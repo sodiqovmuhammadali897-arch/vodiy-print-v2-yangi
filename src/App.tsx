@@ -1,20 +1,22 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { lazy } from "react";
 import Layout from "./components/layout/Layout";
 import Dashboard from "./modules/dashboard/Dashboard";
-import Orders from "./modules/orders/Orders";
-import OrderDetail from "./modules/orders/OrderDetail";
-import OrderWizard from "./modules/orders/wizard/OrderWizard";
-import Customers from "./modules/customers/Customers";
-import CustomerDetail from "./modules/customers/CustomerDetail";
-import Brands from "./modules/brands/Brands";
-import Proposals from "./modules/proposals/Proposals";
-import ProposalEditor from "./modules/proposals/ProposalEditor";
-import Textile from "./modules/textile/Textile";
-import Warehouse from "./modules/warehouse/Warehouse";
-import Finance from "./modules/finance/Finance";
-import Reports from "./modules/reports/Reports";
-import Design from "./modules/design/Design";
-import Settings from "./modules/settings/Settings";
+
+const Orders = lazy(() => import("./modules/orders/Orders"));
+const OrderDetail = lazy(() => import("./modules/orders/OrderDetail"));
+const OrderWizard = lazy(() => import("./modules/orders/wizard/OrderWizard"));
+const Customers = lazy(() => import("./modules/customers/Customers"));
+const CustomerDetail = lazy(() => import("./modules/customers/CustomerDetail"));
+const Brands = lazy(() => import("./modules/brands/Brands"));
+const Proposals = lazy(() => import("./modules/proposals/Proposals"));
+const ProposalEditor = lazy(() => import("./modules/proposals/ProposalEditor"));
+const Textile = lazy(() => import("./modules/textile/Textile"));
+const Warehouse = lazy(() => import("./modules/warehouse/Warehouse"));
+const Finance = lazy(() => import("./modules/finance/Finance"));
+const Reports = lazy(() => import("./modules/reports/Reports"));
+const Design = lazy(() => import("./modules/design/Design"));
+const Settings = lazy(() => import("./modules/settings/Settings"));
 
 export default function App() {
   return (
