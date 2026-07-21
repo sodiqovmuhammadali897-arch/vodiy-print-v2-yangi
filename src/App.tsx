@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "./firebase";
 import { collection, addDoc, updateDoc, deleteDoc, doc, setDoc, onSnapshot, query, orderBy, runTransaction, where, getDocs } from "firebase/firestore";
+import SavdoRejasiPaneli from "./components/SavdoRejasiPaneli";
 
 /* ================= IKONKALAR ================= */
 const ik = { viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
@@ -13,6 +14,7 @@ const IKONALAR = {
   ombor: <svg {...ik}><path d="M3 8l9-5 9 5-9 5-9-5z" /><path d="M3 8v8l9 5 9-5V8" /><path d="M12 13v8" /></svg>,
   moliya: <svg {...ik}><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /><circle cx="16" cy="14.5" r="1.1" /></svg>,
   hisobot: <svg {...ik}><path d="M4 19V11" /><path d="M10 19V5" /><path d="M16 19v-8" /><path d="M3 19h18" /></svg>,
+  reja: <svg {...ik}><path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" /></svg>,
   elonlar: <svg {...ik}><path d="M3 10v4h3l5 4V6l-5 4H3z" /><path d="M15.5 9a4 4 0 0 1 0 6" /><path d="M18.3 6.2a8 8 0 0 1 0 11.6" /></svg>,
   sozlamalar: <svg {...ik}><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.2l1.9-1.5-1.9-3.3-2.3.9a7 7 0 0 0-2-1.2L14.2 3H9.8l-.4 2.7a7 7 0 0 0-2 1.2l-2.3-.9-1.9 3.3 1.9 1.5c-.1.4-.1.8-.1 1.2s0 .8.1 1.2L3.2 15l1.9 3.3 2.3-.9c.6.5 1.3.9 2 1.2l.4 2.7h4.4l.4-2.7c.7-.3 1.4-.7 2-1.2l2.3.9 1.9-3.3-1.9-1.5c.1-.4.1-.8.1-1.2z" /></svg>,
 };
@@ -22,17 +24,17 @@ const IKONA_QIDIRUV = <svg viewBox="0 0 24 24" width="15" height="15" fill="none
 
 /* ================= STANDART ROLLAR ================= */
 const ROLLAR_STANDART = [
-  { nomi: "Admin", pin: "1111", ruxsatlar: ["bosh", "kiritish", "royxat", "mijozlar", "ombor", "moliya", "hisobot", "elonlar", "sozlamalar"] },
-  { nomi: "Menejer", pin: "2222", ruxsatlar: ["bosh", "kiritish", "royxat", "mijozlar", "moliya", "hisobot", "elonlar"] },
+  { nomi: "Admin", pin: "1111", ruxsatlar: ["bosh", "kiritish", "royxat", "mijozlar", "ombor", "moliya", "hisobot", "reja", "elonlar", "sozlamalar"] },
+  { nomi: "Menejer", pin: "2222", ruxsatlar: ["bosh", "kiritish", "royxat", "mijozlar", "moliya", "hisobot", "reja", "elonlar"] },
   { nomi: "Ta'minot", pin: "3333", ruxsatlar: ["bosh", "ombor", "elonlar"] },
   { nomi: "Pechatnik", pin: "4444", ruxsatlar: ["bosh", "royxat", "elonlar"] },
 ];
 
-const BARCHA_BOLIMLAR = ["bosh", "kiritish", "royxat", "mijozlar", "ombor", "moliya", "hisobot", "elonlar", "sozlamalar"];
+const BARCHA_BOLIMLAR = ["bosh", "kiritish", "royxat", "mijozlar", "ombor", "moliya", "hisobot", "reja", "elonlar", "sozlamalar"];
 
 const TAB_NOMLARI = {
   bosh: "Bosh sahifa", kiritish: "Yangi buyurtma", royxat: "Buyurtmalar",
-  mijozlar: "Mijozlar", ombor: "Ombor", moliya: "Moliya", hisobot: "Hisobotlar", elonlar: "Yangiliklar", sozlamalar: "Sozlamalar",
+  mijozlar: "Mijozlar", ombor: "Ombor", moliya: "Moliya", hisobot: "Hisobotlar", reja: "Savdo rejasi", elonlar: "Yangiliklar", sozlamalar: "Sozlamalar",
 };
 
 const SHAHARLAR = ["Farg'ona", "Namangan", "Andijon", "Qo'qon", "Marg'ilon", "Boshqa"];
@@ -1517,6 +1519,10 @@ export default function App() {
               <TaqsimotRoyxati malumot={holatHisoboti} birlik="buyurtma" />
             </div>
           </div>
+        )}
+
+        {korinadiganOyna === "reja" && (
+          <SavdoRejasiPaneli buyurtmalar={buyurtmalar} adminMi={foydalanuvchi.nomi === "Admin"} />
         )}
 
         {korinadiganOyna === "elonlar" && (
