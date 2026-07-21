@@ -59,6 +59,8 @@ export type Order = {
   manager_name: string;
   customer_source: string;
   production_company: string;
+  textile_company_id: string | null;
+  textile_company_name: string;
   designer_name: string;
   designer_status: string;
   production_manager: string;
@@ -203,5 +205,18 @@ export type Manager = {
   name: string;
   monthly_plan: number;
   avatar_url: string;
+  created_at: string;
+};
+
+export type TextileCompany = {
+  id: string;
+  company_number: string | null;
+  name: string;
+  contact_person: string;
+  phone: string;
+  telegram: string;
+  address: string;
+  note: string;
+  is_active: boolean;
   created_at: string;
 };

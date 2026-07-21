@@ -27,6 +27,8 @@ export type OrderPayload = {
   deadline: string | null;
   customer_source: string;
   production_company: string;
+  textile_company_id: string | null;
+  textile_company_name: string;
   designer_name: string;
   designer_status: string;
   production_manager: string;

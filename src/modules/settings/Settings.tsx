@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
-import { Building2, Users, Target, CalendarDays } from "lucide-react";
+import { Building2, Users, Target, CalendarDays, Shirt } from "lucide-react";
 import CompanySettingsPanel from "./CompanySettingsPanel";
 import ManagersPanel from "./ManagersPanel";
 import MonthlyPlanPanel from "./MonthlyPlanPanel";
 import HolidaysPanel from "./HolidaysPanel";
+import TextileCompaniesPanel from "./TextileCompaniesPanel";
 
-type Tab = "company" | "managers" | "plan" | "holidays";
+type Tab = "company" | "managers" | "plan" | "holidays" | "textile";
 
 const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "company", label: "Kompaniya ma'lumotlari", icon: <Building2 className="h-4 w-4" /> },
   { key: "managers", label: "Managerlar", icon: <Users className="h-4 w-4" /> },
   { key: "plan", label: "Oylik reja", icon: <Target className="h-4 w-4" /> },
   { key: "holidays", label: "Bayram kunlari", icon: <CalendarDays className="h-4 w-4" /> },
+  { key: "textile", label: "Textil kompaniyalari", icon: <Shirt className="h-4 w-4" /> },
 ];
 
 export default function Settings() {
@@ -52,6 +54,7 @@ export default function Settings() {
       {tab === "managers" && <ManagersPanel />}
       {tab === "plan" && <MonthlyPlanPanel />}
       {tab === "holidays" && <HolidaysPanel />}
+      {tab === "textile" && <TextileCompaniesPanel />}
     </div>
   );
 }

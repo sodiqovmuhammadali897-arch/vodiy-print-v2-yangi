@@ -14,6 +14,7 @@ import {
   StickyNote,
   ClipboardCopy,
   Paperclip,
+  Shirt,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import type {
@@ -24,6 +25,7 @@ import type {
   OrderFile,
   OrderPayment,
   OrderProduct,
+  TextileCompany,
 } from "../../lib/types";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ProductionBadge from "../../components/ui/ProductionBadge";
@@ -41,6 +43,7 @@ export default function OrderDetail() {
   const [products, setProducts] = useState<OrderProduct[]>([]);
   const [payments, setPayments] = useState<OrderPayment[]>([]);
   const [files, setFiles] = useState<OrderFile[]>([]);
+  const [textile, setTextile] = useState<TextileCompany | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
@@ -52,7 +55,7 @@ export default function OrderDetail() {
     const ord = (o.data as Order) || null;
     setOrder(ord);
     if (ord) {
-      const [b, c, pr, pay, f, h] = await Promise.all([
+      const [b, c, pr, pay, f, h, tx] = await Promise.all([
         ord.brand_id
           ? supabase.from("brands").select("*").eq("id", ord.brand_id).maybeSingle()
           : Promise.resolve({ data: null }),
@@ -79,12 +82,20 @@ export default function OrderDetail() {
           .eq("order_id", ord.id)
           .order("created_at", { ascending: false }),
         supabase.from("holidays").select("*"),
+        ord.textile_company_id
+          ? supabase
+              .from("textile_companies")
+              .select("*")
+              .eq("id", ord.textile_company_id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
       ]);
       setBrand((b.data as Brand) || null);
       setCustomer((c.data as Customer) || null);
       setProducts((pr.data as OrderProduct[]) || []);
       setPayments((pay.data as OrderPayment[]) || []);
       setFiles((f.data as OrderFile[]) || []);
+      setTextile((tx.data as TextileCompany) || null);
       setHolidays((h.data as Holiday[]) || []);
     }
     setLoading(false);
@@ -512,6 +523,37 @@ export default function OrderDetail() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {(order.textile_company_id || order.textile_company_name) && (
+        <div className="card p-5">
+          <div className="flex items-center gap-2">
+            <Shirt className="h-4 w-4 text-brand-700" />
+            <h2 className="font-display text-base font-bold text-ink-900">
+              Textil ishlab chiqaruvchi
+            </h2>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+            <Field
+              label="Kompaniya"
+              value={textile?.name || order.textile_company_name || "-"}
+            />
+            <Field label="ID" value={textile?.company_number || "-"} />
+            <Field label="Mas'ul" value={textile?.contact_person || "-"} />
+            <Field label="Telefon" value={textile?.phone || "-"} />
+          </div>
+          {textile && !textile.is_active && (
+            <div className="mt-2 text-xs text-amber-700">
+              Bu kompaniya hozir "Nofaol" holatida
+            </div>
+          )}
+          {!textile && order.textile_company_name && (
+            <div className="mt-2 text-xs text-ink-500">
+              Bu kompaniya bazadan olib tashlangan — buyurtmadagi nom tarixiy
+              yozuv sifatida saqlanadi
+            </div>
+          )}
         </div>
       )}
 

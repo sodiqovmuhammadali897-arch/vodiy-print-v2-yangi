@@ -31,3 +31,13 @@ export const nextCustomerNumber = async (): Promise<string> => {
   );
   return `CL-${pad(nextSequence(values, "CL"))}`;
 };
+
+export const nextTextileCompanyNumber = async (): Promise<string> => {
+  const { data } = await supabase
+    .from("textile_companies")
+    .select("company_number");
+  const values = ((data as { company_number: string | null }[]) || []).map(
+    (r) => r.company_number,
+  );
+  return `TXT-${pad(nextSequence(values, "TXT"))}`;
+};

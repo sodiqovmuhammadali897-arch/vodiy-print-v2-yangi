@@ -24,6 +24,7 @@ import type {
   OrderPayment,
   OrderProduct,
   OrderStatus,
+  TextileCompany,
 } from "../../../lib/types";
 import {
   CUSTOMER_SOURCES,
@@ -104,6 +105,7 @@ export default function OrderWizard() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [managers, setManagers] = useState<Manager[]>([]);
+  const [textileCompanies, setTextileCompanies] = useState<TextileCompany[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
 
   const [orderNumber, setOrderNumber] = useState<string>("");
@@ -120,6 +122,8 @@ export default function OrderWizard() {
     deadline: null,
     customer_source: "",
     production_company: "Vodiy Print",
+    textile_company_id: null,
+    textile_company_name: "",
     designer_name: "",
     designer_status: "Dizayn kerak emas",
     production_manager: "",
@@ -150,16 +154,18 @@ export default function OrderWizard() {
 
   useEffect(() => {
     const load = async () => {
-      const [c, b, m, h] = await Promise.all([
+      const [c, b, m, h, tx] = await Promise.all([
         supabase.from("customers").select("*").order("first_name"),
         supabase.from("brands").select("*").order("name"),
         supabase.from("managers").select("*").order("name"),
         supabase.from("holidays").select("*"),
+        supabase.from("textile_companies").select("*").order("name"),
       ]);
       setCustomers((c.data as Customer[]) || []);
       setBrands((b.data as Brand[]) || []);
       setManagers((m.data as Manager[]) || []);
       setHolidays((h.data as Holiday[]) || []);
+      setTextileCompanies((tx.data as TextileCompany[]) || []);
 
       if (isNew) {
         const nextNum = await nextOrderNumber();
@@ -187,6 +193,8 @@ export default function OrderWizard() {
             deadline: o.deadline,
             customer_source: o.customer_source || "",
             production_company: o.production_company || "Vodiy Print",
+            textile_company_id: o.textile_company_id || null,
+            textile_company_name: o.textile_company_name || "",
             designer_name: o.designer_name || "",
             designer_status: o.designer_status || "Dizayn kerak emas",
             production_manager: o.production_manager || "",
@@ -713,6 +721,10 @@ export default function OrderWizard() {
           payload={payload}
           set={set}
           managers={managers}
+          textileCompanies={textileCompanies}
+          onTextileCompanyCreated={(c) =>
+            setTextileCompanies((prev) => [...prev, c])
+          }
           customProduction={customProduction}
           setCustomProduction={setCustomProduction}
           dl={dl}
