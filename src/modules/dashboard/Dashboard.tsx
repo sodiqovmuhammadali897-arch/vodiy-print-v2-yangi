@@ -68,7 +68,7 @@ export default function Dashboard() {
           supabase
             .from("orders")
             .select("id", { count: "exact", head: true })
-            .eq("status", "done")
+            .in("status", ["delivered", "closed"])
             .gte("completed_at", dayStart),
         ]);
 
@@ -90,7 +90,7 @@ export default function Dashboard() {
         0,
       );
       const activeCount = monthOrders.filter(
-        (o) => o.status !== "done" && o.status !== "cancelled",
+        (o) => o.status !== "delivered" && o.status !== "closed" && o.status !== "cancelled",
       ).length;
 
       setStats({

@@ -3,6 +3,7 @@ import Layout from "./components/layout/Layout";
 import Dashboard from "./modules/dashboard/Dashboard";
 import Orders from "./modules/orders/Orders";
 import OrderDetail from "./modules/orders/OrderDetail";
+import OrderWizard from "./modules/orders/wizard/OrderWizard";
 import Customers from "./modules/customers/Customers";
 import CustomerDetail from "./modules/customers/CustomerDetail";
 import Brands from "./modules/brands/Brands";
@@ -22,6 +23,8 @@ export default function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/new" element={<OrderWizard />} />
+        <Route path="/orders/:id/edit" element={<OrderWizard />} />
         <Route path="/orders/:id" element={<OrderDetail />} />
         <Route path="/customers" element={<Customers />} />
         <Route path="/customers/:id" element={<CustomerDetail />} />

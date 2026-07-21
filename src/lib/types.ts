@@ -1,5 +1,10 @@
+export type CustomerType = "new" | "regular" | "vip" | "inactive";
+
 export type Customer = {
   id: string;
+  customer_number: string | null;
+  customer_type: CustomerType;
+  source: string;
   first_name: string;
   last_name: string;
   phone: string;
@@ -23,25 +28,87 @@ export type Brand = {
 
 export type OrderStatus =
   | "new"
+  | "calculating"
+  | "awaiting_advance"
   | "design"
-  | "approved"
+  | "approving"
+  | "sent_to_production"
   | "production"
-  | "done"
+  | "ready"
+  | "ready_to_deliver"
+  | "delivered"
+  | "closed"
   | "cancelled";
 
 export type Order = {
   id: string;
+  order_number: string | null;
   brand_id: string | null;
   customer_id: string | null;
+  manager_id: string | null;
   title: string;
   description: string;
   status: OrderStatus;
+  subtotal: number;
+  discount_amount: number;
   total_amount: number;
   paid_amount: number;
+  remaining_amount: number;
+  payment_type: string;
   telegram_link: string;
   manager_name: string;
+  customer_source: string;
+  production_company: string;
+  designer_name: string;
+  designer_status: string;
+  production_manager: string;
+  logistics_manager: string;
+  qc_manager: string;
+  delivery_type: string;
+  delivery_address: string;
+  delivery_location_url: string;
+  delivery_phone: string;
+  courier: string;
+  delivery_date: string | null;
+  delivery_time: string;
+  delivery_cost: number;
+  customer_note: string;
+  production_note: string;
+  logistics_note: string;
+  private_note: string;
+  client_request_note: string;
+  is_draft: boolean;
+  order_date: string | null;
   deadline: string | null;
   completed_at: string | null;
+  created_at: string;
+};
+
+export type OrderProduct = {
+  id: string;
+  order_id: string;
+  position: number;
+  category: string;
+  product_name: string;
+  variant: string;
+  size: string;
+  material: string;
+  color: string;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  total: number;
+  note: string;
+};
+
+export type OrderPayment = {
+  id: string;
+  order_id: string;
+  amount: number;
+  payment_type: string;
+  payment_date: string;
+  received_by: string;
+  note: string;
   created_at: string;
 };
 
@@ -52,6 +119,8 @@ export type OrderFile = {
   url: string;
   mime_type: string;
   size: number;
+  link_type: string;
+  note: string;
   created_at: string;
 };
 
