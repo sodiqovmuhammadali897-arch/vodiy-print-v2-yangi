@@ -14,13 +14,17 @@ import {
   ClipboardCheck,
   FileText,
 } from "lucide-react";
-import { supabase } from "../../../lib/supabase";
+import {
+  getOne,
+  insertOne,
+  listAll,
+  listWhere,
+} from "../../../lib/firestoreDb";
 import type {
   Brand,
   Customer,
   Holiday,
   Manager,
-  Order,
   OrderPayment,
   OrderProduct,
   OrderStatus,
@@ -155,29 +159,63 @@ export default function OrderWizard() {
   useEffect(() => {
     const load = async () => {
       const [c, b, m, h, tx] = await Promise.all([
-        supabase.from("customers").select("*").order("first_name"),
-        supabase.from("brands").select("*").order("name"),
-        supabase.from("managers").select("*").order("name"),
-        supabase.from("holidays").select("*"),
-        supabase.from("textile_companies").select("*").order("name"),
+        listAll<Customer>("customers", { orderBy: ["first_name", "asc"] }),
+        listAll<Brand>("brands", { orderBy: ["name", "asc"] }),
+        listAll<Manager>("managers", { orderBy: ["name", "asc"] }),
+        listAll<Holiday>("holidays"),
+        listAll<TextileCompany>("textile_companies", { orderBy: ["name", "asc"] }),
       ]);
-      setCustomers((c.data as Customer[]) || []);
-      setBrands((b.data as Brand[]) || []);
-      setManagers((m.data as Manager[]) || []);
-      setHolidays((h.data as Holiday[]) || []);
-      setTextileCompanies((tx.data as TextileCompany[]) || []);
+      setCustomers(c);
+      setBrands(b);
+      setManagers(m);
+      setHolidays(h);
+      setTextileCompanies(tx);
 
       if (isNew) {
         const nextNum = await nextOrderNumber();
         setOrderNumber(nextNum);
       } else if (id) {
-        const { data } = await supabase
-          .from("orders")
-          .select("*")
-          .eq("id", id)
-          .maybeSingle();
-        if (data) {
-          const o = data as Order;
+        const o = await getOne<{
+          id: string;
+          order_number: string | null;
+          brand_id: string | null;
+          customer_id: string | null;
+          manager_id: string | null;
+          manager_name: string;
+          title: string;
+          description: string;
+          status: OrderStatus;
+          order_date: string | null;
+          deadline: string | null;
+          customer_source: string;
+          production_company: string;
+          textile_company_id: string | null;
+          textile_company_name: string;
+          designer_name: string;
+          designer_status: string;
+          production_manager: string;
+          logistics_manager: string;
+          qc_manager: string;
+          delivery_type: string;
+          delivery_address: string;
+          delivery_location_url: string;
+          delivery_phone: string;
+          courier: string;
+          delivery_date: string | null;
+          delivery_time: string;
+          delivery_cost: number;
+          payment_type: string;
+          telegram_link: string;
+          customer_note: string;
+          production_note: string;
+          logistics_note: string;
+          private_note: string;
+          client_request_note: string;
+          discount_amount: number;
+          is_draft: boolean;
+          created_at?: string;
+        }>("orders", id);
+        if (o) {
           setOrderNumber(o.order_number || "");
           setPayload({
             id: o.id,
@@ -219,19 +257,20 @@ export default function OrderWizard() {
             is_draft: !!o.is_draft,
           });
           const [pr, pay, fl] = await Promise.all([
-            supabase
-              .from("order_products")
-              .select("*")
-              .eq("order_id", o.id)
-              .order("position"),
-            supabase
-              .from("order_payments")
-              .select("*")
-              .eq("order_id", o.id)
-              .order("created_at"),
-            supabase.from("order_files").select("*").eq("order_id", o.id),
+            listWhere<OrderProduct>("order_products", "order_id", o.id, {
+              orderBy: ["position", "asc"],
+            }),
+            listWhere<OrderPayment>("order_payments", "order_id", o.id, {
+              orderBy: ["created_at", "asc"],
+            }),
+            listWhere<{
+              filename: string;
+              url: string;
+              link_type?: string | null;
+              note?: string | null;
+            }>("order_files", "order_id", o.id),
           ]);
-          const rows = ((pr.data as OrderProduct[]) || []).map((p) => ({
+          const rows = pr.map((p) => ({
             position: p.position,
             category: p.category,
             product_name: p.product_name,
@@ -247,7 +286,7 @@ export default function OrderWizard() {
           }));
           setProducts(rows.length ? rows : [emptyProduct()]);
           setPayments(
-            ((pay.data as OrderPayment[]) || []).map((p) => ({
+            pay.map((p) => ({
               amount: Number(p.amount),
               payment_type: p.payment_type,
               payment_date: p.payment_date,
@@ -256,12 +295,7 @@ export default function OrderWizard() {
             })),
           );
           setFiles(
-            (fl.data || []).map((f: {
-              filename: string;
-              url: string;
-              link_type?: string | null;
-              note?: string | null;
-            }) => ({
+            fl.map((f) => ({
               filename: f.filename,
               url: f.url,
               link_type: f.link_type || "Boshqa",
@@ -311,9 +345,8 @@ export default function OrderWizard() {
 
   const createCustomer = async (data: Partial<Customer>) => {
     const number = await nextCustomerNumber();
-    const { data: created, error } = await supabase
-      .from("customers")
-      .insert({
+    try {
+      const created = await insertOne("customers", {
         customer_number: number,
         customer_type: "new",
         first_name: data.first_name || "",
@@ -325,15 +358,12 @@ export default function OrderWizard() {
         address: data.address || "",
         note: data.note || "",
         source: data.source || "",
-      })
-      .select("*")
-      .maybeSingle();
-    if (error || !created) {
-      alert(error?.message || "Xatolik");
-      return;
+      });
+      setCustomers((cs) => [...cs, created as unknown as Customer]);
+      set("customer_id", created.id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik");
     }
-    setCustomers((cs) => [...cs, created as Customer]);
-    set("customer_id", (created as Customer).id);
   };
 
   const createBrand = async (name: string) => {
@@ -341,17 +371,18 @@ export default function OrderWizard() {
       alert("Avval mijozni tanlang");
       return;
     }
-    const { data, error } = await supabase
-      .from("brands")
-      .insert({ name, customer_id: payload.customer_id })
-      .select("*")
-      .maybeSingle();
-    if (error || !data) {
-      alert(error?.message || "Xatolik");
-      return;
+    try {
+      const created = await insertOne("brands", {
+        name,
+        customer_id: payload.customer_id,
+        logo_url: "",
+        note: "",
+      });
+      setBrands((bs) => [...bs, created as unknown as Brand]);
+      set("brand_id", created.id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik");
     }
-    setBrands((bs) => [...bs, data as Brand]);
-    set("brand_id", (data as Brand).id);
   };
 
   const addProduct = () => setProducts((ps) => [...ps, emptyProduct()]);

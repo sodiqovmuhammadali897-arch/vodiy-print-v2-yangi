@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, Search, Package, Send, Copy } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { listAll } from "../../lib/firestoreDb";
 import type {
   Brand,
   Customer,
@@ -37,29 +37,25 @@ export default function Orders() {
 
   const load = async () => {
     setLoading(true);
-    const [o, b, c, p, h] = await Promise.all([
-      supabase.from("orders").select("*").order("created_at", { ascending: false }),
-      supabase.from("brands").select("*"),
-      supabase.from("customers").select("*"),
-      supabase
-        .from("order_products")
-        .select("order_id, product_name, quantity, position")
-        .order("position"),
-      supabase.from("holidays").select("*"),
-    ]);
-    const brands = new Map(((b.data as Brand[]) || []).map((x) => [x.id, x]));
-    const customers = new Map(
-      ((c.data as Customer[]) || []).map((x) => [x.id, x]),
-    );
+    const [ordersData, brandsData, customersData, productsData, holidaysData] =
+      await Promise.all([
+        listAll<Order>("orders", { orderBy: ["created_at", "desc"] }),
+        listAll<Brand>("brands"),
+        listAll<Customer>("customers"),
+        listAll<OrderProduct>("order_products", { orderBy: ["position", "asc"] }),
+        listAll<Holiday>("holidays"),
+      ]);
+    const brands = new Map(brandsData.map((x) => [x.id, x]));
+    const customers = new Map(customersData.map((x) => [x.id, x]));
     const productsByOrder = new Map<string, OrderProduct[]>();
-    ((p.data as OrderProduct[]) || []).forEach((row) => {
+    productsData.forEach((row) => {
       const arr = productsByOrder.get(row.order_id) || [];
       arr.push(row);
       productsByOrder.set(row.order_id, arr);
     });
 
     setRows(
-      ((o.data as Order[]) || []).map((ord) => {
+      ordersData.map((ord) => {
         const items = productsByOrder.get(ord.id) || [];
         const preview = items
           .slice(0, 2)
@@ -74,7 +70,7 @@ export default function Orders() {
         };
       }),
     );
-    setHolidays((h.data as Holiday[]) || []);
+    setHolidays(holidaysData);
     setLoading(false);
   };
 

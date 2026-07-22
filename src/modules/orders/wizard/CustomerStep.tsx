@@ -6,7 +6,7 @@ import { CUSTOMER_SOURCES } from "../../../lib/orderConstants";
 import CustomerTypeBadge from "../../../components/ui/CustomerTypeBadge";
 import { formatMoney } from "../../../lib/format";
 import Modal from "../../../components/ui/Modal";
-import { supabase } from "../../../lib/supabase";
+import { listWhere } from "../../../lib/firestoreDb";
 
 type Props = {
   payload: OrderPayload;
@@ -101,16 +101,13 @@ export default function CustomerStep({
         setStats(null);
         return;
       }
-      const { data } = await supabase
-        .from("orders")
-        .select("total_amount, paid_amount, created_at")
-        .eq("customer_id", linkedCustomer.id)
-        .order("created_at", { ascending: false });
-      const rows = (data as {
+      const rows = await listWhere<{
         total_amount: number;
         paid_amount: number;
         created_at: string;
-      }[]) || [];
+      }>("orders", "customer_id", linkedCustomer.id, {
+        orderBy: ["created_at", "desc"],
+      });
       const revenue = rows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
       const debt = rows.reduce(
         (s, r) =>

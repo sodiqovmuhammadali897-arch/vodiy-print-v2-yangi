@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Target, TrendingUp, Wallet, PackageOpen, ClipboardList, CircleCheck as CheckCircle2 } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { getOne, listAll } from "../../lib/firestoreDb";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
 import { computeWorkdayStats, monthRange, startOfDay } from "../../lib/workdays";
 import type { Holiday, MonthlyPlan, Order } from "../../lib/types";
@@ -28,6 +28,8 @@ const emptyStats: Stats = {
   doneCount: 0,
 };
 
+const planId = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats>(emptyStats);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -42,43 +44,21 @@ export default function Dashboard() {
       const { start, end } = monthRange(today);
       const dayStart = startOfDay(today).toISOString();
 
-      const [monthOrdersRes, planRes, holidaysRes, recentRes, todayCountRes, doneTodayRes] =
-        await Promise.all([
-          supabase
-            .from("orders")
-            .select("total_amount, paid_amount, status")
-            .gte("created_at", start)
-            .lt("created_at", end),
-          supabase
-            .from("monthly_plans")
-            .select("*")
-            .eq("year", today.getFullYear())
-            .eq("month", today.getMonth() + 1)
-            .maybeSingle(),
-          supabase.from("holidays").select("*"),
-          supabase
-            .from("orders")
-            .select("*")
-            .order("created_at", { ascending: false })
-            .limit(6),
-          supabase
-            .from("orders")
-            .select("id", { count: "exact", head: true })
-            .gte("created_at", dayStart),
-          supabase
-            .from("orders")
-            .select("id", { count: "exact", head: true })
-            .in("status", ["delivered", "closed"])
-            .gte("completed_at", dayStart),
-        ]);
+      const [allOrders, planRow, holidaysData] = await Promise.all([
+        listAll<Order>("orders", { orderBy: ["created_at", "desc"] }),
+        getOne<MonthlyPlan>(
+          "monthly_plans",
+          planId(today.getFullYear(), today.getMonth() + 1),
+        ),
+        listAll<Holiday>("holidays"),
+      ]);
 
       if (cancelled) return;
 
-      const monthOrders = (monthOrdersRes.data || []) as Pick<
-        Order,
-        "total_amount" | "paid_amount" | "status"
-      >[];
-      const plan = (planRes.data as MonthlyPlan | null)?.plan_amount ?? 0;
+      const monthOrders = allOrders.filter(
+        (o) => o.created_at >= start && o.created_at < end,
+      );
+      const plan = planRow?.plan_amount ?? 0;
       const revenue = monthOrders.reduce(
         (s, o) => s + Number(o.total_amount || 0),
         0,
@@ -90,7 +70,17 @@ export default function Dashboard() {
         0,
       );
       const activeCount = monthOrders.filter(
-        (o) => o.status !== "delivered" && o.status !== "closed" && o.status !== "cancelled",
+        (o) =>
+          o.status !== "delivered" &&
+          o.status !== "closed" &&
+          o.status !== "cancelled",
+      ).length;
+      const todayCount = allOrders.filter((o) => o.created_at >= dayStart).length;
+      const doneCount = allOrders.filter(
+        (o) =>
+          (o.status === "delivered" || o.status === "closed") &&
+          !!o.completed_at &&
+          o.completed_at >= dayStart,
       ).length;
 
       setStats({
@@ -98,11 +88,11 @@ export default function Dashboard() {
         revenue,
         debt,
         activeCount,
-        todayCount: todayCountRes.count ?? 0,
-        doneCount: doneTodayRes.count ?? 0,
+        todayCount,
+        doneCount,
       });
-      setHolidays((holidaysRes.data as Holiday[]) || []);
-      setRecentOrders((recentRes.data as Order[]) || []);
+      setHolidays(holidaysData);
+      setRecentOrders(allOrders.slice(0, 6));
       setLoading(false);
     };
     void load();

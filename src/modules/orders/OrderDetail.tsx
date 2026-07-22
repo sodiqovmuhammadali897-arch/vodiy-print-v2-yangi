@@ -16,7 +16,13 @@ import {
   Paperclip,
   Shirt,
 } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import {
+  getOne,
+  insertMany,
+  insertOne,
+  listAll,
+  listWhere,
+} from "../../lib/firestoreDb";
 import type {
   Brand,
   Customer,
@@ -51,52 +57,37 @@ export default function OrderDetail() {
   const load = async () => {
     if (!id) return;
     setLoading(true);
-    const o = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
-    const ord = (o.data as Order) || null;
+    const ord = await getOne<Order>("orders", id);
     setOrder(ord);
     if (ord) {
       const [b, c, pr, pay, f, h, tx] = await Promise.all([
         ord.brand_id
-          ? supabase.from("brands").select("*").eq("id", ord.brand_id).maybeSingle()
-          : Promise.resolve({ data: null }),
+          ? getOne<Brand>("brands", ord.brand_id)
+          : Promise.resolve(null),
         ord.customer_id
-          ? supabase
-              .from("customers")
-              .select("*")
-              .eq("id", ord.customer_id)
-              .maybeSingle()
-          : Promise.resolve({ data: null }),
-        supabase
-          .from("order_products")
-          .select("*")
-          .eq("order_id", ord.id)
-          .order("position"),
-        supabase
-          .from("order_payments")
-          .select("*")
-          .eq("order_id", ord.id)
-          .order("payment_date"),
-        supabase
-          .from("order_files")
-          .select("*")
-          .eq("order_id", ord.id)
-          .order("created_at", { ascending: false }),
-        supabase.from("holidays").select("*"),
+          ? getOne<Customer>("customers", ord.customer_id)
+          : Promise.resolve(null),
+        listWhere<OrderProduct>("order_products", "order_id", ord.id, {
+          orderBy: ["position", "asc"],
+        }),
+        listWhere<OrderPayment>("order_payments", "order_id", ord.id, {
+          orderBy: ["payment_date", "asc"],
+        }),
+        listWhere<OrderFile>("order_files", "order_id", ord.id, {
+          orderBy: ["created_at", "desc"],
+        }),
+        listAll<Holiday>("holidays"),
         ord.textile_company_id
-          ? supabase
-              .from("textile_companies")
-              .select("*")
-              .eq("id", ord.textile_company_id)
-              .maybeSingle()
-          : Promise.resolve({ data: null }),
+          ? getOne<TextileCompany>("textile_companies", ord.textile_company_id)
+          : Promise.resolve(null),
       ]);
-      setBrand((b.data as Brand) || null);
-      setCustomer((c.data as Customer) || null);
-      setProducts((pr.data as OrderProduct[]) || []);
-      setPayments((pay.data as OrderPayment[]) || []);
-      setFiles((f.data as OrderFile[]) || []);
-      setTextile((tx.data as TextileCompany) || null);
-      setHolidays((h.data as Holiday[]) || []);
+      setBrand(b);
+      setCustomer(c);
+      setProducts(pr);
+      setPayments(pay);
+      setFiles(f);
+      setTextile(tx);
+      setHolidays(h);
     }
     setLoading(false);
   };
@@ -120,9 +111,8 @@ export default function OrderDetail() {
     void _on;
     void _ca;
     void _cd;
-    const { data: created, error } = await supabase
-      .from("orders")
-      .insert({
+    try {
+      const created = await insertOne("orders", {
         ...rest,
         order_number: number,
         status: "new",
@@ -130,14 +120,12 @@ export default function OrderDetail() {
         remaining_amount: order.total_amount,
         is_draft: false,
         order_date: new Date().toISOString().slice(0, 10),
-      })
-      .select("id")
-      .maybeSingle();
-    if (created && !error) {
+      });
       if (products.length > 0) {
-        await supabase.from("order_products").insert(
+        await insertMany(
+          "order_products",
           products.map((p) => ({
-            order_id: (created as { id: string }).id,
+            order_id: created.id,
             position: p.position,
             category: p.category,
             product_name: p.product_name,
@@ -153,9 +141,10 @@ export default function OrderDetail() {
           })),
         );
       }
-      navigate(`/orders/${(created as { id: string }).id}/edit`);
+      navigate(`/orders/${created.id}/edit`);
+    } finally {
+      setDuplicating(false);
     }
-    setDuplicating(false);
   };
 
   const copy = async (v: string) => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Search, Tag } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { listAll } from "../../lib/firestoreDb";
 import type { Brand, Customer } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import BrandFormModal from "./BrandFormModal";
@@ -17,12 +17,10 @@ export default function Brands() {
 
   const load = async () => {
     setLoading(true);
-    const [b, c] = await Promise.all([
-      supabase.from("brands").select("*").order("created_at", { ascending: false }),
-      supabase.from("customers").select("*"),
+    const [brands, customers] = await Promise.all([
+      listAll<Brand>("brands", { orderBy: ["created_at", "desc"] }),
+      listAll<Customer>("customers"),
     ]);
-    const brands = (b.data as Brand[]) || [];
-    const customers = (c.data as Customer[]) || [];
     const map = new Map(customers.map((x) => [x.id, x]));
     setRows(brands.map((br) => ({ ...br, customer: map.get(br.customer_id) })));
     setLoading(false);

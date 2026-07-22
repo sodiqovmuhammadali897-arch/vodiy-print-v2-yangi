@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, CalendarDays } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { deleteOne, insertOne, listAll } from "../../lib/firestoreDb";
 import type { Holiday } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import { formatDate } from "../../lib/format";
@@ -12,11 +12,8 @@ export default function HolidaysPanel() {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("holidays")
-      .select("*")
-      .order("date");
-    setRows((data as Holiday[]) || []);
+    const data = await listAll<Holiday>("holidays", { orderBy: ["date", "asc"] });
+    setRows(data);
     setLoading(false);
   };
 
@@ -26,7 +23,7 @@ export default function HolidaysPanel() {
 
   const add = async () => {
     if (!form.date) return;
-    await supabase.from("holidays").insert({
+    await insertOne("holidays", {
       date: form.date,
       name: form.name.trim(),
     });
@@ -35,7 +32,7 @@ export default function HolidaysPanel() {
   };
 
   const remove = async (id: string) => {
-    await supabase.from("holidays").delete().eq("id", id);
+    await deleteOne("holidays", id);
     void load();
   };
 
