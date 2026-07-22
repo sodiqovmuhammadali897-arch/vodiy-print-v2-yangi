@@ -25,5 +25,4 @@ export const supabase: SupabaseClient = isSupabaseConfigured
       },
     ) as unknown as SupabaseClient);
 
-
 export { isSupabaseConfigured }
