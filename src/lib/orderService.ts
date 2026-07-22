@@ -1,7 +1,14 @@
-import { supabase } from "./supabase";
 import type { OrderPayment, OrderProduct } from "./types";
 import { nextOrderNumber } from "./numbering";
 import { computeOrderTotals } from "./orderCalculations";
+import {
+  countWhere,
+  deleteWhere,
+  getOne,
+  insertMany,
+  insertOne,
+  updateOne,
+} from "./firestoreDb";
 
 export type WizardProduct = Omit<OrderProduct, "id" | "order_id">;
 export type WizardPayment = Omit<OrderPayment, "id" | "order_id" | "created_at">;
@@ -59,9 +66,10 @@ const upsertChildren = async (
   payments: WizardPayment[],
   fileLinks: WizardFileLink[],
 ) => {
-  await supabase.from("order_products").delete().eq("order_id", orderId);
+  await deleteWhere("order_products", "order_id", orderId);
   if (products.length > 0) {
-    await supabase.from("order_products").insert(
+    await insertMany(
+      "order_products",
       products.map((p, i) => ({
         ...p,
         order_id: orderId,
@@ -69,28 +77,31 @@ const upsertChildren = async (
       })),
     );
   }
-  await supabase.from("order_payments").delete().eq("order_id", orderId);
+
+  await deleteWhere("order_payments", "order_id", orderId);
   if (payments.length > 0) {
-    await supabase.from("order_payments").insert(
+    await insertMany(
+      "order_payments",
       payments
         .filter((p) => Number(p.amount) > 0)
         .map((p) => ({ ...p, order_id: orderId })),
     );
   }
-  await supabase.from("order_files").delete().eq("order_id", orderId);
-  if (fileLinks.length > 0) {
-    await supabase.from("order_files").insert(
-      fileLinks
-        .filter((f) => f.url.trim())
-        .map((f) => ({
-          order_id: orderId,
-          filename: f.filename || "Havola",
-          url: f.url,
-          link_type: f.link_type,
-          note: f.note,
-          mime_type: "text/uri-list",
-          size: 0,
-        })),
+
+  await deleteWhere("order_files", "order_id", orderId);
+  const filesToAdd = fileLinks.filter((f) => f.url.trim());
+  if (filesToAdd.length > 0) {
+    await insertMany(
+      "order_files",
+      filesToAdd.map((f) => ({
+        order_id: orderId,
+        filename: f.filename || "Havola",
+        url: f.url,
+        link_type: f.link_type,
+        note: f.note,
+        mime_type: "text/uri-list",
+        size: 0,
+      })),
     );
   }
 };
@@ -108,8 +119,9 @@ export const saveOrder = async (
     orderNumber = await nextOrderNumber();
   }
 
+  const { id: _ignored, ...rest } = payload;
   const record = {
-    ...payload,
+    ...rest,
     order_number: orderNumber,
     subtotal: totals.subtotal,
     total_amount: totals.total,
@@ -121,45 +133,34 @@ export const saveOrder = async (
         : null,
   };
 
-  let orderId = payload.id;
-  if (orderId) {
-    const { error } = await supabase.from("orders").update(record).eq("id", orderId);
-    if (error) return { error: error.message };
-  } else {
-    const { data, error } = await supabase
-      .from("orders")
-      .insert(record)
-      .select("id")
-      .maybeSingle();
-    if (error || !data) return { error: error?.message || "Xatolik" };
-    orderId = data.id;
+  try {
+    let orderId = payload.id;
+    if (orderId) {
+      await updateOne("orders", orderId, record);
+    } else {
+      const created = await insertOne("orders", record);
+      orderId = created.id;
+    }
+
+    await upsertChildren(orderId, products, payments, fileLinks);
+
+    if (record.customer_id) {
+      await maybePromoteCustomer(record.customer_id);
+    }
+
+    return { id: orderId, order_number: orderNumber || "" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Xatolik";
+    return { error: message };
   }
-
-  await upsertChildren(orderId!, products, payments, fileLinks);
-
-  if (record.customer_id) {
-    await maybePromoteCustomer(record.customer_id);
-  }
-
-  return { id: orderId!, order_number: orderNumber || "" };
 };
 
 const maybePromoteCustomer = async (customerId: string) => {
-  const { data } = await supabase
-    .from("customers")
-    .select("customer_type")
-    .eq("id", customerId)
-    .maybeSingle();
-  const type = (data as { customer_type: string } | null)?.customer_type;
-  if (type && (type === "regular" || type === "vip")) return;
-  const { count } = await supabase
-    .from("orders")
-    .select("id", { count: "exact", head: true })
-    .eq("customer_id", customerId);
-  if ((count || 0) >= 2) {
-    await supabase
-      .from("customers")
-      .update({ customer_type: "regular" })
-      .eq("id", customerId);
+  const customer = await getOne<{ customer_type: string }>("customers", customerId);
+  const type = customer?.customer_type;
+  if (type === "regular" || type === "vip") return;
+  const count = await countWhere("orders", "customer_id", customerId);
+  if (count >= 2) {
+    await updateOne("customers", customerId, { customer_type: "regular" });
   }
 };

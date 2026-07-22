@@ -1,8 +1,8 @@
-import { supabase } from "./supabase";
+import { listAll } from "./firestoreDb";
 
 const pad = (n: number, width = 3) => String(n).padStart(width, "0");
 
-const nextSequence = (values: (string | null)[], prefix: string): number => {
+const nextSequence = (values: (string | null | undefined)[], prefix: string): number => {
   const re = new RegExp(`^${prefix}-(\\d+)$`);
   let max = 0;
   for (const v of values) {
@@ -17,27 +17,16 @@ const nextSequence = (values: (string | null)[], prefix: string): number => {
 };
 
 export const nextOrderNumber = async (): Promise<string> => {
-  const { data } = await supabase.from("orders").select("order_number");
-  const values = ((data as { order_number: string | null }[]) || []).map(
-    (r) => r.order_number,
-  );
-  return `VP-${pad(nextSequence(values, "VP"))}`;
+  const rows = await listAll<{ order_number: string | null }>("orders");
+  return `VP-${pad(nextSequence(rows.map((r) => r.order_number), "VP"))}`;
 };
 
 export const nextCustomerNumber = async (): Promise<string> => {
-  const { data } = await supabase.from("customers").select("customer_number");
-  const values = ((data as { customer_number: string | null }[]) || []).map(
-    (r) => r.customer_number,
-  );
-  return `CL-${pad(nextSequence(values, "CL"))}`;
+  const rows = await listAll<{ customer_number: string | null }>("customers");
+  return `CL-${pad(nextSequence(rows.map((r) => r.customer_number), "CL"))}`;
 };
 
 export const nextTextileCompanyNumber = async (): Promise<string> => {
-  const { data } = await supabase
-    .from("textile_companies")
-    .select("company_number");
-  const values = ((data as { company_number: string | null }[]) || []).map(
-    (r) => r.company_number,
-  );
-  return `TXT-${pad(nextSequence(values, "TXT"))}`;
+  const rows = await listAll<{ company_number: string | null }>("textile_companies");
+  return `TXT-${pad(nextSequence(rows.map((r) => r.company_number), "TXT"))}`;
 };

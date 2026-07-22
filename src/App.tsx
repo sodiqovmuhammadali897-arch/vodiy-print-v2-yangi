@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { lazy } from "react";
 import Layout from "./components/layout/Layout";
 import Dashboard from "./modules/dashboard/Dashboard";
+import Login from "./modules/auth/Login";
+import { useAuth } from "./lib/AuthContext";
 
 const Orders = lazy(() => import("./modules/orders/Orders"));
 const OrderDetail = lazy(() => import("./modules/orders/OrderDetail"));
@@ -19,6 +21,20 @@ const Design = lazy(() => import("./modules/design/Design"));
 const Settings = lazy(() => import("./modules/settings/Settings"));
 
 export default function App() {
+  const { user, initializing } = useAuth();
+
+  if (initializing) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-ink-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
   return (
     <Routes>
       <Route element={<Layout />}>

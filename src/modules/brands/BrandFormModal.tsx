@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/ui/Modal";
-import { supabase } from "../../lib/supabase";
+import { insertOne, listAll, updateOne } from "../../lib/firestoreDb";
 import type { Brand, Customer } from "../../lib/types";
 
 type Props = {
@@ -30,11 +30,9 @@ export default function BrandFormModal({
 
   useEffect(() => {
     if (!open) return;
-    void supabase
-      .from("customers")
-      .select("*")
-      .order("first_name")
-      .then(({ data }) => setCustomers((data as Customer[]) || []));
+    void listAll<Customer>("customers", {
+      orderBy: ["first_name", "asc"],
+    }).then(setCustomers);
   }, [open]);
 
   useEffect(() => {
@@ -61,12 +59,18 @@ export default function BrandFormModal({
     if (!form.customer_id) return setError("Mijoz tanlanishi shart");
     setSaving(true);
     setError(null);
-    const { error } = brand
-      ? await supabase.from("brands").update(form).eq("id", brand.id)
-      : await supabase.from("brands").insert(form);
-    setSaving(false);
-    if (error) return setError(error.message);
-    onSaved();
+    try {
+      if (brand) {
+        await updateOne("brands", brand.id, form);
+      } else {
+        await insertOne("brands", form);
+      }
+      setSaving(false);
+      onSaved();
+    } catch (e) {
+      setSaving(false);
+      setError(e instanceof Error ? e.message : "Xatolik");
+    }
   };
 
   return (
