@@ -3,14 +3,14 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
 const anon = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
 
-export const isSupabaseConfigured = Boolean(url && anon);
+const configured = Boolean(url && anon);
 
-export const missingSupabaseKeys: string[] = [
+const missing: string[] = [
   ...(url ? [] : ["VITE_SUPABASE_URL"]),
   ...(anon ? [] : ["VITE_SUPABASE_ANON_KEY"]),
 ];
 
-export const supabase: SupabaseClient = isSupabaseConfigured
+const client: SupabaseClient = configured
   ? createClient(url as string, anon as string, {
       auth: { persistSession: false },
     })
@@ -25,4 +25,6 @@ export const supabase: SupabaseClient = isSupabaseConfigured
       },
     ) as unknown as SupabaseClient);
 
-export { isSupabaseConfigured }
+export const isSupabaseConfigured = configured;
+export const missingSupabaseKeys = missing;
+export const supabase = client;
