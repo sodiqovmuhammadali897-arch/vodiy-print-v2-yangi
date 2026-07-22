@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Shirt } from "lucide-react";
-import { insertOne } from "../../../lib/firestoreDb";
+import { supabase } from "../../../lib/supabase";
 import { nextTextileCompanyNumber } from "../../../lib/numbering";
 import type { Manager, TextileCompany } from "../../../lib/types";
 import type { OrderPayload } from "../../../lib/orderService";
@@ -53,30 +53,30 @@ export default function ProductionStep({
     }
     setTxSaving(true);
     setTxError(null);
-    try {
-      const number = await nextTextileCompanyNumber();
-      const created = await insertOne("textile_companies", {
-        ...txForm,
-        company_number: number,
-        is_active: true,
-      });
-      setTxSaving(false);
-      onTextileCompanyCreated(created as unknown as TextileCompany);
-      set("textile_company_id", created.id);
-      set("textile_company_name", created.name as string);
-      setTxOpen(false);
-      setTxForm({
-        name: "",
-        contact_person: "",
-        phone: "",
-        telegram: "",
-        address: "",
-        note: "",
-      });
-    } catch (e) {
-      setTxSaving(false);
-      setTxError(e instanceof Error ? e.message : "Xatolik");
+    const number = await nextTextileCompanyNumber();
+    const { data, error } = await supabase
+      .from("textile_companies")
+      .insert({ ...txForm, company_number: number, is_active: true })
+      .select("*")
+      .maybeSingle();
+    setTxSaving(false);
+    if (error || !data) {
+      setTxError(error?.message || "Xatolik");
+      return;
     }
+    const created = data as TextileCompany;
+    onTextileCompanyCreated(created);
+    set("textile_company_id", created.id);
+    set("textile_company_name", created.name);
+    setTxOpen(false);
+    setTxForm({
+      name: "",
+      contact_person: "",
+      phone: "",
+      telegram: "",
+      address: "",
+      note: "",
+    });
   };
 
   const selectedTextile = textileCompanies.find(

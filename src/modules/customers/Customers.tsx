@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Search, UsersRound, Phone, Building2, Send } from "lucide-react";
-import { listAll } from "../../lib/firestoreDb";
+import { supabase } from "../../lib/supabase";
 import type { Customer } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import CustomerFormModal from "./CustomerFormModal";
@@ -15,10 +15,11 @@ export default function Customers() {
 
   const load = async () => {
     setLoading(true);
-    const data = await listAll<Customer>("customers", {
-      orderBy: ["created_at", "desc"],
-    });
-    setCustomers(data);
+    const { data } = await supabase
+      .from("customers")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setCustomers((data as Customer[]) || []);
     setLoading(false);
   };
 

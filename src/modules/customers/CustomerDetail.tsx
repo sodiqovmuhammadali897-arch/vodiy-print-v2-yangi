@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Send, Building2, Phone, MapPin, Tag, Package, Plus } from "lucide-react";
-import { getOne, listWhere } from "../../lib/firestoreDb";
+import { supabase } from "../../lib/supabase";
 import type { Brand, Customer, Order } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import StatusBadge from "../../components/ui/StatusBadge";
@@ -21,17 +21,21 @@ export default function CustomerDetail() {
     if (!id) return;
     setLoading(true);
     const [c, b, o] = await Promise.all([
-      getOne<Customer>("customers", id),
-      listWhere<Brand>("brands", "customer_id", id, {
-        orderBy: ["created_at", "desc"],
-      }),
-      listWhere<Order>("orders", "customer_id", id, {
-        orderBy: ["created_at", "desc"],
-      }),
+      supabase.from("customers").select("*").eq("id", id).maybeSingle(),
+      supabase
+        .from("brands")
+        .select("*")
+        .eq("customer_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("orders")
+        .select("*")
+        .eq("customer_id", id)
+        .order("created_at", { ascending: false }),
     ]);
-    setCustomer(c);
-    setBrands(b);
-    setOrders(o);
+    setCustomer((c.data as Customer) || null);
+    setBrands((b.data as Brand[]) || []);
+    setOrders((o.data as Order[]) || []);
     setLoading(false);
   };
 

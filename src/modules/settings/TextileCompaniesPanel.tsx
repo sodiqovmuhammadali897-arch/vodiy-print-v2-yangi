@@ -11,17 +11,11 @@ import {
   MapPin,
   User,
 } from "lucide-react";
+import { supabase } from "../../lib/supabase";
+import type { TextileCompany } from "../../lib/types";
 import { nextTextileCompanyNumber } from "../../lib/numbering";
 import Modal from "../../components/ui/Modal";
 import AsyncState from "../../components/ui/AsyncState";
-import {
-  deleteOne,
-  insertOne,
-  listAll,
-  updateOne,
-  updateWhere,
-} from "../../lib/firestoreDb";
-import type { TextileCompany } from "../../lib/types";
 
 type FormState = {
   name: string;
@@ -56,18 +50,20 @@ export default function TextileCompaniesPanel() {
 
   const load = async () => {
     setLoading(true);
-    const [companies, orders] = await Promise.all([
-      listAll<TextileCompany>("textile_companies", {
-        orderBy: ["created_at", "desc"],
-      }),
-      listAll<{ textile_company_id: string | null }>("orders"),
+    const [c, o] = await Promise.all([
+      supabase
+        .from("textile_companies")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("orders")
+        .select("textile_company_id")
+        .not("textile_company_id", "is", null),
     ]);
-    setRows(companies);
+    setRows((c.data as TextileCompany[]) || []);
     const counts: Record<string, number> = {};
-    orders.forEach((r) => {
-      if (r.textile_company_id) {
-        counts[r.textile_company_id] = (counts[r.textile_company_id] || 0) + 1;
-      }
+    ((o.data as { textile_company_id: string }[]) || []).forEach((r) => {
+      counts[r.textile_company_id] = (counts[r.textile_company_id] || 0) + 1;
     });
     setUsageCount(counts);
     setLoading(false);
@@ -118,28 +114,39 @@ export default function TextileCompaniesPanel() {
     }
     setSaving(true);
     setError(null);
-    try {
-      if (editing) {
-        await updateOne("textile_companies", editing.id, form);
-        await updateWhere("orders", "textile_company_id", editing.id, {
-          textile_company_name: form.name,
-        });
-        setModalOpen(false);
-        await load();
-      } else {
-        const number = await nextTextileCompanyNumber();
-        await insertOne("textile_companies", { ...form, company_number: number });
+    if (editing) {
+      const { error: err } = await supabase
+        .from("textile_companies")
+        .update(form)
+        .eq("id", editing.id);
+      if (err) setError(err.message);
+      else {
+        await supabase
+          .from("orders")
+          .update({ textile_company_name: form.name })
+          .eq("textile_company_id", editing.id);
         setModalOpen(false);
         await load();
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Xatolik");
+    } else {
+      const number = await nextTextileCompanyNumber();
+      const { error: err } = await supabase
+        .from("textile_companies")
+        .insert({ ...form, company_number: number });
+      if (err) setError(err.message);
+      else {
+        setModalOpen(false);
+        await load();
+      }
     }
     setSaving(false);
   };
 
   const toggleActive = async (c: TextileCompany) => {
-    await updateOne("textile_companies", c.id, { is_active: !c.is_active });
+    await supabase
+      .from("textile_companies")
+      .update({ is_active: !c.is_active })
+      .eq("id", c.id);
     await load();
   };
 
@@ -152,7 +159,7 @@ export default function TextileCompaniesPanel() {
       return;
     }
     if (!confirm(`"${c.name}" kompaniyasi o'chirilsinmi?`)) return;
-    await deleteOne("textile_companies", c.id);
+    await supabase.from("textile_companies").delete().eq("id", c.id);
     await load();
   };
 

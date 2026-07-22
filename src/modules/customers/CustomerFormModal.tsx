@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/ui/Modal";
-import { insertOne, updateOne } from "../../lib/firestoreDb";
+import { supabase } from "../../lib/supabase";
 import type { Customer } from "../../lib/types";
 
 type Props = {
@@ -61,23 +61,16 @@ export default function CustomerFormModal({
     }
     setSaving(true);
     setError(null);
-    try {
-      if (customer) {
-        await updateOne("customers", customer.id, form);
-      } else {
-        await insertOne("customers", {
-          ...form,
-          customer_type: "new",
-          customer_number: null,
-          source: "",
-        });
-      }
-      setSaving(false);
-      onSaved();
-    } catch (e) {
-      setSaving(false);
-      setError(e instanceof Error ? e.message : "Xatolik");
+    const payload = { ...form };
+    const { error } = customer
+      ? await supabase.from("customers").update(payload).eq("id", customer.id)
+      : await supabase.from("customers").insert(payload);
+    setSaving(false);
+    if (error) {
+      setError(error.message);
+      return;
     }
+    onSaved();
   };
 
   return (

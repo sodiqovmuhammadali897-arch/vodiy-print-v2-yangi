@@ -1,42 +1,56 @@
 import { useEffect, useState } from "react";
 import { Save, Target } from "lucide-react";
-import { getOne, upsertOne } from "../../lib/firestoreDb";
+import { supabase } from "../../lib/supabase";
 import type { MonthlyPlan } from "../../lib/types";
 import { formatMoney, monthNameUz } from "../../lib/format";
-
-const planId = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
 
 export default function MonthlyPlanPanel() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [plan, setPlan] = useState("");
+  const [current, setCurrent] = useState<MonthlyPlan | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    void (async () => {
-      const row = await getOne<MonthlyPlan>("monthly_plans", planId(year, month));
-      setPlan(row ? String(row.plan_amount) : "");
-    })();
+    void supabase
+      .from("monthly_plans")
+      .select("*")
+      .eq("year", year)
+      .eq("month", month)
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = (data as MonthlyPlan) || null;
+        setCurrent(row);
+        setPlan(row ? String(row.plan_amount) : "");
+      });
   }, [year, month]);
 
   const save = async () => {
     setSaving(true);
     setMsg(null);
     const amount = Number(plan) || 0;
-    try {
-      await upsertOne("monthly_plans", planId(year, month), {
-        year,
-        month,
-        plan_amount: amount,
-      });
-      setMsg("Saqlandi");
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Xatolik");
-    }
+    const { error } = current
+      ? await supabase
+          .from("monthly_plans")
+          .update({ plan_amount: amount })
+          .eq("id", current.id)
+      : await supabase
+          .from("monthly_plans")
+          .insert({ year, month, plan_amount: amount });
     setSaving(false);
+    setMsg(error ? error.message : "Saqlandi");
     setTimeout(() => setMsg(null), 2500);
+    if (!error) {
+      const { data } = await supabase
+        .from("monthly_plans")
+        .select("*")
+        .eq("year", year)
+        .eq("month", month)
+        .maybeSingle();
+      setCurrent((data as MonthlyPlan) || null);
+    }
   };
 
   const years = Array.from({ length: 6 }, (_, i) => now.getFullYear() - 2 + i);

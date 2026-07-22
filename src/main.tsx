@@ -3,13 +3,12 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import ConfigError from "./components/ui/ConfigError";
-import { isFirebaseConfigured } from "./lib/firebase";
-import { AuthProvider } from "./lib/AuthContext";
+import { isSupabaseConfigured } from "./lib/supabase";
 import "./index.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 
-if (!isFirebaseConfigured) {
+if (!isSupabaseConfigured) {
   root.render(
     <React.StrictMode>
       <ConfigError />
@@ -18,11 +17,9 @@ if (!isFirebaseConfigured) {
 } else {
   root.render(
     <React.StrictMode>
-      <AuthProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </AuthProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
     </React.StrictMode>,
   );
 }

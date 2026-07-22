@@ -1,6 +1,5 @@
-import { Menu, Search, Bell, Plus, LogOut } from "lucide-react";
+import { Menu, Search, Bell, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../lib/AuthContext";
 
 const titleMap: Record<string, string> = {
   "/dashboard": "Bosh sahifa",
@@ -21,17 +20,8 @@ type Props = { onOpenMobile: () => void };
 export default function Topbar({ onOpenMobile }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
   const base = "/" + location.pathname.split("/")[1];
   const title = titleMap[base] || "Poligrafiya ERP";
-
-  const handleLogout = async () => {
-    try {
-      await signOut();
-    } catch {
-      // ignore
-    }
-  };
 
   return (
     <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-ink-100 bg-white/80 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
@@ -68,25 +58,6 @@ export default function Topbar({ onOpenMobile }: Props) {
         className="btn-primary hidden sm:inline-flex"
       >
         <Plus className="h-4 w-4" /> Yangi buyurtma
-      </button>
-      <div className="hidden items-center gap-2 border-l border-ink-200 pl-3 md:flex">
-        <span className="max-w-[10rem] truncate text-xs text-ink-600" title={user?.email ?? ""}>
-          {user?.email}
-        </span>
-        <button
-          onClick={handleLogout}
-          title="Chiqish"
-          className="rounded-xl p-2 text-ink-500 transition hover:bg-ink-100 hover:text-ink-800"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
-      </div>
-      <button
-        onClick={handleLogout}
-        title="Chiqish"
-        className="rounded-xl p-2 text-ink-500 hover:bg-ink-100 md:hidden"
-      >
-        <LogOut className="h-4 w-4" />
       </button>
     </header>
   );

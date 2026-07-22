@@ -5,7 +5,6 @@ import ManagersPanel from "./ManagersPanel";
 import MonthlyPlanPanel from "./MonthlyPlanPanel";
 import HolidaysPanel from "./HolidaysPanel";
 import TextileCompaniesPanel from "./TextileCompaniesPanel";
-import SeedPanel from "./SeedPanel";
 
 type Tab = "company" | "managers" | "plan" | "holidays" | "textile";
 
@@ -50,8 +49,6 @@ export default function Settings() {
           </button>
         ))}
       </div>
-
-      <SeedPanel />
 
       {tab === "company" && <CompanySettingsPanel />}
       {tab === "managers" && <ManagersPanel />}

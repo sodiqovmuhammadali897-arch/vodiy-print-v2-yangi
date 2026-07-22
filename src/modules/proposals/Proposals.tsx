@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, FileText, Trash2, ExternalLink } from "lucide-react";
-import { deleteOne, listAll } from "../../lib/firestoreDb";
+import { supabase } from "../../lib/supabase";
 import type { Customer, Proposal } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import { formatDate, formatMoney } from "../../lib/format";
@@ -13,13 +13,13 @@ export default function Proposals() {
 
   const load = async () => {
     setLoading(true);
-    const [proposals, customers] = await Promise.all([
-      listAll<Proposal>("proposals", { orderBy: ["created_at", "desc"] }),
-      listAll<Customer>("customers"),
+    const [p, c] = await Promise.all([
+      supabase.from("proposals").select("*").order("created_at", { ascending: false }),
+      supabase.from("customers").select("*"),
     ]);
-    const map = new Map(customers.map((x) => [x.id, x]));
+    const map = new Map(((c.data as Customer[]) || []).map((x) => [x.id, x]));
     setRows(
-      proposals.map((pr) => ({
+      ((p.data as Proposal[]) || []).map((pr) => ({
         ...pr,
         customer: pr.customer_id ? map.get(pr.customer_id) : undefined,
       })),
@@ -33,7 +33,7 @@ export default function Proposals() {
 
   const remove = async (id: string) => {
     if (!confirm("Ushbu tijorat taklifini o'chirishni tasdiqlaysizmi?")) return;
-    await deleteOne("proposals", id);
+    await supabase.from("proposals").delete().eq("id", id);
     void load();
   };
 

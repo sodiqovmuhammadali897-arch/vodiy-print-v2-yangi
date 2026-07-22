@@ -1,5 +1,5 @@
 import { TriangleAlert as AlertTriangle } from "lucide-react";
-import { missingFirebaseKeys } from "../../lib/firebase";
+import { missingSupabaseKeys } from "../../lib/supabase";
 
 export default function ConfigError() {
   return (
@@ -14,12 +14,12 @@ export default function ConfigError() {
               Konfiguratsiya xatosi
             </h1>
             <p className="mt-1 text-sm leading-6 text-ink-600">
-              Ilovani ishga tushirish uchun Firebase ulanish sozlamalari
-              topilmadi. Quyidagi environment variable'lar yetishmayapti:
+              Ilovani ishga tushirish uchun Supabase ulanish sozlamalari topilmadi.
+              Quyidagi environment variable'lar yetishmayapti:
             </p>
 
             <ul className="mt-4 space-y-2">
-              {missingFirebaseKeys.map((k: string) => (
+              {missingSupabaseKeys.map((k: string) => (
                 <li
                   key={k}
                   className="rounded-lg border border-ink-200 bg-ink-50 px-3 py-2 font-mono text-xs text-ink-800"
@@ -38,15 +38,16 @@ export default function ConfigError() {
                 </li>
                 <li>
                   Vercel'da: Project Settings &rarr; Environment Variables
-                  bo'limiga barcha <code>VITE_FIREBASE_*</code> qiymatlarini
-                  qo'shing va qayta deploy qiling.
+                  bo'limida <code>VITE_SUPABASE_URL</code> va{" "}
+                  <code>VITE_SUPABASE_ANON_KEY</code> qiymatlarini qo'shing va
+                  qayta deploy qiling.
                 </li>
               </ol>
             </div>
 
             <p className="mt-4 text-xs text-ink-500">
-              Qiymatlar Firebase Console &rarr; Project Settings &rarr; General
-              &rarr; Your apps bo'limidan olinadi.
+              Qiymatlar Supabase loyihangizning Project Settings &rarr; API
+              bo'limidan olinadi.
             </p>
           </div>
         </div>

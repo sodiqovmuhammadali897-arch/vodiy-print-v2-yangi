@@ -8,7 +8,7 @@ import {
   Save,
   Image as ImageIcon,
 } from "lucide-react";
-import { getOne, insertOne, listAll, updateOne } from "../../lib/firestoreDb";
+import { supabase } from "../../lib/supabase";
 import type {
   Brand,
   CompanySettings,
@@ -67,23 +67,27 @@ export default function ProposalEditor() {
   useEffect(() => {
     const load = async () => {
       const [c, b, pr, cs] = await Promise.all([
-        listAll<Customer>("customers", { orderBy: ["first_name", "asc"] }),
-        listAll<Brand>("brands", { orderBy: ["name", "asc"] }),
-        listAll<Product>("products", { orderBy: ["name", "asc"] }),
-        getOne<CompanySettings>("company_settings", "main"),
+        supabase.from("customers").select("*").order("first_name"),
+        supabase.from("brands").select("*").order("name"),
+        supabase.from("products").select("*").order("name"),
+        supabase.from("company_settings").select("*").maybeSingle(),
       ]);
-      setCustomers(c);
-      setBrands(b);
-      setProducts(pr);
-      setCompany(cs);
+      setCustomers((c.data as Customer[]) || []);
+      setBrands((b.data as Brand[]) || []);
+      setProducts((pr.data as Product[]) || []);
+      setCompany((cs.data as CompanySettings) || null);
 
       if (!isNew && id) {
-        const data = await getOne<Proposal>("proposals", id);
+        const { data } = await supabase
+          .from("proposals")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
         if (data) {
           const items = Array.isArray(data.items)
             ? (data.items as ProposalItem[])
             : [];
-          setProposal({ ...data, items });
+          setProposal({ ...(data as Proposal), items });
         }
       }
     };
@@ -163,19 +167,18 @@ export default function ProposalEditor() {
       valid_until: proposal.valid_until,
       note: proposal.note,
     };
-    try {
-      if (isNew) {
-        const created = await insertOne("proposals", payload);
-        setSaving(false);
-        navigate(`/proposals/${created.id}`, { replace: true });
-      } else {
-        await updateOne("proposals", proposal.id, payload);
-        setSaving(false);
-        navigate("/proposals");
-      }
-    } catch (e) {
-      setSaving(false);
-      alert(e instanceof Error ? e.message : "Xatolik");
+    const res = isNew
+      ? await supabase.from("proposals").insert(payload).select("id").maybeSingle()
+      : await supabase.from("proposals").update(payload).eq("id", proposal.id);
+    setSaving(false);
+    if (res.error) {
+      alert(res.error.message);
+      return;
+    }
+    if (isNew && (res.data as { id: string } | null)?.id) {
+      navigate(`/proposals/${(res.data as { id: string }).id}`, { replace: true });
+    } else {
+      navigate("/proposals");
     }
   };
 

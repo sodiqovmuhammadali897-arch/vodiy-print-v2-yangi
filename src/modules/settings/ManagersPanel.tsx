@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Users } from "lucide-react";
-import { deleteOne, insertOne, listAll, updateOne } from "../../lib/firestoreDb";
+import { supabase } from "../../lib/supabase";
 import type { Manager } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import { formatMoney, initialsOf } from "../../lib/format";
@@ -12,8 +12,11 @@ export default function ManagersPanel() {
 
   const load = async () => {
     setLoading(true);
-    const data = await listAll<Manager>("managers", { orderBy: ["created_at", "asc"] });
-    setRows(data);
+    const { data } = await supabase
+      .from("managers")
+      .select("*")
+      .order("created_at");
+    setRows((data as Manager[]) || []);
     setLoading(false);
   };
 
@@ -23,23 +26,22 @@ export default function ManagersPanel() {
 
   const add = async () => {
     if (!form.name.trim()) return;
-    await insertOne("managers", {
+    await supabase.from("managers").insert({
       name: form.name.trim(),
       monthly_plan: Number(form.monthly_plan) || 0,
-      avatar_url: "",
     });
     setForm({ name: "", monthly_plan: "" });
     void load();
   };
 
   const updatePlan = async (id: string, plan: number) => {
-    await updateOne("managers", id, { monthly_plan: plan });
+    await supabase.from("managers").update({ monthly_plan: plan }).eq("id", id);
     void load();
   };
 
   const remove = async (id: string) => {
     if (!confirm("Managerni o'chirmoqchimisiz?")) return;
-    await deleteOne("managers", id);
+    await supabase.from("managers").delete().eq("id", id);
     void load();
   };
 

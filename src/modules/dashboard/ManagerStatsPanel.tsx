@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { UserRound, Users } from "lucide-react";
-import { listAll } from "../../lib/firestoreDb";
+import { supabase } from "../../lib/supabase";
 import { formatMoney, formatMoneyShort, initialsOf } from "../../lib/format";
 import { monthRange } from "../../lib/workdays";
 import type { Manager } from "../../lib/types";
@@ -21,16 +21,19 @@ export default function ManagerStatsPanel() {
     const load = async () => {
       setLoading(true);
       const { start, end } = monthRange(new Date());
-      const [managers, allOrders] = await Promise.all([
-        listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }),
-        listAll<{ manager_name: string; total_amount: number; created_at: string }>(
-          "orders",
-        ),
+      const [managersRes, ordersRes] = await Promise.all([
+        supabase.from("managers").select("*").order("created_at"),
+        supabase
+          .from("orders")
+          .select("manager_name, total_amount")
+          .gte("created_at", start)
+          .lt("created_at", end),
       ]);
       if (cancelled) return;
-      const orders = allOrders.filter(
-        (o) => o.created_at >= start && o.created_at < end,
-      );
+      const managers = (managersRes.data as Manager[]) || [];
+      const orders =
+        ((ordersRes.data as { manager_name: string; total_amount: number }[]) ||
+          []);
       const totals = new Map<string, number>();
       for (const o of orders) {
         const key = (o.manager_name || "").trim();

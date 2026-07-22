@@ -1,37 +1,7 @@
 import { useEffect, useState } from "react";
 import { Save } from "lucide-react";
-import { getOne, upsertOne } from "../../lib/firestoreDb";
+import { supabase } from "../../lib/supabase";
 import type { CompanySettings } from "../../lib/types";
-
-const SINGLETON_ID = "main";
-
-const emptySettings = (): CompanySettings => ({
-  id: SINGLETON_ID,
-  singleton: true,
-  name: "",
-  logo_url: "",
-  director_name: "",
-  phone: "",
-  extra_phone: "",
-  email: "",
-  telegram: "",
-  website: "",
-  address: "",
-  stir: "",
-  mfo: "",
-  bank_account: "",
-  bank_name: "",
-  qr_url: "",
-  work_hours: "",
-  google_maps: "",
-  instagram: "",
-  facebook: "",
-  youtube: "",
-  requisites: "",
-  stamp_url: "",
-  signature_url: "",
-  updated_at: new Date().toISOString(),
-});
 
 const fields: {
   key: keyof CompanySettings;
@@ -71,10 +41,11 @@ export default function CompanySettingsPanel() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    void (async () => {
-      const existing = await getOne<CompanySettings>("company_settings", SINGLETON_ID);
-      setData(existing ?? emptySettings());
-    })();
+    void supabase
+      .from("company_settings")
+      .select("*")
+      .maybeSingle()
+      .then(({ data }) => setData((data as CompanySettings) || null));
   }, []);
 
   if (!data) {
@@ -87,17 +58,13 @@ export default function CompanySettingsPanel() {
   const save = async () => {
     setSaving(true);
     setMsg(null);
-    try {
-      const { id: _ignored, ...rest } = data;
-      await upsertOne("company_settings", SINGLETON_ID, {
-        ...rest,
-        updated_at: new Date().toISOString(),
-      });
-      setMsg("Saqlandi");
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Xatolik");
-    }
+    const payload = { ...data, updated_at: new Date().toISOString() };
+    const { error } = await supabase
+      .from("company_settings")
+      .update(payload)
+      .eq("id", data.id);
     setSaving(false);
+    setMsg(error ? error.message : "Saqlandi");
     setTimeout(() => setMsg(null), 2500);
   };
 
@@ -124,8 +91,12 @@ export default function CompanySettingsPanel() {
 
       {(data.logo_url || data.stamp_url || data.signature_url || data.qr_url) && (
         <div className="mb-5 flex flex-wrap gap-4 rounded-xl bg-ink-50 p-4">
-          {data.logo_url && <Preview label="Logo" url={data.logo_url} />}
-          {data.stamp_url && <Preview label="Muhr" url={data.stamp_url} />}
+          {data.logo_url && (
+            <Preview label="Logo" url={data.logo_url} />
+          )}
+          {data.stamp_url && (
+            <Preview label="Muhr" url={data.stamp_url} />
+          )}
           {data.signature_url && (
             <Preview label="Imzo" url={data.signature_url} />
           )}
