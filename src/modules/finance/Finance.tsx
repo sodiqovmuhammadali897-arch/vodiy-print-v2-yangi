@@ -11,9 +11,19 @@ import {
   Percent,
   UserPlus,
   Repeat,
+  Lock,
 } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
-import type { Customer, Expense, MonthlyPlan, Order, OrderPayment } from "../../lib/types";
+import type {
+  Customer,
+  Expense,
+  MonthlyPlan,
+  Order,
+  OrderPayment,
+  OrderProduct,
+  Product,
+  ProductCost,
+} from "../../lib/types";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
 import {
   defaultDateRange,
@@ -23,6 +33,7 @@ import {
 import { segmentCustomersByFirstOrder } from "../../lib/customerSegments";
 import { exportCsv } from "../../lib/exportCsv";
 import { exportNodeToPdf } from "../../lib/exportPdf";
+import { useAuth } from "../../lib/AuthContext";
 import StatCard from "../../components/ui/StatCard";
 import DateRangeFilter from "../../components/ui/DateRangeFilter";
 import SimpleDonutChart, { type DonutSlice } from "../../components/ui/SimpleDonutChart";
@@ -35,6 +46,7 @@ const planId = (year: number, month: number) =>
   `${year}-${String(month).padStart(2, "0")}`;
 
 export default function Finance() {
+  const { isAdmin } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState<DateRange>(defaultDateRange());
   const [loading, setLoading] = useState(true);
@@ -43,6 +55,8 @@ export default function Finance() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [customers, setCustomers] = useState<Map<string, Customer>>(new Map());
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
+  const [orderProducts, setOrderProducts] = useState<OrderProduct[]>([]);
+  const [costByProductName, setCostByProductName] = useState<Map<string, number>>(new Map());
 
   const load = async () => {
     setLoading(true);
@@ -60,12 +74,30 @@ export default function Finance() {
     setExpenses(expensesData);
     setCustomers(new Map(customersData.map((c) => [c.id, c])));
     setPlan(planData);
+
+    if (isAdmin) {
+      const [orderProductsData, productsData, costsData] = await Promise.all([
+        listAll<OrderProduct>("order_products"),
+        listAll<Product>("products"),
+        listAll<ProductCost>("product_costs"),
+      ]);
+      setOrderProducts(orderProductsData);
+      const costById = new Map(costsData.map((c) => [c.id, Number(c.cost_price || 0)]));
+      const byName = new Map<string, number>();
+      for (const p of productsData) {
+        const cost = costById.get(p.id);
+        if (cost !== undefined) byName.set(p.name, cost);
+      }
+      setCostByProductName(byName);
+    }
+
     setLoading(false);
   };
 
   useEffect(() => {
     void load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   const ordersInRange = useMemo(
     () => orders.filter((o) => inRange(o.order_date || o.created_at, range)),
@@ -107,6 +139,21 @@ export default function Finance() {
     () => segmentCustomersByFirstOrder(orders, range),
     [orders, range],
   );
+
+  // Real (cost-adjusted) profit: only computable for admins, since cost
+  // price is admin-only, and only for order lines whose product_name
+  // matches a catalog product exactly — lines with no match are excluded.
+  const cogs = useMemo(() => {
+    if (!isAdmin) return 0;
+    const orderIdsInRange = new Set(ordersInRange.map((o) => o.id));
+    return orderProducts
+      .filter((p) => orderIdsInRange.has(p.order_id))
+      .reduce((s, p) => {
+        const cost = costByProductName.get(p.product_name?.trim() || "");
+        return cost === undefined ? s : s + cost * Number(p.quantity || 0);
+      }, 0);
+  }, [isAdmin, orderProducts, costByProductName, ordersInRange]);
+  const realProfit = profit - cogs;
 
   const paymentTypeDonut: DonutSlice[] = useMemo(() => {
     const map = new Map<string, number>();
@@ -235,6 +282,38 @@ export default function Finance() {
           icon={<Repeat className="h-5 w-5" />}
         />
       </div>
+
+      {isAdmin && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Lock className="h-4 w-4 text-amber-700" />
+            <h2 className="font-display text-base font-bold text-ink-900">
+              Haqiqiy sof foyda (tan narx bilan) — faqat admin
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <StatCard
+              title="Mahsulot tannarxi (COGS)"
+              value={formatMoneyShort(cogs)}
+              hint={formatMoney(cogs)}
+              tone="amber"
+              icon={<Lock className="h-5 w-5" />}
+            />
+            <StatCard
+              title="Haqiqiy sof foyda"
+              value={formatMoneyShort(realProfit)}
+              hint={formatMoney(realProfit)}
+              tone={realProfit >= 0 ? "emerald" : "rose"}
+              icon={<PiggyBank className="h-5 w-5" />}
+            />
+          </div>
+          <p className="mt-3 text-xs text-ink-500">
+            Faqat "Mahsulotlar" katalogida tan narxi kiritilgan va nomi
+            buyurtmadagi nom bilan aynan mos kelgan mahsulotlar hisobga
+            olinadi — bu taxminiy ko'rsatkich.
+          </p>
+        </div>
+      )}
 
       <div className="card p-5">
         <h2 className="mb-4 font-display text-base font-bold text-ink-900">

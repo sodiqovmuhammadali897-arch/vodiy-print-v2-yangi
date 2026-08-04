@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Package, Users, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Palette, Settings as SettingsIcon, X, Sparkles } from "lucide-react";
+import { LayoutDashboard, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Palette, Settings as SettingsIcon, X, Sparkles } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import type { ModuleKey } from "../../lib/permissions";
 
@@ -7,6 +7,7 @@ const navItems = [
   { to: "/dashboard", label: "Bosh sahifa", icon: LayoutDashboard, module: "dashboard" as ModuleKey },
   { to: "/orders", label: "Buyurtmalar", icon: Package, module: "orders" as ModuleKey },
   { to: "/customers", label: "Mijozlar", icon: Users, module: "customers" as ModuleKey },
+  { to: "/products", label: "Mahsulotlar", icon: Boxes, module: "products" as ModuleKey },
   { to: "/proposals", label: "Tijorat taklifi", icon: FileText, module: "proposals" as ModuleKey },
   { to: "/design", label: "Dizayn", icon: Palette, module: "design" as ModuleKey },
   { to: "/textile", label: "Textil", icon: Shirt, module: "textile" as ModuleKey },

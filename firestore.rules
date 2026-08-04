@@ -72,6 +72,19 @@ service cloud.firestore {
       allow delete: if can('customers', 'delete');
     }
 
+    match /products/{id} {
+      allow read: if can('products', 'view');
+      allow create, update: if can('products', 'edit');
+      allow delete: if can('products', 'delete');
+    }
+
+    // Cost price lives in its own collection, readable only by admins, so
+    // it never reaches a non-admin client even though the product itself
+    // (name, category, price tiers) is visible to anyone with products.view.
+    match /product_costs/{id} {
+      allow read, write: if isAdmin();
+    }
+
     match /proposals/{id} {
       allow read: if can('proposals', 'view');
       allow create, update: if can('proposals', 'edit');

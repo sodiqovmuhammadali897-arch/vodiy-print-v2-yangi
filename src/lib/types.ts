@@ -127,13 +127,27 @@ export type OrderFile = {
   created_at: string;
 };
 
+export type PriceTier = {
+  min_qty: number;
+  price: number;
+};
+
 export type Product = {
   id: string;
   name: string;
   unit: string;
   base_price: number;
   category: string;
+  price_tiers: PriceTier[];
   created_at: string;
+};
+
+// Kept in a separate collection with its own Firestore rules so cost price
+// stays readable by admins only, even though the product itself is visible
+// to anyone with products.view.
+export type ProductCost = {
+  id: string;
+  cost_price: number;
 };
 
 export type ProposalItem = {
