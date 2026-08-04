@@ -7,6 +7,10 @@ on:
       - claude/server-talabini-ayt-s48oig
   workflow_dispatch: {}
 
+concurrency:
+  group: deploy-printvodiy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -47,7 +51,7 @@ jobs:
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S apt-get update -y
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S apt-get install -y nginx certbot python3-certbot-nginx
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S mkdir -p /var/www/printvodiy.uz
-            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R "${{ secrets.SERVER_USER }}":"${{ secrets.SERVER_USER }}" /var/www/printvodiy.uz
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R "${{ secrets.SERVER_USER }}" /var/www/printvodiy.uz
 
       - name: Upload nginx site config
         uses: appleboy/scp-action@v0.1.7
