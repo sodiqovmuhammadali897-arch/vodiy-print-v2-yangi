@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { TriangleAlert as AlertTriangle, LogIn } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 
@@ -22,11 +23,15 @@ const errorMessage = (code: string): string => {
 };
 
 export default function Login() {
-  const { signIn } = useAuth();
+  const { user, initializing, signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (!initializing && user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
