@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { Building2, Users, Target, CalendarDays, Shirt } from "lucide-react";
+import { Building2, Users, Target, CalendarDays, Shirt, ShieldCheck } from "lucide-react";
 import CompanySettingsPanel from "./CompanySettingsPanel";
 import ManagersPanel from "./ManagersPanel";
 import MonthlyPlanPanel from "./MonthlyPlanPanel";
 import HolidaysPanel from "./HolidaysPanel";
 import TextileCompaniesPanel from "./TextileCompaniesPanel";
+import StaffPermissionsPanel from "./StaffPermissionsPanel";
 import SeedPanel from "./SeedPanel";
 
-type Tab = "company" | "managers" | "plan" | "holidays" | "textile";
+type Tab = "company" | "managers" | "plan" | "holidays" | "textile" | "staff";
 
 const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "company", label: "Kompaniya ma'lumotlari", icon: <Building2 className="h-4 w-4" /> },
@@ -15,6 +16,7 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "plan", label: "Oylik reja", icon: <Target className="h-4 w-4" /> },
   { key: "holidays", label: "Bayram kunlari", icon: <CalendarDays className="h-4 w-4" /> },
   { key: "textile", label: "Textil kompaniyalari", icon: <Shirt className="h-4 w-4" /> },
+  { key: "staff", label: "Xodimlar va ruxsatlar", icon: <ShieldCheck className="h-4 w-4" /> },
 ];
 
 export default function Settings() {
@@ -58,6 +60,7 @@ export default function Settings() {
       {tab === "plan" && <MonthlyPlanPanel />}
       {tab === "holidays" && <HolidaysPanel />}
       {tab === "textile" && <TextileCompaniesPanel />}
+      {tab === "staff" && <StaffPermissionsPanel />}
     </div>
   );
 }

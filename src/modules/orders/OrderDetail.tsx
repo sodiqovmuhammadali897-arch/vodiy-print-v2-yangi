@@ -39,10 +39,13 @@ import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
 import { formatDate, formatDateTime, formatMoney } from "../../lib/format";
 import { deadlineInfo } from "../../lib/workingDays";
 import { nextOrderNumber } from "../../lib/numbering";
+import { useAuth } from "../../lib/AuthContext";
 
 export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { can } = useAuth();
+  const canEdit = can("orders", "edit");
   const [order, setOrder] = useState<Order | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -180,21 +183,23 @@ export default function OrderDetail() {
         <button onClick={() => navigate("/orders")} className="btn-ghost -ml-2">
           <ArrowLeft className="h-4 w-4" /> Buyurtmalar
         </button>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            className="btn-secondary"
-            onClick={duplicate}
-            disabled={duplicating}
-          >
-            <ClipboardCopy className="h-4 w-4" /> Nusxa olish
-          </button>
-          <button
-            className="btn-primary"
-            onClick={() => navigate(`/orders/${order.id}/edit`)}
-          >
-            <Pencil className="h-4 w-4" /> Tahrirlash
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className="btn-secondary"
+              onClick={duplicate}
+              disabled={duplicating}
+            >
+              <ClipboardCopy className="h-4 w-4" /> Nusxa olish
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => navigate(`/orders/${order.id}/edit`)}
+            >
+              <Pencil className="h-4 w-4" /> Tahrirlash
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card p-6">

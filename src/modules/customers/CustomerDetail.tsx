@@ -7,10 +7,13 @@ import AsyncState from "../../components/ui/AsyncState";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { formatDate, formatMoney } from "../../lib/format";
 import BrandFormModal from "../brands/BrandFormModal";
+import { useAuth } from "../../lib/AuthContext";
 
 export default function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { can } = useAuth();
+  const canEditBrands = can("brands", "edit");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -123,9 +126,11 @@ export default function CustomerDetail() {
               Bu mijozga tegishli brendlar ({brands.length})
             </p>
           </div>
-          <button className="btn-primary" onClick={() => setBrandModal(true)}>
-            <Plus className="h-4 w-4" /> Yangi brend
-          </button>
+          {canEditBrands && (
+            <button className="btn-primary" onClick={() => setBrandModal(true)}>
+              <Plus className="h-4 w-4" /> Yangi brend
+            </button>
+          )}
         </div>
         <AsyncState
           empty={brands.length === 0}

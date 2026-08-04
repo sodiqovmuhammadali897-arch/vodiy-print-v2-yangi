@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { lazy } from "react";
 import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PermissionRoute from "./components/auth/PermissionRoute";
+import AdminRoute from "./components/auth/AdminRoute";
 import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
 
@@ -27,23 +29,57 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/orders/new" element={<OrderWizard />} />
-          <Route path="/orders/:id/edit" element={<OrderWizard />} />
-          <Route path="/orders/:id" element={<OrderDetail />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/customers/:id" element={<CustomerDetail />} />
-          <Route path="/brands" element={<Brands />} />
-          <Route path="/proposals" element={<Proposals />} />
-          <Route path="/proposals/new" element={<ProposalEditor />} />
-          <Route path="/proposals/:id" element={<ProposalEditor />} />
-          <Route path="/textile" element={<Textile />} />
-          <Route path="/warehouse" element={<Warehouse />} />
-          <Route path="/finance" element={<Finance />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/design" element={<Design />} />
-          <Route path="/settings" element={<Settings />} />
+
+          <Route element={<PermissionRoute module="dashboard" />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="orders" />}>
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/orders/new" element={<OrderWizard />} />
+            <Route path="/orders/:id/edit" element={<OrderWizard />} />
+            <Route path="/orders/:id" element={<OrderDetail />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="customers" />}>
+            <Route path="/customers" element={<Customers />} />
+            <Route path="/customers/:id" element={<CustomerDetail />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="brands" />}>
+            <Route path="/brands" element={<Brands />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="proposals" />}>
+            <Route path="/proposals" element={<Proposals />} />
+            <Route path="/proposals/new" element={<ProposalEditor />} />
+            <Route path="/proposals/:id" element={<ProposalEditor />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="textile" />}>
+            <Route path="/textile" element={<Textile />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="warehouse" />}>
+            <Route path="/warehouse" element={<Warehouse />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="finance" />}>
+            <Route path="/finance" element={<Finance />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="reports" />}>
+            <Route path="/reports" element={<Reports />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="design" />}>
+            <Route path="/design" element={<Design />} />
+          </Route>
+
+          <Route element={<AdminRoute />}>
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Route>

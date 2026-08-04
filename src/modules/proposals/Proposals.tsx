@@ -5,9 +5,13 @@ import { deleteOne, listAll } from "../../lib/firestoreDb";
 import type { Customer, Proposal } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import { formatDate, formatMoney } from "../../lib/format";
+import { useAuth } from "../../lib/AuthContext";
 
 export default function Proposals() {
   const navigate = useNavigate();
+  const { can } = useAuth();
+  const canEdit = can("proposals", "edit");
+  const canDelete = can("proposals", "delete");
   const [rows, setRows] = useState<(Proposal & { customer?: Customer })[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,9 +52,11 @@ export default function Proposals() {
             Mijozlar uchun tijorat takliflarini yarating va PDF eksport qiling
           </p>
         </div>
-        <button className="btn-primary" onClick={() => navigate("/proposals/new")}>
-          <Plus className="h-4 w-4" /> Yangi taklif
-        </button>
+        {canEdit && (
+          <button className="btn-primary" onClick={() => navigate("/proposals/new")}>
+            <Plus className="h-4 w-4" /> Yangi taklif
+          </button>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -101,12 +107,14 @@ export default function Proposals() {
                         <Link className="btn-ghost" to={`/proposals/${p.id}`}>
                           <ExternalLink className="h-4 w-4" /> Ochish
                         </Link>
-                        <button
-                          className="btn-ghost text-rose-600 hover:bg-rose-50"
-                          onClick={() => remove(p.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            className="btn-ghost text-rose-600 hover:bg-rose-50"
+                            onClick={() => remove(p.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

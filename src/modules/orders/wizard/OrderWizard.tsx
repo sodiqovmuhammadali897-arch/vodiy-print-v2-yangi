@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -18,6 +18,7 @@ import { saveOrder } from "../../../lib/orderService";
 import type { OrderPayload, WizardFileLink, WizardPayment, WizardProduct } from "../../../lib/orderService";
 import { computeOrderTotals } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
+import { useAuth } from "../../../lib/AuthContext";
 import CustomerStep from "./CustomerStep";
 import ProductionStep from "./ProductionStep";
 import FilesStep from "./FilesStep";
@@ -75,6 +76,7 @@ export default function OrderWizard() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isNew = !id || id === "new";
+  const { can } = useAuth();
 
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(!isNew);
@@ -254,6 +256,10 @@ export default function OrderWizard() {
 
   const goNext = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
   const goPrev = () => setStep((s) => Math.max(0, s - 1));
+
+  if (!can("orders", "edit")) {
+    return <Navigate to="/orders" replace />;
+  }
 
   if (loading) {
     return <div className="py-16 text-center text-ink-500">Yuklanmoqda...</div>;

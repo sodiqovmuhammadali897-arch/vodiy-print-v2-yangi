@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Plus,
@@ -20,6 +20,7 @@ import type {
 import { formatMoney } from "../../lib/format";
 import ProposalPreview from "./ProposalPreview";
 import { exportProposalPdf, exportProposalPng } from "./exportProposal";
+import { useAuth } from "../../lib/AuthContext";
 
 const genNumber = () => {
   const d = new Date();
@@ -42,6 +43,7 @@ export default function ProposalEditor() {
   const navigate = useNavigate();
   const isNew = !id || id === "new";
   const previewRef = useRef<HTMLDivElement>(null);
+  const { can } = useAuth();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -195,6 +197,10 @@ export default function ProposalEditor() {
       setExporting(false);
     }
   };
+
+  if (!can("proposals", "edit")) {
+    return <Navigate to="/proposals" replace />;
+  }
 
   return (
     <div className="space-y-5">

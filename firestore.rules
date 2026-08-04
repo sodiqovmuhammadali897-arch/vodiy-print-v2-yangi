@@ -1,8 +1,109 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function email() {
+      return request.auth.token.email;
+    }
+
+    function staffDoc() {
+      return get(/databases/$(database)/documents/staff/$(email())).data;
+    }
+
+    function isStaff() {
+      return isSignedIn() && exists(/databases/$(database)/documents/staff/$(email()));
+    }
+
+    function isAdmin() {
+      return isStaff() && staffDoc().role == 'admin';
+    }
+
+    function can(module, action) {
+      return isAdmin() ||
+        (isStaff() && staffDoc().permissions[module][action] == true);
+    }
+
+    // First-ever login from the bootstrap admin email may create their own
+    // staff record (once) so there's a way into the app before any staff
+    // documents exist. Every other write to this collection requires an
+    // existing admin.
+    match /staff/{staffEmail} {
+      allow read: if isStaff();
+      allow create: if isAdmin() ||
+        (isSignedIn() && email() == staffEmail &&
+         staffEmail == 'sodiqovmuhammadali897@gmail.com' &&
+         !exists(/databases/$(database)/documents/staff/$(staffEmail)));
+      allow update, delete: if isAdmin();
+    }
+
+    match /orders/{id} {
+      allow read: if can('orders', 'view');
+      allow create, update: if can('orders', 'edit');
+      allow delete: if can('orders', 'delete');
+    }
+    match /order_products/{id} {
+      allow read: if can('orders', 'view');
+      allow create, update, delete: if can('orders', 'edit');
+    }
+    match /order_payments/{id} {
+      allow read: if can('orders', 'view');
+      allow create, update, delete: if can('orders', 'edit');
+    }
+    match /order_files/{id} {
+      allow read: if can('orders', 'view');
+      allow create, update, delete: if can('orders', 'edit');
+    }
+
+    match /customers/{id} {
+      allow read: if can('customers', 'view');
+      allow create, update: if can('customers', 'edit');
+      allow delete: if can('customers', 'delete');
+    }
+
+    match /brands/{id} {
+      allow read: if can('brands', 'view');
+      allow create, update: if can('brands', 'edit');
+      allow delete: if can('brands', 'delete');
+    }
+
+    match /proposals/{id} {
+      allow read: if can('proposals', 'view');
+      allow create, update: if can('proposals', 'edit');
+      allow delete: if can('proposals', 'delete');
+    }
+
+    // Shared configuration used across modules (dropdowns, dashboards).
+    // Any signed-in staff member may read; only admins may change them.
+    match /managers/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+    match /holidays/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+    match /company_settings/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+    match /monthly_plans/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+    match /textile_companies/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // Anything not covered above (future modules, e.g. warehouse/finance
+    // once they get real data): admins get full access, everyone else is
+    // blocked until an explicit rule is added.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
     }
   }
 }

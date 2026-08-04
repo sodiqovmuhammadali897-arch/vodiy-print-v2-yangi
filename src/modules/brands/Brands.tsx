@@ -5,10 +5,13 @@ import { listAll } from "../../lib/firestoreDb";
 import type { Brand, Customer } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import BrandFormModal from "./BrandFormModal";
+import { useAuth } from "../../lib/AuthContext";
 
 type Row = Brand & { customer?: Customer };
 
 export default function Brands() {
+  const { can } = useAuth();
+  const canEdit = can("brands", "edit");
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -61,15 +64,17 @@ export default function Brands() {
               className="w-56 bg-transparent text-sm outline-none placeholder-ink-400"
             />
           </div>
-          <button
-            className="btn-primary"
-            onClick={() => {
-              setEditing(null);
-              setModal(true);
-            }}
-          >
-            <Plus className="h-4 w-4" /> Yangi brend
-          </button>
+          {canEdit && (
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setEditing(null);
+                setModal(true);
+              }}
+            >
+              <Plus className="h-4 w-4" /> Yangi brend
+            </button>
+          )}
         </div>
       </div>
 
@@ -111,17 +116,19 @@ export default function Brands() {
                     )}
                   </div>
                 </div>
-                <div className="mt-3 flex justify-end">
-                  <button
-                    className="btn-ghost opacity-0 transition group-hover:opacity-100"
-                    onClick={() => {
-                      setEditing(b);
-                      setModal(true);
-                    }}
-                  >
-                    Tahrirlash
-                  </button>
-                </div>
+                {canEdit && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      className="btn-ghost opacity-0 transition group-hover:opacity-100"
+                      onClick={() => {
+                        setEditing(b);
+                        setModal(true);
+                      }}
+                    >
+                      Tahrirlash
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

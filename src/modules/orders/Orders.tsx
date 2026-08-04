@@ -19,6 +19,7 @@ import ProductionBadge from "../../components/ui/ProductionBadge";
 import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
 import { formatDate, formatMoney } from "../../lib/format";
 import { deadlineInfo } from "../../lib/workingDays";
+import { useAuth } from "../../lib/AuthContext";
 
 type Row = Order & {
   brand?: Brand;
@@ -29,6 +30,8 @@ type Row = Order & {
 
 export default function Orders() {
   const navigate = useNavigate();
+  const { can } = useAuth();
+  const canEdit = can("orders", "edit");
   const [rows, setRows] = useState<Row[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,12 +148,14 @@ export default function Orders() {
               className="w-64 bg-transparent text-sm outline-none placeholder-ink-400"
             />
           </div>
-          <button
-            className="btn-primary"
-            onClick={() => navigate("/orders/new")}
-          >
-            <Plus className="h-4 w-4" /> Yangi buyurtma
-          </button>
+          {canEdit && (
+            <button
+              className="btn-primary"
+              onClick={() => navigate("/orders/new")}
+            >
+              <Plus className="h-4 w-4" /> Yangi buyurtma
+            </button>
+          )}
         </div>
       </div>
 

@@ -5,8 +5,11 @@ import { listAll } from "../../lib/firestoreDb";
 import type { Customer } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import CustomerFormModal from "./CustomerFormModal";
+import { useAuth } from "../../lib/AuthContext";
 
 export default function Customers() {
+  const { can } = useAuth();
+  const canEdit = can("customers", "edit");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -70,15 +73,17 @@ export default function Customers() {
               className="w-56 bg-transparent text-sm outline-none placeholder-ink-400"
             />
           </div>
-          <button
-            className="btn-primary"
-            onClick={() => {
-              setEditing(null);
-              setModalOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4" /> Yangi mijoz
-          </button>
+          {canEdit && (
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setEditing(null);
+                setModalOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" /> Yangi mijoz
+            </button>
+          )}
         </div>
       </div>
 
@@ -150,15 +155,17 @@ export default function Customers() {
                       )}
                     </td>
                     <td className="table-td text-right">
-                      <button
-                        className="btn-ghost"
-                        onClick={() => {
-                          setEditing(c);
-                          setModalOpen(true);
-                        }}
-                      >
-                        Tahrirlash
-                      </button>
+                      {canEdit && (
+                        <button
+                          className="btn-ghost"
+                          onClick={() => {
+                            setEditing(c);
+                            setModalOpen(true);
+                          }}
+                        >
+                          Tahrirlash
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
