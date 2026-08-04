@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Settings as SettingsIcon, X, Sparkles } from "lucide-react";
+import { LayoutDashboard, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Fingerprint, Settings as SettingsIcon, X, Sparkles } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import type { ModuleKey } from "../../lib/permissions";
 
@@ -14,6 +14,7 @@ const navItems = [
   { to: "/warehouse", label: "Ombor", icon: Warehouse, module: "warehouse" as ModuleKey },
   { to: "/finance", label: "Moliya", icon: Wallet, module: "finance" as ModuleKey },
   { to: "/reports", label: "Hisobot", icon: BarChart3, module: "reports" as ModuleKey },
+  { to: "/attendance", label: "Davomat va KPI", icon: Fingerprint, module: "attendance" as ModuleKey },
 ];
 
 type Props = {

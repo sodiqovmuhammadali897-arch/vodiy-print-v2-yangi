@@ -11,6 +11,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^10.0.0",
     "firebase": "^12.16.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
@@ -20,6 +21,7 @@
     "react-router-dom": "^6.27.0"
   },
   "devDependencies": {
+    "@simplewebauthn/types": "^10.0.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",

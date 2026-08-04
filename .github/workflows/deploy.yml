@@ -101,3 +101,31 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl reload nginx
+
+  # Deploys Cloud Functions (WebAuthn backend) and Firestore rules. Runs as
+  # its own job so it can never break the SPA deploy above, and no-ops
+  # until FIREBASE_SERVICE_ACCOUNT is added as a repo secret (see README
+  # for the one-time setup: Firebase project must be on the Blaze plan,
+  # and the secret is a Firebase service account JSON key).
+  deploy-functions:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Write service account key
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/firebase-sa.json"
+
+      - name: Deploy functions + Firestore rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+        run: npx firebase-tools@13 deploy --only functions,firestore:rules --project vodiy-print --non-interactive

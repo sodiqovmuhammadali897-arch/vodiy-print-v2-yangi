@@ -1,6 +1,7 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getAuth, type Auth } from "firebase/auth";
+import { getFunctions, type Functions } from "firebase/functions";
 
 type EnvKey =
   | "VITE_FIREBASE_API_KEY"
@@ -32,6 +33,7 @@ export const missingFirebaseKeys: string[] = missing;
 let appInstance: FirebaseApp | null = null;
 let dbInstance: Firestore | null = null;
 let authInstance: Auth | null = null;
+let functionsInstance: Functions | null = null;
 
 if (isFirebaseConfigured) {
   appInstance = initializeApp({
@@ -44,6 +46,7 @@ if (isFirebaseConfigured) {
   });
   dbInstance = getFirestore(appInstance);
   authInstance = getAuth(appInstance);
+  functionsInstance = getFunctions(appInstance);
 }
 
 const notConfigured = () => {
@@ -58,3 +61,4 @@ const proxy = <T>(): T =>
 export const firebaseApp: FirebaseApp = appInstance ?? proxy<FirebaseApp>();
 export const db: Firestore = dbInstance ?? proxy<Firestore>();
 export const auth: Auth = authInstance ?? proxy<Auth>();
+export const functions: Functions = functionsInstance ?? proxy<Functions>();

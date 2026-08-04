@@ -258,3 +258,136 @@ export type TextileCompany = {
   is_active: boolean;
   created_at: string;
 };
+
+// ── Davomat va KPI ──────────────────────────────────────────────────
+
+export type GeoPoint = { latitude: number; longitude: number };
+
+export type WebAuthnCredential = {
+  id: string; // credentialId (base64url) — also the Firestore doc id
+  employeeEmail: string;
+  employeeName: string;
+  credentialId: string;
+  deviceName: string | null;
+  transports: string[];
+  deviceType: string;
+  backedUp: boolean;
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
+export type AttendanceStatus =
+  | "Kelmagan"
+  | "Vaqtida keldi"
+  | "Kechikdi"
+  | "Ishda"
+  | "Tanaffusda"
+  | "Ishni tugatdi"
+  | "Erta ketdi"
+  | "Qo'shimcha ishladi"
+  | "Ta'tilda"
+  | "Kasallik"
+  | "Ruxsat bilan yo'q"
+  | "Sababsiz yo'q";
+
+export type AttendanceRecord = {
+  id: string;
+  employeeId: string; // staff email
+  employeeName: string;
+  dateCode: string; // "YYYY-MM-DD"
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  checkInTimestamp: string | null;
+  checkOutTimestamp: string | null;
+  workedMinutes: number;
+  breakMinutes: number;
+  lateMinutes: number;
+  earlyLeaveMinutes: number;
+  overtimeMinutes: number;
+  status: string;
+  authenticationMethod: "webauthn";
+  checkInLocation: GeoPoint | null;
+  checkOutLocation: GeoPoint | null;
+  deviceName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkSchedule = {
+  id: string;
+  workStart: string; // "HH:MM"
+  workEnd: string;
+  breakStart: string;
+  breakEnd: string;
+  breakMinutes: number;
+  weeklyOffDay: number; // 0 = Sunday
+  officeLat: number;
+  officeLng: number;
+  officeRadiusMeters: number;
+  gpsCheckEnabled: boolean;
+  updatedAt?: string;
+};
+
+export type LeaveType = "vacation" | "sick" | "excused" | "unexcused";
+
+export type LeaveRequest = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  type: LeaveType;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  requestedAt: string;
+  decidedBy?: string;
+  decidedAt?: string;
+};
+
+export type KpiWeights = {
+  attendance: number;
+  punctuality: number;
+  hoursWorked: number;
+  tasksCompleted: number;
+  onTimeOrders: number;
+  reworkRate: number;
+  managerScore: number;
+};
+
+export const DEFAULT_KPI_WEIGHTS: KpiWeights = {
+  attendance: 20,
+  punctuality: 15,
+  hoursWorked: 10,
+  tasksCompleted: 20,
+  onTimeOrders: 20,
+  reworkRate: 10,
+  managerScore: 5,
+};
+
+export type KpiSettings = {
+  id: string;
+  weights: KpiWeights;
+  updatedAt?: string;
+};
+
+export type EmployeeKpi = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  periodCode: string; // "YYYY-MM"
+  totalScore: number;
+  breakdown: Record<string, number>;
+  computedAt: string;
+};
+
+export type AttendanceAuditEntry = {
+  id: string;
+  attendanceId: string;
+  employeeId: string;
+  field: string;
+  oldValue: string;
+  newValue: string;
+  reason: string;
+  changedBy: string;
+  changedAt: string;
+};
