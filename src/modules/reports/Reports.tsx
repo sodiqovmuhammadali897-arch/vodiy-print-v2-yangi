@@ -11,6 +11,7 @@ import {
   Factory,
   Tag,
   ShapesIcon,
+  Briefcase,
   Timer,
   Download,
   FileDown,
@@ -228,6 +229,22 @@ export default function Reports() {
     }));
   }, [ordersInRange, customerMap]);
 
+  // Industry distribution among those who ordered in range.
+  const industryDonut: DonutSlice[] = useMemo(() => {
+    const seen = new Set<string>();
+    const map = new Map<string, number>();
+    for (const o of ordersInRange) {
+      if (!o.customer_id || seen.has(o.customer_id)) continue;
+      seen.add(o.customer_id);
+      const c = customerMap.get(o.customer_id);
+      const industry = c?.industry?.trim() || "Belgilanmagan";
+      map.set(industry, (map.get(industry) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .sort(([, a], [, b]) => b - a)
+      .map(([label, value], i) => ({ label, value, color: PALETTE[i % PALETTE.length] }));
+  }, [ordersInRange, customerMap]);
+
   // On-time delivery rate among orders completed within the range.
   const onTimeStats = useMemo(() => {
     const completed = orders.filter(
@@ -417,6 +434,15 @@ export default function Reports() {
             </h2>
           </div>
           <SimpleDonutChart data={customerTypeDonut} size={130} />
+        </div>
+        <div className="card p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Briefcase className="h-4 w-4 text-ink-500" />
+            <h2 className="font-display text-sm font-bold text-ink-900">
+              Soha bo'yicha mijozlar
+            </h2>
+          </div>
+          <SimpleDonutChart data={industryDonut} size={130} />
         </div>
       </div>
 

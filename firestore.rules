@@ -64,10 +64,12 @@ service cloud.firestore {
       allow delete: if can('customers', 'delete');
     }
 
+    // Brands are managed from within a customer's profile, so they share
+    // the customers permission rather than having their own module.
     match /brands/{id} {
-      allow read: if can('brands', 'view');
-      allow create, update: if can('brands', 'edit');
-      allow delete: if can('brands', 'delete');
+      allow read: if can('customers', 'view');
+      allow create, update: if can('customers', 'edit');
+      allow delete: if can('customers', 'delete');
     }
 
     match /proposals/{id} {

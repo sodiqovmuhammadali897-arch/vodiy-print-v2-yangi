@@ -2,7 +2,6 @@ export type ModuleKey =
   | "dashboard"
   | "orders"
   | "customers"
-  | "brands"
   | "proposals"
   | "design"
   | "textile"
@@ -34,7 +33,6 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "dashboard", label: "Bosh sahifa" },
   { key: "orders", label: "Buyurtmalar" },
   { key: "customers", label: "Mijozlar" },
-  { key: "brands", label: "Brendlar" },
   { key: "proposals", label: "Tijorat taklifi" },
   { key: "design", label: "Dizayn" },
   { key: "textile", label: "Textil" },

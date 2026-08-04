@@ -5,6 +5,7 @@ export type Customer = {
   customer_number: string | null;
   customer_type: CustomerType;
   source: string;
+  industry: string;
   first_name: string;
   last_name: string;
   phone: string;

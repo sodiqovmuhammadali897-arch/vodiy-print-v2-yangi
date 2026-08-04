@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -75,6 +75,8 @@ const emptyPayload = (): OrderPayload => ({
 export default function OrderWizard() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preselectedCustomerId = searchParams.get("customer");
   const isNew = !id || id === "new";
   const { can } = useAuth();
 
@@ -113,6 +115,15 @@ export default function OrderWizard() {
         if (p.product_name) prices[p.product_name] = p.unit_price;
       }
       setHistoryPrices(prices);
+
+      if (isNew && preselectedCustomerId) {
+        const customerBrands = b.filter((br) => br.customer_id === preselectedCustomerId);
+        setPayload((p) => ({
+          ...p,
+          customer_id: preselectedCustomerId,
+          brand_id: customerBrands.length === 1 ? customerBrands[0].id : null,
+        }));
+      }
 
       if (!isNew && id) {
         const order = await getOne<Order>("orders", id);

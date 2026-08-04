@@ -164,6 +164,23 @@ export const CUSTOMER_TYPES = [
 export const customerTypeInfo = (t: string) =>
   CUSTOMER_TYPES.find((x) => x.key === t) || CUSTOMER_TYPES[0];
 
+export const INDUSTRIES = [
+  "Qurilish",
+  "Ta'lim",
+  "Ishlab chiqarish",
+  "Chevarlik",
+  "Ko'chmas mulk",
+  "Diller",
+  "Savdo",
+  "Restoran/Kafe",
+  "Sog'liqni saqlash",
+  "IT/Texnologiya",
+  "Moliya/Bank",
+  "Avtomobil",
+  "Go'zallik saloni",
+  "Boshqa",
+] as const;
+
 export const EXPENSE_CATEGORIES = [
   "Ijara",
   "Maosh",

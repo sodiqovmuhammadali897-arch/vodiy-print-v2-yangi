@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/ui/Modal";
-import { insertOne, updateOne } from "../../lib/firestoreDb";
+import { insertOne, listAll, updateOne } from "../../lib/firestoreDb";
 import { nextCustomerNumber } from "../../lib/numbering";
-import { CUSTOMER_SOURCES, CUSTOMER_TYPES } from "../../lib/orderConstants";
+import { CUSTOMER_SOURCES, CUSTOMER_TYPES, INDUSTRIES } from "../../lib/orderConstants";
 import type { Customer } from "../../lib/types";
 
 type Props = {
@@ -15,6 +15,7 @@ type Props = {
 const emptyForm = {
   customer_type: "new" as Customer["customer_type"],
   source: "",
+  industry: "",
   first_name: "",
   last_name: "",
   phone: "",
@@ -35,12 +36,14 @@ export default function CustomerFormModal({
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [existing, setExisting] = useState<Customer[]>([]);
 
   useEffect(() => {
     if (customer) {
       setForm({
         customer_type: customer.customer_type,
         source: customer.source,
+        industry: customer.industry || "",
         first_name: customer.first_name,
         last_name: customer.last_name,
         phone: customer.phone,
@@ -57,9 +60,27 @@ export default function CustomerFormModal({
     setError(null);
   }, [customer, open]);
 
+  useEffect(() => {
+    if (!open) return;
+    void listAll<Customer>("customers").then(setExisting);
+  }, [open]);
+
   const submit = async () => {
     if (!form.first_name.trim()) return setError("Ism kiritilishi shart");
     if (!form.phone.trim()) return setError("Telefon raqami kiritilishi shart");
+    const normalizedPhone = form.phone.replace(/\D/g, "");
+    const duplicate = existing.find(
+      (c) =>
+        c.id !== customer?.id &&
+        normalizedPhone &&
+        c.phone.replace(/\D/g, "") === normalizedPhone,
+    );
+    if (duplicate) {
+      const proceed = confirm(
+        `Bu telefon raqami allaqachon ro'yxatda: ${duplicate.first_name} ${duplicate.last_name}. Baribir davom etamizmi?`,
+      );
+      if (!proceed) return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -195,6 +216,21 @@ export default function CustomerFormModal({
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="label">Soha</label>
+          <input
+            className="input"
+            list="industries-list"
+            placeholder="Tanlang yoki yozing..."
+            value={form.industry}
+            onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))}
+          />
+          <datalist id="industries-list">
+            {INDUSTRIES.map((i) => (
+              <option key={i} value={i} />
+            ))}
+          </datalist>
         </div>
         <div className="md:col-span-2">
           <label className="label">Manzil</label>
