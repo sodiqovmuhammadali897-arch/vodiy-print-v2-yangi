@@ -1,153 +1,399 @@
-import { listWhere, getOne, insertOne, updateOne, deleteWhere, insertMany, countWhere } from "./firestoreDb";
-import type { OrderPayment, OrderProduct, Customer } from "./types";
-import { nextOrderNumber } from "./numbering";
-import { computeOrderTotals } from "./orderCalculations";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Save,
+  FileText,
+  User,
+  Package,
+  Paperclip,
+  ClipboardCheck,
+} from "lucide-react";
+import { listAll, getOne } from "../../../lib/firestoreDb";
+import type { Brand, Customer, Manager, Order, OrderProduct, OrderPayment, OrderStatus, TextileCompany } from "../../../lib/types";
+import { ORDER_STATUSES } from "../../../lib/orderConstants";
+import { saveOrder } from "../../../lib/orderService";
+import type { OrderPayload, WizardFileLink, WizardPayment, WizardProduct } from "../../../lib/orderService";
+import { computeOrderTotals } from "../../../lib/orderCalculations";
+import { formatMoney } from "../../../lib/format";
+import CustomerStep from "./CustomerStep";
+import ProductionStep from "./ProductionStep";
+import FilesStep from "./FilesStep";
+import ReviewStep from "./ReviewStep";
 
-export type WizardProduct = Omit<OrderProduct, "id" | "order_id">;
-export type WizardPayment = Omit<OrderPayment, "id" | "order_id" | "created_at">;
-export type WizardFileLink = {
-  id?: string;
-  filename: string;
-  url: string;
-  link_type: string;
-  note: string;
-};
+const STEPS = [
+  { key: "customer", label: "Mijoz", icon: User },
+  { key: "production", label: "Mahsulot va to'lov", icon: Package },
+  { key: "files", label: "Fayllar", icon: Paperclip },
+  { key: "review", label: "Tekshirish", icon: ClipboardCheck },
+] as const;
 
-export type OrderPayload = {
-  id?: string;
-  order_number: string | null;
-  brand_id: string | null;
-  customer_id: string | null;
-  manager_id: string | null;
-  manager_name: string;
-  title: string;
-  description: string;
-  status: string;
-  order_date: string | null;
-  deadline: string | null;
-  customer_source: string;
-  production_company: string;
-  textile_company_id: string | null;
-  textile_company_name: string;
-  designer_name: string;
-  designer_status: string;
-  production_manager: string;
-  logistics_manager: string;
-  qc_manager: string;
-  delivery_type: string;
-  delivery_address: string;
-  delivery_location_url: string;
-  delivery_phone: string;
-  courier: string;
-  delivery_date: string | null;
-  delivery_time: string;
-  delivery_cost: number;
-  payment_type: string;
-  telegram_link: string;
-  customer_note: string;
-  production_note: string;
-  logistics_note: string;
-  private_note: string;
-  client_request_note: string;
-  discount_amount: number;
-  is_draft: boolean;
-};
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
-const upsertChildren = async (
-  orderId: string,
-  products: WizardProduct[],
-  payments: WizardPayment[],
-  fileLinks: WizardFileLink[],
-) => {
-  await deleteWhere("order_products", "order_id", orderId);
-  if (products.length > 0) {
-    await insertMany(
-      "order_products",
-      products.map((p, i) => ({ ...p, order_id: orderId, position: i })),
+const emptyPayload = (): OrderPayload => ({
+  order_number: null,
+  brand_id: null,
+  customer_id: null,
+  manager_id: null,
+  manager_name: "",
+  title: "",
+  description: "",
+  status: "new",
+  order_date: todayISO(),
+  deadline: null,
+  customer_source: "",
+  production_company: "Vodiy Print",
+  textile_company_id: null,
+  textile_company_name: "",
+  designer_name: "",
+  designer_status: "Dizayn kerak emas",
+  production_manager: "",
+  logistics_manager: "",
+  qc_manager: "",
+  delivery_type: "",
+  delivery_address: "",
+  delivery_location_url: "",
+  delivery_phone: "",
+  courier: "",
+  delivery_date: null,
+  delivery_time: "",
+  delivery_cost: 0,
+  payment_type: "Naqd",
+  telegram_link: "",
+  customer_note: "",
+  production_note: "",
+  logistics_note: "",
+  private_note: "",
+  client_request_note: "",
+  discount_amount: 0,
+  is_draft: false,
+});
+
+export default function OrderWizard() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isNew = !id || id === "new";
+
+  const [step, setStep] = useState(0);
+  const [loading, setLoading] = useState(!isNew);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [managerNames, setManagerNames] = useState<string[]>([]);
+  const [textileCompanies, setTextileCompanies] = useState<TextileCompany[]>([]);
+  const [historyPrices, setHistoryPrices] = useState<Record<string, number>>({});
+
+  const [payload, setPayload] = useState<OrderPayload>(emptyPayload());
+  const [products, setProducts] = useState<WizardProduct[]>([]);
+  const [payments, setPayments] = useState<WizardPayment[]>([]);
+  const [files, setFiles] = useState<WizardFileLink[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const [c, b, m, tx, op] = await Promise.all([
+        listAll<Customer>("customers", { orderBy: ["first_name", "asc"] }),
+        listAll<Brand>("brands", { orderBy: ["name", "asc"] }),
+        listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }),
+        listAll<TextileCompany>("textile_companies", { orderBy: ["name", "asc"] }),
+        listAll<OrderProduct>("order_products"),
+      ]);
+      setCustomers(c);
+      setBrands(b);
+      setManagerNames(m.map((x) => x.name));
+      setTextileCompanies(tx);
+
+      const prices: Record<string, number> = {};
+      for (const p of op) {
+        if (p.product_name) prices[p.product_name] = p.unit_price;
+      }
+      setHistoryPrices(prices);
+
+      if (!isNew && id) {
+        const order = await getOne<Order>("orders", id);
+        if (order) {
+          setPayload({
+            id: order.id,
+            order_number: order.order_number,
+            brand_id: order.brand_id,
+            customer_id: order.customer_id,
+            manager_id: order.manager_id,
+            manager_name: order.manager_name || "",
+            title: order.title,
+            description: order.description || "",
+            status: order.status,
+            order_date: order.order_date || order.created_at?.slice(0, 10) || todayISO(),
+            deadline: order.deadline,
+            customer_source: order.customer_source || "",
+            production_company: order.production_company || "Vodiy Print",
+            textile_company_id: order.textile_company_id || null,
+            textile_company_name: order.textile_company_name || "",
+            designer_name: order.designer_name || "",
+            designer_status: order.designer_status || "Dizayn kerak emas",
+            production_manager: order.production_manager || "",
+            logistics_manager: order.logistics_manager || "",
+            qc_manager: order.qc_manager || "",
+            delivery_type: order.delivery_type || "",
+            delivery_address: order.delivery_address || "",
+            delivery_location_url: order.delivery_location_url || "",
+            delivery_phone: order.delivery_phone || "",
+            courier: order.courier || "",
+            delivery_date: order.delivery_date,
+            delivery_time: order.delivery_time || "",
+            delivery_cost: Number(order.delivery_cost || 0),
+            payment_type: order.payment_type || "Naqd",
+            telegram_link: order.telegram_link || "",
+            customer_note: order.customer_note || "",
+            production_note: order.production_note || "",
+            logistics_note: order.logistics_note || "",
+            private_note: order.private_note || "",
+            client_request_note: order.client_request_note || "",
+            discount_amount: Number(order.discount_amount || 0),
+            is_draft: !!order.is_draft,
+          });
+
+          const [pr, pay, fl] = await Promise.all([
+            listAll<OrderProduct>("order_products"),
+            listAll<OrderPayment>("order_payments"),
+            listAll<WizardFileLink & { order_id: string }>("order_files"),
+          ]);
+          setProducts(
+            pr
+              .filter((p) => p.order_id === id)
+              .sort((a, b) => a.position - b.position)
+              .map((p) => ({
+                position: p.position,
+                category: p.category,
+                product_name: p.product_name,
+                variant: p.variant,
+                size: p.size,
+                material: p.material,
+                color: p.color,
+                quantity: Number(p.quantity),
+                unit_price: Number(p.unit_price),
+                discount: Number(p.discount),
+                total: Number(p.total),
+                note: p.note,
+              })),
+          );
+          setPayments(
+            pay
+              .filter((p) => p.order_id === id)
+              .map((p) => ({
+                amount: Number(p.amount),
+                payment_type: p.payment_type,
+                payment_date: p.payment_date,
+                received_by: p.received_by,
+                note: p.note,
+              })),
+          );
+          setFiles(
+            fl
+              .filter((f) => f.order_id === id)
+              .map((f) => ({
+                filename: f.filename,
+                url: f.url,
+                link_type: f.link_type || "Boshqa",
+                note: f.note || "",
+              })),
+          );
+        }
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [id, isNew]);
+
+  const onPayloadChange = (patch: Partial<OrderPayload>) =>
+    setPayload((p) => ({ ...p, ...patch }));
+
+  const onCustomerCreated = (c: Customer) => setCustomers((cs) => [...cs, c]);
+
+  const totals = useMemo(
+    () => computeOrderTotals(products, payload.discount_amount, payments),
+    [products, payload.discount_amount, payments],
+  );
+
+  const linkedCustomer = useMemo(
+    () => customers.find((c) => c.id === payload.customer_id) || null,
+    [customers, payload.customer_id],
+  );
+  const linkedBrand = useMemo(
+    () => brands.find((b) => b.id === payload.brand_id) || null,
+    [brands, payload.brand_id],
+  );
+
+  const doSave = async (asDraft: boolean) => {
+    setError(null);
+    const filteredProducts = products.filter((p) => p.product_name.trim() || p.quantity > 0);
+    if (!payload.title.trim() && !filteredProducts[0]?.product_name) {
+      setError("Buyurtma nomi yoki mahsulot kiritilishi shart");
+      return;
+    }
+    setSaving(true);
+    const res = await saveOrder(
+      {
+        ...payload,
+        title: payload.title || filteredProducts[0]?.product_name || "Buyurtma",
+        is_draft: asDraft,
+      },
+      filteredProducts,
+      payments,
+      files,
     );
-  }
-
-  await deleteWhere("order_payments", "order_id", orderId);
-  const validPayments = payments.filter((p) => Number(p.amount) > 0);
-  if (validPayments.length > 0) {
-    await insertMany(
-      "order_payments",
-      validPayments.map((p) => ({ ...p, order_id: orderId })),
-    );
-  }
-
-  await deleteWhere("order_files", "order_id", orderId);
-  const validFiles = fileLinks.filter((f) => f.url.trim());
-  if (validFiles.length > 0) {
-    await insertMany(
-      "order_files",
-      validFiles.map((f) => ({
-        order_id: orderId,
-        filename: f.filename || "Havola",
-        url: f.url,
-        link_type: f.link_type,
-        note: f.note,
-        mime_type: "text/uri-list",
-        size: 0,
-      })),
-    );
-  }
-};
-
-export const saveOrder = async (
-  payload: OrderPayload,
-  products: WizardProduct[],
-  payments: WizardPayment[],
-  fileLinks: WizardFileLink[],
-): Promise<{ id: string; order_number: string } | { error: string }> => {
-  const totals = computeOrderTotals(products, payload.discount_amount, payments);
-
-  let orderNumber = payload.order_number;
-  if (!payload.id && !orderNumber) {
-    orderNumber = await nextOrderNumber();
-  }
-
-  const record = {
-    ...payload,
-    order_number: orderNumber,
-    subtotal: totals.subtotal,
-    total_amount: totals.total,
-    paid_amount: totals.paid,
-    remaining_amount: totals.remaining,
-    completed_at:
-      payload.status === "delivered" || payload.status === "closed"
-        ? new Date().toISOString()
-        : null,
+    setSaving(false);
+    if ("error" in res) {
+      setError(res.error);
+      return;
+    }
+    navigate(`/orders/${res.id}`, { replace: true });
   };
 
-  try {
-    let orderId = payload.id;
-    if (orderId) {
-      await updateOne("orders", orderId, record);
-    } else {
-      const created = await insertOne("orders", record);
-      orderId = created.id;
-    }
+  const goNext = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
+  const goPrev = () => setStep((s) => Math.max(0, s - 1));
 
-    await upsertChildren(orderId!, products, payments, fileLinks);
-
-    if (record.customer_id) {
-      await maybePromoteCustomer(record.customer_id);
-    }
-
-    return { id: orderId!, order_number: orderNumber || "" };
-  } catch (e: any) {
-    return { error: e?.message || "Xatolik yuz berdi" };
+  if (loading) {
+    return <div className="py-16 text-center text-ink-500">Yuklanmoqda...</div>;
   }
-};
 
-const maybePromoteCustomer = async (customerId: string) => {
-  const customer = await getOne<Customer>("customers", customerId);
-  const type = customer?.customer_type;
-  if (type && (type === "regular" || type === "vip")) return;
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <button onClick={() => navigate("/orders")} className="btn-ghost -ml-2">
+          <ArrowLeft className="h-4 w-4" /> Buyurtmalar
+        </button>
+        {payload.order_number && (
+          <div className="flex items-center gap-2 text-sm text-ink-500">
+            Buyurtma ID:
+            <span className="font-display text-lg font-extrabold text-brand-700">
+              {payload.order_number}
+            </span>
+          </div>
+        )}
+      </div>
 
-  const count = await countWhere("orders", "customer_id", customerId);
-  if (count >= 2) {
-    await updateOne("customers", customerId, { customer_type: "regular" });
-  }
-};
+      <div className="card p-4">
+        <div className="flex flex-wrap items-center gap-1">
+          {STEPS.map((s, i) => {
+            const Icon = s.icon;
+            const active = i === step;
+            const done = i < step;
+            return (
+              <button
+                key={s.key}
+                onClick={() => setStep(i)}
+                className={`flex flex-1 min-w-[130px] items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                  active
+                    ? "bg-brand-600 text-white shadow-sm"
+                    : done
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "text-ink-500 hover:bg-ink-50"
+                }`}
+              >
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                    active
+                      ? "bg-white/20 text-white"
+                      : done
+                      ? "bg-emerald-600 text-white"
+                      : "bg-ink-100 text-ink-500"
+                  }`}
+                >
+                  {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                </span>
+                <Icon className="h-4 w-4" />
+                <span className="hidden md:inline">{s.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
+
+      {step === 0 && (
+        <CustomerStep
+          customers={customers}
+          brands={brands}
+          payload={payload}
+          onPayloadChange={onPayloadChange}
+          onCustomerCreated={onCustomerCreated}
+          managerNames={managerNames}
+        />
+      )}
+
+      {step === 1 && (
+        <ProductionStep
+          payload={payload}
+          onPayloadChange={onPayloadChange}
+          products={products}
+          setProducts={setProducts}
+          payments={payments}
+          setPayments={setPayments}
+          textileCompanies={textileCompanies}
+          managerNames={managerNames}
+          historyPrices={historyPrices}
+        />
+      )}
+
+      {step === 2 && <FilesStep files={files} setFiles={setFiles} />}
+
+      {step === 3 && (
+        <ReviewStep
+          orderNumber={payload.order_number || ""}
+          payload={payload}
+          customer={linkedCustomer}
+          brand={linkedBrand}
+          products={products}
+          payments={payments}
+          files={files}
+          totals={totals}
+        />
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button className="btn-secondary" onClick={goPrev} disabled={step === 0}>
+          <ArrowLeft className="h-4 w-4" /> Orqaga
+        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="input w-auto"
+            value={payload.status}
+            onChange={(e) => onPayloadChange({ status: e.target.value as OrderStatus })}
+          >
+            {ORDER_STATUSES.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <button className="btn-secondary" onClick={() => doSave(true)} disabled={saving}>
+            <Save className="h-4 w-4" /> Qoralama
+          </button>
+          {step < STEPS.length - 1 ? (
+            <button className="btn-primary" onClick={goNext}>
+              Keyingisi <ArrowRight className="h-4 w-4" />
+            </button>
+          ) : (
+            <button className="btn-primary" onClick={() => doSave(false)} disabled={saving}>
+              <FileText className="h-4 w-4" />
+              {saving ? "Saqlanmoqda..." : "Buyurtmani saqlash"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="text-right text-sm text-ink-500">
+        Umumiy: <span className="font-semibold text-ink-800">{formatMoney(totals.total)}</span>
+        {" · "}Qoldiq: <span className="font-semibold text-ink-800">{formatMoney(totals.remaining)}</span>
+      </div>
+    </div>
+  );
+}
