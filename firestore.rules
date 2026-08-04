@@ -40,13 +40,21 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Pechatnik (production staff) only has the "production" permission, not
+    // "orders" — but they still need to read the order and flip its status
+    // for their own assigned work. The update branch limits them to touching
+    // only status/completed_at, never the rest of the order.
     match /orders/{id} {
-      allow read: if can('orders', 'view');
-      allow create, update: if can('orders', 'edit');
+      allow read: if can('orders', 'view') || can('production', 'view');
+      allow create: if can('orders', 'edit');
+      allow update: if can('orders', 'edit') ||
+        (can('production', 'edit') &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['status', 'completed_at']));
       allow delete: if can('orders', 'delete');
     }
     match /order_products/{id} {
-      allow read: if can('orders', 'view');
+      allow read: if can('orders', 'view') || can('production', 'view');
       allow create, update, delete: if can('orders', 'edit');
     }
     match /order_payments/{id} {
@@ -54,12 +62,20 @@ service cloud.firestore {
       allow create, update, delete: if can('orders', 'edit');
     }
     match /order_files/{id} {
-      allow read: if can('orders', 'view');
+      allow read: if can('orders', 'view') || can('production', 'view');
       allow create, update, delete: if can('orders', 'edit');
     }
 
+    // Every status transition (who, when, to what) is logged here so it can
+    // never be silently lost — entries are append-only, never edited.
+    match /order_status_history/{id} {
+      allow read: if can('orders', 'view') || can('production', 'view');
+      allow create: if can('orders', 'edit') || can('production', 'edit');
+      allow update, delete: if isAdmin();
+    }
+
     match /customers/{id} {
-      allow read: if can('customers', 'view');
+      allow read: if can('customers', 'view') || can('production', 'view');
       allow create, update: if can('customers', 'edit');
       allow delete: if can('customers', 'delete');
     }
@@ -67,7 +83,7 @@ service cloud.firestore {
     // Brands are managed from within a customer's profile, so they share
     // the customers permission rather than having their own module.
     match /brands/{id} {
-      allow read: if can('customers', 'view');
+      allow read: if can('customers', 'view') || can('production', 'view');
       allow create, update: if can('customers', 'edit');
       allow delete: if can('customers', 'delete');
     }

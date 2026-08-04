@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, Search, Package, Send, Copy } from "lucide-react";
-import { listAll } from "../../lib/firestoreDb";
+import { listAll, subscribeAll } from "../../lib/firestoreDb";
 import type {
   Brand,
   Customer,
@@ -32,54 +32,71 @@ export default function Orders() {
   const navigate = useNavigate();
   const { can } = useAuth();
   const canEdit = can("orders", "edit");
-  const [rows, setRows] = useState<Row[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<OrderProduct[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
 
-  const load = async () => {
-    setLoading(true);
-    const [ordersData, brandsData, customersData, productsData, holidaysData] =
-      await Promise.all([
-        listAll<Order>("orders", { orderBy: ["created_at", "desc"] }),
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [brandsData, customersData, productsData, holidaysData] = await Promise.all([
         listAll<Brand>("brands"),
         listAll<Customer>("customers"),
         listAll<OrderProduct>("order_products", { orderBy: ["position", "asc"] }),
         listAll<Holiday>("holidays"),
       ]);
-    const brands = new Map(brandsData.map((x) => [x.id, x]));
-    const customers = new Map(customersData.map((x) => [x.id, x]));
+      if (cancelled) return;
+      setBrands(brandsData);
+      setCustomers(customersData);
+      setProducts(productsData);
+      setHolidays(holidaysData);
+    })();
+
+    const unsubOrders = subscribeAll<Order>(
+      "orders",
+      (rows) => {
+        setOrders(rows);
+        setLoading(false);
+      },
+      { orderBy: ["created_at", "desc"] },
+    );
+
+    return () => {
+      cancelled = true;
+      unsubOrders();
+    };
+  }, []);
+
+  const rows = useMemo<Row[]>(() => {
+    const brandsMap = new Map(brands.map((x) => [x.id, x]));
+    const customersMap = new Map(customers.map((x) => [x.id, x]));
     const productsByOrder = new Map<string, OrderProduct[]>();
-    productsData.forEach((row) => {
+    products.forEach((row) => {
       const arr = productsByOrder.get(row.order_id) || [];
       arr.push(row);
       productsByOrder.set(row.order_id, arr);
     });
 
-    setRows(
-      ordersData.map((ord) => {
-        const items = productsByOrder.get(ord.id) || [];
-        const preview = items
-          .slice(0, 2)
-          .map((it) => `${it.product_name || "?"} × ${it.quantity || 0}`)
-          .join(", ");
-        return {
-          ...ord,
-          brand: ord.brand_id ? brands.get(ord.brand_id) : undefined,
-          customer: ord.customer_id ? customers.get(ord.customer_id) : undefined,
-          productPreview: preview + (items.length > 2 ? ` +${items.length - 2}` : ""),
-          productCount: items.length,
-        };
-      }),
-    );
-    setHolidays(holidaysData);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
+    return orders.map((ord) => {
+      const items = productsByOrder.get(ord.id) || [];
+      const preview = items
+        .slice(0, 2)
+        .map((it) => `${it.product_name || "?"} × ${it.quantity || 0}`)
+        .join(", ");
+      return {
+        ...ord,
+        brand: ord.brand_id ? brandsMap.get(ord.brand_id) : undefined,
+        customer: ord.customer_id ? customersMap.get(ord.customer_id) : undefined,
+        productPreview: preview + (items.length > 2 ? ` +${items.length - 2}` : ""),
+        productCount: items.length,
+      };
+    });
+  }, [orders, brands, customers, products]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -183,6 +200,7 @@ export default function Orders() {
                   <th className="table-th text-right">Qoldiq</th>
                   <th className="table-th">Deadline</th>
                   <th className="table-th">Status</th>
+                  <th className="table-th">Pechatnik</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
@@ -328,6 +346,9 @@ export default function Orders() {
                       </td>
                       <td className="table-td">
                         <StatusBadge status={o.status} />
+                      </td>
+                      <td className="table-td whitespace-nowrap text-ink-600">
+                        {o.assigned_printer_name || "-"}
                       </td>
                     </tr>
                   );

@@ -108,6 +108,11 @@ export const FILE_LINK_TYPES = [
 export const ORDER_STATUSES: { key: OrderStatus; label: string; cls: string }[] = [
   { key: "new", label: "Yangi", cls: "bg-sky-100 text-sky-700" },
   {
+    key: "accepted",
+    label: "Qabul qilindi",
+    cls: "bg-indigo-100 text-indigo-700",
+  },
+  {
     key: "calculating",
     label: "Hisob-kitob qilinmoqda",
     cls: "bg-slate-100 text-slate-700",
@@ -130,8 +135,13 @@ export const ORDER_STATUSES: { key: OrderStatus; label: string; cls: string }[] 
   },
   {
     key: "production",
-    label: "Ishlab chiqarilmoqda",
+    label: "Ishlab chiqarishda",
     cls: "bg-slate-200 text-slate-800",
+  },
+  {
+    key: "quality_control",
+    label: "Sifat nazoratida",
+    cls: "bg-amber-100 text-amber-800",
   },
   { key: "ready", label: "Tayyor", cls: "bg-emerald-100 text-emerald-700" },
   {
@@ -189,5 +199,33 @@ export const EXPENSE_CATEGORIES = [
   "Kommunal",
   "Soliq",
   "Reklama",
+  "Boshqa",
+] as const;
+
+export const TEXTILE_SIZES = [
+  "S",
+  "M",
+  "L",
+  "XL",
+  "XXL",
+  "3XL",
+  "4XL",
+  "5XL",
+  "6XL",
+] as const;
+
+export const TEXTILE_COLORS = [
+  "Oq",
+  "Qora",
+  "Kulrang",
+  "Ko'k",
+  "To'q ko'k",
+  "Qizil",
+  "Yashil",
+  "Sariq",
+  "Binafsha",
+  "Pushti",
+  "Jigarrang",
+  "To'q sariq",
   "Boshqa",
 ] as const;

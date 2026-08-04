@@ -11,6 +11,7 @@ import {
   query,
   where,
   orderBy,
+  onSnapshot,
   QueryConstraint,
   DocumentData,
   QueryDocumentSnapshot,
@@ -55,6 +56,36 @@ export const listWhere = async <T>(
   const constraints: QueryConstraint[] = [where(field, "==", value), ...buildOrder(options?.orderBy)];
   const snap = await getDocs(query(collection(db, name), ...constraints));
   return snap.docs.map((d) => mapDoc<T>(d));
+};
+
+export type Unsubscribe = () => void;
+
+export const subscribeAll = <T>(
+  name: string,
+  onData: (rows: WithId<T>[]) => void,
+  options?: ListOptions,
+): Unsubscribe => {
+  const constraints = buildOrder(options?.orderBy);
+  const q = constraints.length
+    ? query(collection(db, name), ...constraints)
+    : collection(db, name);
+  return onSnapshot(q, (snap) => {
+    onData(snap.docs.map((d) => mapDoc<T>(d)));
+  });
+};
+
+export const subscribeWhere = <T>(
+  name: string,
+  field: string,
+  value: unknown,
+  onData: (rows: WithId<T>[]) => void,
+  options?: ListOptions,
+): Unsubscribe => {
+  const constraints: QueryConstraint[] = [where(field, "==", value), ...buildOrder(options?.orderBy)];
+  const q = query(collection(db, name), ...constraints);
+  return onSnapshot(q, (snap) => {
+    onData(snap.docs.map((d) => mapDoc<T>(d)));
+  });
 };
 
 export const getOne = async <T>(

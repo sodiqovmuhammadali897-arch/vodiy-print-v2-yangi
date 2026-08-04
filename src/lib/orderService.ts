@@ -41,6 +41,8 @@ export type OrderPayload = {
   production_manager: string;
   logistics_manager: string;
   qc_manager: string;
+  assigned_printer_email: string;
+  assigned_printer_name: string;
   delivery_type: string;
   delivery_address: string;
   delivery_location_url: string;
@@ -111,6 +113,7 @@ export const saveOrder = async (
   products: WizardProduct[],
   payments: WizardPayment[],
   fileLinks: WizardFileLink[],
+  statusChange?: { previousStatus: string; actorEmail: string; actorName: string },
 ): Promise<{ id: string; order_number: string } | { error: string }> => {
   const totals = computeOrderTotals(products, payload.discount_amount, payments);
 
@@ -146,6 +149,16 @@ export const saveOrder = async (
 
     if (record.customer_id) {
       await maybePromoteCustomer(record.customer_id);
+    }
+
+    if (statusChange && statusChange.previousStatus !== record.status) {
+      await insertOne("order_status_history", {
+        order_id: orderId,
+        status: record.status,
+        changed_by_email: statusChange.actorEmail,
+        changed_by_name: statusChange.actorName || statusChange.actorEmail,
+        changed_at: new Date().toISOString(),
+      });
     }
 
     return { id: orderId, order_number: orderNumber || "" };

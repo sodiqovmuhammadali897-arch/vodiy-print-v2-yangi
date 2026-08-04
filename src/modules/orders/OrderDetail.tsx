@@ -15,6 +15,7 @@ import {
   ClipboardCopy,
   Paperclip,
   Shirt,
+  History,
 } from "lucide-react";
 import {
   getOne,
@@ -31,6 +32,7 @@ import type {
   OrderFile,
   OrderPayment,
   OrderProduct,
+  StatusHistoryEntry,
   TextileCompany,
 } from "../../lib/types";
 import StatusBadge from "../../components/ui/StatusBadge";
@@ -54,6 +56,7 @@ export default function OrderDetail() {
   const [files, setFiles] = useState<OrderFile[]>([]);
   const [textile, setTextile] = useState<TextileCompany | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
 
@@ -63,7 +66,7 @@ export default function OrderDetail() {
     const ord = await getOne<Order>("orders", id);
     setOrder(ord);
     if (ord) {
-      const [b, c, pr, pay, f, h, tx] = await Promise.all([
+      const [b, c, pr, pay, f, h, tx, sh] = await Promise.all([
         ord.brand_id
           ? getOne<Brand>("brands", ord.brand_id)
           : Promise.resolve(null),
@@ -83,6 +86,9 @@ export default function OrderDetail() {
         ord.textile_company_id
           ? getOne<TextileCompany>("textile_companies", ord.textile_company_id)
           : Promise.resolve(null),
+        listWhere<StatusHistoryEntry>("order_status_history", "order_id", ord.id, {
+          orderBy: ["changed_at", "asc"],
+        }),
       ]);
       setBrand(b);
       setCustomer(c);
@@ -91,6 +97,7 @@ export default function OrderDetail() {
       setFiles(f);
       setTextile(tx);
       setHolidays(h);
+      setStatusHistory(sh);
     }
     setLoading(false);
   };
@@ -554,7 +561,8 @@ export default function OrderDetail() {
       {(order.production_manager ||
         order.logistics_manager ||
         order.qc_manager ||
-        order.designer_name) && (
+        order.designer_name ||
+        order.assigned_printer_name) && (
         <div className="card p-5">
           <div className="flex items-center gap-2">
             <Factory className="h-4 w-4 text-brand-700" />
@@ -574,6 +582,7 @@ export default function OrderDetail() {
             />
             <Field label="Logistika" value={order.logistics_manager || "-"} />
             <Field label="Sifat nazorati" value={order.qc_manager || "-"} />
+            <Field label="Pechatnik" value={order.assigned_printer_name || "-"} />
           </div>
         </div>
       )}
@@ -607,6 +616,31 @@ export default function OrderDetail() {
               tone="amber"
             />
           </div>
+        </div>
+      )}
+
+      {statusHistory.length > 0 && (
+        <div className="card p-5">
+          <div className="flex items-center gap-2">
+            <History className="h-4 w-4 text-brand-700" />
+            <h2 className="font-display text-base font-bold text-ink-900">
+              Status tarixi
+            </h2>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {statusHistory.map((h) => (
+              <li
+                key={h.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink-100 px-3 py-2 text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={h.status} />
+                  <span className="text-ink-600">{h.changed_by_name || h.changed_by_email}</span>
+                </div>
+                <span className="text-xs text-ink-400">{formatDateTime(h.changed_at)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

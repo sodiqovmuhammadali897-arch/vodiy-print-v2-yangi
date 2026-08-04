@@ -3,6 +3,8 @@ import type { WizardProduct } from "../../../lib/orderService";
 import {
   CATEGORY_PRODUCTS,
   PRODUCT_CATEGORIES,
+  TEXTILE_COLORS,
+  TEXTILE_SIZES,
 } from "../../../lib/orderConstants";
 import { computeProductTotal } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
@@ -24,6 +26,7 @@ export default function ProductLineItem({
 }: Props) {
   const total = computeProductTotal(product);
   const suggestions = CATEGORY_PRODUCTS[product.category] || [];
+  const isTextile = product.category === "Textil";
 
   const patchAndRecalc = (patch: Partial<WizardProduct>) => {
     const merged = { ...product, ...patch };
@@ -93,19 +96,50 @@ export default function ProductLineItem({
         </div>
         <div className="col-span-6 md:col-span-3">
           <label className="label">Rangi</label>
-          <input
-            className="input"
-            value={product.color}
-            onChange={(e) => patchAndRecalc({ color: e.target.value })}
-          />
+          {isTextile ? (
+            <>
+              <input
+                className="input"
+                list={`colors-${index}`}
+                value={product.color}
+                onChange={(e) => patchAndRecalc({ color: e.target.value })}
+              />
+              <datalist id={`colors-${index}`}>
+                {TEXTILE_COLORS.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            </>
+          ) : (
+            <input
+              className="input"
+              value={product.color}
+              onChange={(e) => patchAndRecalc({ color: e.target.value })}
+            />
+          )}
         </div>
         <div className="col-span-6 md:col-span-3">
           <label className="label">O'lchami</label>
-          <input
-            className="input"
-            value={product.size}
-            onChange={(e) => patchAndRecalc({ size: e.target.value })}
-          />
+          {isTextile ? (
+            <select
+              className="input"
+              value={product.size}
+              onChange={(e) => patchAndRecalc({ size: e.target.value })}
+            >
+              <option value="">-- tanlang --</option>
+              {TEXTILE_SIZES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              className="input"
+              value={product.size}
+              onChange={(e) => patchAndRecalc({ size: e.target.value })}
+            />
+          )}
         </div>
         <div className="col-span-6 md:col-span-3">
           <label className="label">Materiali</label>

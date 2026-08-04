@@ -29,12 +29,14 @@ export type Brand = {
 
 export type OrderStatus =
   | "new"
+  | "accepted"
   | "calculating"
   | "awaiting_advance"
   | "design"
   | "approving"
   | "sent_to_production"
   | "production"
+  | "quality_control"
   | "ready"
   | "ready_to_deliver"
   | "delivered"
@@ -67,6 +69,8 @@ export type Order = {
   production_manager: string;
   logistics_manager: string;
   qc_manager: string;
+  assigned_printer_email: string;
+  assigned_printer_name: string;
   delivery_type: string;
   delivery_address: string;
   delivery_location_url: string;
@@ -231,6 +235,15 @@ export type Expense = {
   note: string;
   created_by: string;
   created_at: string;
+};
+
+export type StatusHistoryEntry = {
+  id: string;
+  order_id: string;
+  status: OrderStatus;
+  changed_by_email: string;
+  changed_by_name: string;
+  changed_at: string;
 };
 
 export type TextileCompany = {

@@ -166,7 +166,10 @@ function StaffFormModal({ open, onClose, staff, onSaved }: FormProps) {
       setEmail(staff.email);
       setFullName(staff.full_name);
       setRole(staff.role);
-      setPermissions(staff.permissions || emptyPermissions());
+      // Merge over emptyPermissions() so modules added after this staff
+      // record was created (e.g. a brand-new panel) don't crash the grid —
+      // they simply default to "no access" until explicitly granted.
+      setPermissions({ ...emptyPermissions(), ...(staff.permissions || {}) });
     } else {
       setEmail("");
       setFullName("");

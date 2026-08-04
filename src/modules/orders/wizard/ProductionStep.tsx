@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
 import type { TextileCompany } from "../../../lib/types";
+import type { Staff } from "../../../lib/permissions";
 import { PRODUCTION_COMPANIES, DESIGNER_STATUSES, DELIVERY_TYPES, PAYMENT_TYPES } from "../../../lib/orderConstants";
 import ProductLineItem from "./ProductLineItem";
 
@@ -13,6 +14,7 @@ type Props = {
   setPayments: (updater: (prev: WizardPayment[]) => WizardPayment[]) => void;
   textileCompanies: TextileCompany[];
   managerNames: string[];
+  printers: Staff[];
   historyPrices: Record<string, number>;
 };
 
@@ -28,7 +30,7 @@ const emptyPayment: WizardPayment = {
 
 export default function ProductionStep({
   payload, onPayloadChange, products, setProducts, payments, setPayments,
-  textileCompanies, managerNames, historyPrices,
+  textileCompanies, managerNames, printers, historyPrices,
 }: Props) {
   const addProduct = () => setProducts((p) => [...p, { ...emptyProduct, position: p.length }]);
   const updateProduct = (i: number, patch: Partial<WizardProduct>) =>
@@ -83,6 +85,28 @@ export default function ProductionStep({
             <select className="input" value={payload.production_manager} onChange={(e) => onPayloadChange({ production_manager: e.target.value })}>
               <option value="">-- tanlang --</option>
               {managerNames.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Pechatnik (ijrochi)</label>
+            <select
+              className="input"
+              value={payload.assigned_printer_email}
+              onChange={(e) => {
+                const email = e.target.value;
+                const found = printers.find((p) => p.email === email);
+                onPayloadChange({
+                  assigned_printer_email: email,
+                  assigned_printer_name: found?.full_name || "",
+                });
+              }}
+            >
+              <option value="">-- biriktirilmagan --</option>
+              {printers.map((p) => (
+                <option key={p.email} value={p.email}>
+                  {p.full_name || p.email}
+                </option>
+              ))}
             </select>
           </div>
           <div>
