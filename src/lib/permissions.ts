@@ -9,7 +9,8 @@ export type ModuleKey =
   | "warehouse"
   | "finance"
   | "reports"
-  | "attendance";
+  | "attendance"
+  | "tasks";
 
 export type PermissionAction = "view" | "edit" | "delete";
 
@@ -43,6 +44,7 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "finance", label: "Moliya" },
   { key: "reports", label: "Hisobot" },
   { key: "attendance", label: "Davomat va KPI" },
+  { key: "tasks", label: "Vazifalar" },
 ];
 
 export const emptyPermissions = (): StaffPermissions => {

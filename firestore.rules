@@ -200,6 +200,17 @@ service cloud.firestore {
       allow write: if can('attendance', 'edit');
     }
 
+    // Admin/managers assign tasks; the assignee may only ever touch their
+    // own (to mark it done), never someone else's or the task details.
+    match /tasks/{id} {
+      allow read: if isAdmin() || can('tasks', 'view') ||
+        (isStaff() && resource.data.assigned_to_email == email());
+      allow create: if can('tasks', 'edit');
+      allow update: if isAdmin() ||
+        (can('tasks', 'edit') && resource.data.assigned_to_email == email());
+      allow delete: if isAdmin();
+    }
+
     // Anything not covered above (future modules, e.g. warehouse/finance
     // once they get real data): admins get full access, everyone else is
     // blocked until an explicit rule is added.

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Gauge, Info } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
-import { getOne } from "../../lib/firestoreDb";
-import { DEFAULT_KPI_WEIGHTS, type AttendanceRecord, type KpiSettings, type WorkSchedule } from "../../lib/types";
+import { getOne, listWhere } from "../../lib/firestoreDb";
+import { DEFAULT_KPI_WEIGHTS, type AttendanceRecord, type KpiSettings, type Task, type WorkSchedule } from "../../lib/types";
 import { getWorkSchedule, listMonthAttendance } from "../../services/attendanceService";
 import { attendancePercent, dateCodeOf, isWeeklyOff } from "../../utils/attendanceCalculations";
 
@@ -11,19 +11,23 @@ export default function KpiPanel() {
   const email = (user?.email || "").toLowerCase();
   const [schedule, setSchedule] = useState<WorkSchedule | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [weights, setWeights] = useState(DEFAULT_KPI_WEIGHTS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!email) return;
     (async () => {
-      const [sched, rows, settings] = await Promise.all([
+      const monthPrefix = dateCodeOf(new Date()).slice(0, 7);
+      const [sched, rows, settings, myTasks] = await Promise.all([
         getWorkSchedule(),
-        listMonthAttendance(email, dateCodeOf(new Date()).slice(0, 7)),
+        listMonthAttendance(email, monthPrefix),
         getOne<KpiSettings>("kpi_settings", "default"),
+        listWhere<Task>("tasks", "assigned_to_email", email),
       ]);
       setSchedule(sched);
       setRecords(rows);
+      setTasks(myTasks.filter((t) => t.created_at.slice(0, 7) === monthPrefix));
       if (settings?.weights) setWeights(settings.weights);
       setLoading(false);
     })();
@@ -51,18 +55,27 @@ export default function KpiPanel() {
       expectedMinutes > 0
         ? Math.min(1, totalWorkedMinutes / expectedMinutes) * weights.hoursWorked
         : 0;
+    const doneTasks = tasks.filter((t) => t.status === "done").length;
+    const tasksScore =
+      tasks.length > 0 ? (doneTasks / tasks.length) * weights.tasksCompleted : 0;
 
-    const availableMax = weights.attendance + weights.punctuality + weights.hoursWorked;
-    const availableScore = attendanceScore + punctualityScore + hoursScore;
+    const availableMax =
+      weights.attendance + weights.punctuality + weights.hoursWorked +
+      (tasks.length > 0 ? weights.tasksCompleted : 0);
+    const availableScore = attendanceScore + punctualityScore + hoursScore + tasksScore;
 
     return {
       attendanceScore: Math.round(attendanceScore * 10) / 10,
       punctualityScore: Math.round(punctualityScore * 10) / 10,
       hoursScore: Math.round(hoursScore * 10) / 10,
+      tasksScore: Math.round(tasksScore * 10) / 10,
+      hasTasks: tasks.length > 0,
+      taskCount: tasks.length,
+      doneTasks,
       availableMax,
       availableScore: Math.round(availableScore * 10) / 10,
     };
-  }, [schedule, records, weights]);
+  }, [schedule, records, tasks, weights]);
 
   if (loading || !result) {
     return <div className="card p-5 text-center text-sm text-ink-500">Yuklanmoqda...</div>;
@@ -86,13 +99,20 @@ export default function KpiPanel() {
         <KpiRow label={`Davomat (${weights.attendance} balldan)`} value={result.attendanceScore} />
         <KpiRow label={`Vaqtida kelish (${weights.punctuality} balldan)`} value={result.punctualityScore} />
         <KpiRow label={`Ishlangan soat (${weights.hoursWorked} balldan)`} value={result.hoursScore} />
+        {result.hasTasks && (
+          <KpiRow
+            label={`Bajarilgan vazifalar (${result.doneTasks}/${result.taskCount}, ${weights.tasksCompleted} balldan)`}
+            value={result.tasksScore}
+          />
+        )}
       </div>
 
       <div className="mt-4 flex items-start gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          Hozircha faqat davomat asosidagi ko'rsatkichlar hisoblanmoqda. Bajarilgan vazifalar,
-          buyurtmalarni vaqtida tugatish va rahbar bahosi keyingi bosqichda qo'shiladi.
+          {result.hasTasks
+            ? "Buyurtmalarni vaqtida tugatish va rahbar bahosi keyingi bosqichda qo'shiladi."
+            : "Bu oy sizga vazifa biriktirilmagan. Buyurtmalarni vaqtida tugatish va rahbar bahosi keyingi bosqichda qo'shiladi."}
         </span>
       </div>
     </div>

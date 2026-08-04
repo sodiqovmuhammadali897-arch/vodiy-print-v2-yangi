@@ -391,3 +391,21 @@ export type AttendanceAuditEntry = {
   changedBy: string;
   changedAt: string;
 };
+
+// ── Vazifalar (Tasks) ───────────────────────────────────────────────
+
+export type TaskStatus = "new" | "done";
+
+export type Task = {
+  id: string;
+  title: string;
+  description: string;
+  assigned_to_email: string;
+  assigned_to_name: string;
+  assigned_by_email: string;
+  assigned_by_name: string;
+  due_date: string | null;
+  status: TaskStatus;
+  completed_at: string | null;
+  created_at: string;
+};
