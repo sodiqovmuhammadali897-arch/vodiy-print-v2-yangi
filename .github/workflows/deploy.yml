@@ -74,7 +74,14 @@ jobs:
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S rm -f /etc/nginx/sites-enabled/default
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S nginx -t
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl reload nginx
-            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S certbot --nginx -d printvodiy.uz -d www.printvodiy.uz --non-interactive --agree-tos -m "${{ secrets.LETSENCRYPT_EMAIL }}" --redirect || true
+            echo "=== diagnostics ==="
+            date -u
+            getent hosts printvodiy.uz || true
+            curl -sS -m 10 -o /dev/null -w "acme-v02 http_code=%{http_code}\n" https://acme-v02.api.letsencrypt.org/directory || echo "acme-v02 unreachable"
+            echo "=== certbot ==="
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S certbot --nginx -d printvodiy.uz -d www.printvodiy.uz --non-interactive --agree-tos -m "${{ secrets.LETSENCRYPT_EMAIL }}" --redirect -v || true
+            echo "=== certbot log tail ==="
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S tail -n 60 /var/log/letsencrypt/letsencrypt.log || true
 
       - name: Upload build output
         uses: appleboy/scp-action@v0.1.7
