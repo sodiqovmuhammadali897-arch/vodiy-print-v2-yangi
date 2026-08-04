@@ -102,37 +102,31 @@ jobs:
           script: |
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl reload nginx
 
-  # Deploys Cloud Functions (WebAuthn backend) and Firestore rules. Runs as
-  # its own job so it can never break the SPA deploy above, and no-ops
-  # until FIREBASE_SERVICE_ACCOUNT is added as a repo secret (see README
-  # for the one-time setup: Firebase project must be on the Blaze plan,
-  # and the secret is a Firebase service account JSON key).
+  # Deploys Cloud Functions (WebAuthn backend) and Firestore rules.
+  # Skips itself via plain bash (not a workflow "if:") until
+  # FIREBASE_SERVICE_ACCOUNT is added as a repo secret.
   deploy-functions:
     runs-on: ubuntu-latest
     steps:
-      # `secrets` isn't available in a job-level `if:`, only step-level, so
-      # every step below guards itself instead — the whole job just shows
-      # as a fast no-op (all steps skipped) until the secret is added.
       - name: Checkout
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
         uses: actions/checkout@v4
 
       - name: Setup Node
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install functions dependencies
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
         run: npm ci --prefix functions
 
-      - name: Write service account key
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/firebase-sa.json"
-
-      - name: Deploy functions + Firestore rules
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+      - name: Deploy functions and Firestore rules
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
-        run: npx firebase-tools@13 deploy --only functions,firestore:rules --project vodiy-print --non-interactive
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT secret not set yet, skipping Cloud Functions deploy."
+            exit 0
+          fi
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          npx firebase-tools@13 deploy --only functions,firestore:rules --project vodiy-print --non-interactive
