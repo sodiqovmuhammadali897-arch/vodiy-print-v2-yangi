@@ -208,6 +208,16 @@ export type Manager = {
   created_at: string;
 };
 
+export type Expense = {
+  id: string;
+  category: string;
+  amount: number;
+  date: string;
+  note: string;
+  created_by: string;
+  created_at: string;
+};
+
 export type TextileCompany = {
   id: string;
   company_number: string | null;

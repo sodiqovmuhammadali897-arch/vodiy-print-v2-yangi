@@ -76,6 +76,12 @@ service cloud.firestore {
       allow delete: if can('proposals', 'delete');
     }
 
+    match /expenses/{id} {
+      allow read: if can('finance', 'view');
+      allow create, update: if can('finance', 'edit');
+      allow delete: if can('finance', 'delete');
+    }
+
     // Shared configuration used across modules (dropdowns, dashboards).
     // Any signed-in staff member may read; only admins may change them.
     match /managers/{id} {

@@ -163,3 +163,14 @@ export const CUSTOMER_TYPES = [
 
 export const customerTypeInfo = (t: string) =>
   CUSTOMER_TYPES.find((x) => x.key === t) || CUSTOMER_TYPES[0];
+
+export const EXPENSE_CATEGORIES = [
+  "Ijara",
+  "Maosh",
+  "Xomashyo",
+  "Transport",
+  "Kommunal",
+  "Soliq",
+  "Reklama",
+  "Boshqa",
+] as const;
