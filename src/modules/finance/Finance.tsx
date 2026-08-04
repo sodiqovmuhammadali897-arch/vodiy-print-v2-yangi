@@ -9,6 +9,8 @@ import {
   FileDown,
   Truck,
   Percent,
+  UserPlus,
+  Repeat,
 } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
 import type { Customer, Expense, MonthlyPlan, Order, OrderPayment } from "../../lib/types";
@@ -18,6 +20,7 @@ import {
   inRange,
   type DateRange,
 } from "../../lib/dateRange";
+import { segmentCustomersByFirstOrder } from "../../lib/customerSegments";
 import { exportCsv } from "../../lib/exportCsv";
 import { exportNodeToPdf } from "../../lib/exportPdf";
 import StatCard from "../../components/ui/StatCard";
@@ -100,6 +103,11 @@ export default function Finance() {
 
   const planProgress = plan && plan.plan_amount > 0 ? (income / plan.plan_amount) * 100 : 0;
 
+  const customerSegments = useMemo(
+    () => segmentCustomersByFirstOrder(orders, range),
+    [orders, range],
+  );
+
   const paymentTypeDonut: DonutSlice[] = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of paymentsInRange) {
@@ -121,6 +129,10 @@ export default function Finance() {
       ["Chegirmalar", discountTotal],
       ["Yetkazish xarajati", deliveryTotal],
       ["Umumiy qarzdorlik", debtTotal],
+      ["Yangi mijozlar soni", customerSegments.newCount],
+      ["Yangi mijozlardan kirim", customerSegments.newRevenue],
+      ["Doimiy mijozlar soni", customerSegments.returningCount],
+      ["Doimiy mijozlardan kirim", customerSegments.returningRevenue],
     ]);
   };
 
@@ -204,6 +216,23 @@ export default function Finance() {
           hint={formatMoney(deliveryTotal)}
           tone="violet"
           icon={<Truck className="h-5 w-5" />}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <StatCard
+          title="Yangi mijozlardan kirim"
+          value={formatMoneyShort(customerSegments.newRevenue)}
+          hint={`${customerSegments.newCount} ta yangi mijoz`}
+          tone="sky"
+          icon={<UserPlus className="h-5 w-5" />}
+        />
+        <StatCard
+          title="Doimiy mijozlardan kirim"
+          value={formatMoneyShort(customerSegments.returningRevenue)}
+          hint={`${customerSegments.returningCount} ta doimiy mijoz`}
+          tone="emerald"
+          icon={<Repeat className="h-5 w-5" />}
         />
       </div>
 

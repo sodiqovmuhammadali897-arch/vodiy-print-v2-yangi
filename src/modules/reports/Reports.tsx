@@ -15,6 +15,8 @@ import {
   Timer,
   Download,
   FileDown,
+  UserPlus,
+  Repeat,
 } from "lucide-react";
 import { listAll } from "../../lib/firestoreDb";
 import type { Brand, Customer, Order, OrderProduct } from "../../lib/types";
@@ -28,6 +30,7 @@ import {
   previousPeriod,
   type DateRange,
 } from "../../lib/dateRange";
+import { segmentCustomersByFirstOrder } from "../../lib/customerSegments";
 import { exportCsv } from "../../lib/exportCsv";
 import { exportNodeToPdf } from "../../lib/exportPdf";
 import StatCard from "../../components/ui/StatCard";
@@ -255,6 +258,11 @@ export default function Reports() {
   }, [orders, range]);
   const onTimeRate = onTimeStats.total > 0 ? (onTimeStats.onTime / onTimeStats.total) * 100 : null;
 
+  const customerSegments = useMemo(
+    () => segmentCustomersByFirstOrder(orders, range),
+    [orders, range],
+  );
+
   const exportOverviewCsv = () => {
     exportCsv(`hisobot-${range.from}_${range.to}`, ["Ko'rsatkich", "Qiymat"], [
       ["Davr", `${range.from} - ${range.to}`],
@@ -262,6 +270,10 @@ export default function Reports() {
       ["Umumiy summa", totalRevenue],
       ["O'rtacha chek", Math.round(avgCheck)],
       ["Muddatda bajarilgan", `${onTimeStats.onTime}/${onTimeStats.total}`],
+      ["Yangi mijozlar soni", customerSegments.newCount],
+      ["Yangi mijozlardan tushum", customerSegments.newRevenue],
+      ["Doimiy mijozlar soni", customerSegments.returningCount],
+      ["Doimiy mijozlardan tushum", customerSegments.returningRevenue],
     ]);
   };
 
@@ -328,6 +340,23 @@ export default function Reports() {
           hint={`${onTimeStats.onTime}/${onTimeStats.total} buyurtma`}
           tone={onTimeRate === null ? "brand" : onTimeRate >= 80 ? "emerald" : onTimeRate >= 50 ? "amber" : "rose"}
           icon={<Timer className="h-5 w-5" />}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <StatCard
+          title="Yangi mijozlar"
+          value={customerSegments.newCount}
+          hint={`Tushum: ${formatMoney(customerSegments.newRevenue)}`}
+          tone="sky"
+          icon={<UserPlus className="h-5 w-5" />}
+        />
+        <StatCard
+          title="Doimiy mijozlar"
+          value={customerSegments.returningCount}
+          hint={`Tushum: ${formatMoney(customerSegments.returningRevenue)}`}
+          tone="emerald"
+          icon={<Repeat className="h-5 w-5" />}
         />
       </div>
 
