@@ -66,28 +66,38 @@ export default function ProposalEditor() {
   });
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
-      const [c, b, pr, cs] = await Promise.all([
-        listAll<Customer>("customers", { orderBy: ["first_name", "asc"] }),
-        listAll<Brand>("brands", { orderBy: ["name", "asc"] }),
-        listAll<Product>("products", { orderBy: ["name", "asc"] }),
-        getOne<CompanySettings>("company_settings", "main"),
-      ]);
-      setCustomers(c);
-      setBrands(b);
-      setProducts(pr);
-      setCompany(cs);
+      setLoadError(null);
+      try {
+        const [c, b, pr, cs] = await Promise.all([
+          listAll<Customer>("customers", { orderBy: ["first_name", "asc"] }),
+          listAll<Brand>("brands", { orderBy: ["name", "asc"] }),
+          listAll<Product>("products", { orderBy: ["name", "asc"] }),
+          getOne<CompanySettings>("company_settings", "main"),
+        ]);
+        setCustomers(c);
+        setBrands(b);
+        setProducts(pr);
+        setCompany(cs);
 
-      if (!isNew && id) {
-        const data = await getOne<Proposal>("proposals", id);
-        if (data) {
-          const items = Array.isArray(data.items)
-            ? (data.items as ProposalItem[])
-            : [];
-          setProposal({ ...data, items, recipient_name: data.recipient_name || "" });
+        if (!isNew && id) {
+          const data = await getOne<Proposal>("proposals", id);
+          if (data) {
+            const items = Array.isArray(data.items)
+              ? (data.items as ProposalItem[])
+              : [];
+            setProposal({ ...data, items, recipient_name: data.recipient_name || "" });
+          }
         }
+      } catch (e) {
+        setLoadError(
+          e instanceof Error
+            ? `Ma'lumotlarni yuklab bo'lmadi: ${e.message}`
+            : "Ma'lumotlarni yuklab bo'lmadi",
+        );
       }
     };
     void load();
@@ -209,6 +219,11 @@ export default function ProposalEditor() {
       <button onClick={() => navigate("/proposals")} className="btn-ghost -ml-2">
         <ArrowLeft className="h-4 w-4" /> Takliflar
       </button>
+      {loadError && (
+        <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {loadError}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_1fr]">
         <div className="space-y-4">
           <div className="card p-5">

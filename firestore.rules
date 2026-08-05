@@ -6,8 +6,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Staff doc IDs are always the lowercased email (see AuthContext.tsx
+    // and StaffFormModal.tsx), but Firebase Auth does not normalize the
+    // case of request.auth.token.email — an account created/signed-in
+    // with any uppercase letters would otherwise fail every isStaff()/
+    // isAdmin()/can() check here even though the client-side app (which
+    // does lowercase before lookup) shows them as a fully permissioned
+    // staff member. Lowercasing here keeps both sides consistent.
     function email() {
-      return request.auth.token.email;
+      return request.auth.token.email.lower();
     }
 
     function staffDoc() {
