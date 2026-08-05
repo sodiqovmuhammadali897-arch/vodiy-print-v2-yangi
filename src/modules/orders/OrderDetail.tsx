@@ -119,6 +119,12 @@ export default function OrderDetail() {
         name: staff?.full_name || user?.email || "",
       });
       await load();
+    } catch (e) {
+      alert(
+        e instanceof Error
+          ? `Statusni o'zgartirib bo'lmadi: ${e.message}`
+          : "Statusni o'zgartirib bo'lmadi",
+      );
     } finally {
       setStatusSaving(false);
     }

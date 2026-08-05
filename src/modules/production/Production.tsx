@@ -133,6 +133,8 @@ export default function Production() {
     setBusyId(orderId);
     try {
       await changeOrderStatus(orderId, "production", actorInfo());
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
     } finally {
       setBusyId(null);
     }
@@ -142,16 +144,22 @@ export default function Production() {
     setBusyId(orderId);
     try {
       await changeOrderStatus(orderId, "ready", actorInfo());
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
     } finally {
       setBusyId(null);
     }
   };
 
   const reassign = async (orderId: string, email: string, name: string) => {
-    await updateOne("orders", orderId, {
-      assigned_printer_email: email,
-      assigned_printer_name: name,
-    });
+    try {
+      await updateOne("orders", orderId, {
+        assigned_printer_email: email,
+        assigned_printer_name: name,
+      });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    }
   };
 
   return (
