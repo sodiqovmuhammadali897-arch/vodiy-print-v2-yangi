@@ -30,6 +30,11 @@ type Row = Order & {
   productCount: number;
 };
 
+// Delivered/closed orders stay fully in Firestore (history, payments,
+// reports all depend on them) — they're just hidden from the default list
+// view so the working panel doesn't fill up with finished work.
+const CLOSED_STATUSES: OrderStatus[] = ["delivered", "closed"];
+
 export default function Orders() {
   const navigate = useNavigate();
   const { user, staff, can } = useAuth();
@@ -43,6 +48,7 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+  const [showClosed, setShowClosed] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [requireCustomerFor, setRequireCustomerFor] = useState<Order | null>(null);
 
@@ -103,10 +109,19 @@ export default function Orders() {
     });
   }, [orders, brands, customers, products]);
 
+  const closedCount = useMemo(
+    () => rows.filter((r) => CLOSED_STATUSES.includes(r.status)).length,
+    [rows],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (statusFilter !== "all") {
+        if (r.status !== statusFilter) return false;
+      } else if (!showClosed && CLOSED_STATUSES.includes(r.status)) {
+        return false;
+      }
       if (!q) return true;
       return [
         r.order_number,
@@ -224,6 +239,16 @@ export default function Orders() {
               </option>
             ))}
           </select>
+          {statusFilter === "all" && closedCount > 0 && (
+            <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
+              <input
+                type="checkbox"
+                checked={showClosed}
+                onChange={(e) => setShowClosed(e.target.checked)}
+              />
+              Yopilganlarni ko'rsatish ({closedCount})
+            </label>
+          )}
           <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
             <Search className="h-4 w-4 text-ink-400" />
             <input
