@@ -1,6 +1,11 @@
 import { forwardRef } from "react";
+import { Mail, MapPin, Phone } from "lucide-react";
 import type { Brand, CompanySettings, Customer, Proposal } from "../../lib/types";
-import { formatDate, formatMoney } from "../../lib/format";
+import { formatMoney } from "../../lib/format";
+
+// A plain "YYYY-MM-DD" date, matching the reference design exactly —
+// formatDate()'s localized "20-avg, 2026" style doesn't match it.
+const isoDate = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : "-");
 
 type Props = {
   proposal: Proposal;
@@ -11,221 +16,160 @@ type Props = {
 
 const ProposalPreview = forwardRef<HTMLDivElement, Props>(
   ({ proposal, company, customer, brand }, ref) => {
+    const companyName = company?.name || "Kompaniya";
+    const customerName = customer
+      ? `${customer.first_name} ${customer.last_name}`.trim()
+      : "";
+
     return (
       <div
         ref={ref}
-        className="mx-auto bg-white text-ink-900 shadow-card"
+        className="mx-auto bg-white text-ink-900"
         style={{ width: 794, minHeight: 1123, padding: 48 }}
       >
-        <header className="flex items-start justify-between border-b border-ink-200 pb-5">
-          <div className="flex items-start gap-3">
-            {company?.logo_url ? (
-              <img
-                src={company.logo_url}
-                alt=""
-                className="h-14 w-14 rounded-xl object-contain"
-              />
-            ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand-600 font-display text-2xl font-extrabold text-white">
-                {(company?.name || "P").charAt(0)}
-              </div>
-            )}
-            <div>
-              <div className="font-display text-xl font-bold">
-                {company?.name || "Kompaniya"}
-              </div>
-              <div className="text-xs text-ink-500">
-                {company?.address}
-              </div>
-              <div className="mt-1 space-x-2 text-xs text-ink-600">
-                {company?.phone && <span>{company.phone}</span>}
-                {company?.email && <span>· {company.email}</span>}
-                {company?.website && <span>· {company.website}</span>}
-              </div>
+        <header className="flex items-start justify-between">
+          <div>
+            <div className="font-display text-4xl font-extrabold text-emerald-600">
+              {companyName}
+            </div>
+            <div className="mt-1 text-sm text-ink-500">
+              Tijorat taklifi · {isoDate(proposal.created_at)}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-500">
-              Tijorat taklifi
-            </div>
-            <div className="mt-1 font-display text-2xl font-extrabold text-brand-700">
-              {proposal.number}
-            </div>
-            <div className="mt-1 text-xs text-ink-500">
-              Sana: {formatDate(proposal.created_at)}
-            </div>
-            {proposal.valid_until && (
-              <div className="text-xs text-ink-500">
-                Amal qiladi: {formatDate(proposal.valid_until)}
-              </div>
-            )}
+            <div className="text-sm font-bold text-ink-900">Sana</div>
+            <div className="text-sm text-ink-700">{isoDate(proposal.created_at)}</div>
           </div>
         </header>
+        <div className="mt-4 h-[3px] w-full bg-emerald-600" />
 
-        <section className="mt-6 grid grid-cols-2 gap-4">
-          <div className="rounded-xl bg-ink-50 p-4">
-            <div className="text-[11px] font-semibold uppercase text-ink-500">
-              Kimga
-            </div>
-            <div className="mt-1 font-bold text-ink-900">
-              {customer
-                ? `${customer.first_name} ${customer.last_name}`
-                : "—"}
-            </div>
-            {customer?.company && (
-              <div className="text-sm text-ink-700">{customer.company}</div>
+        <div className="mt-6 text-xl font-bold leading-snug text-ink-900">
+          <span className="text-emerald-600">{companyName}</span>
+          {customerName ? (
+            <>
+              {" "}dan <span>{customerName}</span>
+              {brand && <span> ({brand.name})</span>} uchun tijorat taklifi
+            </>
+          ) : (
+            <> tijorat taklifi</>
+          )}
+        </div>
+
+        <table className="mt-6 w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-emerald-700 text-white">
+              <th className="rounded-l-lg px-3 py-3 text-left text-xs font-bold uppercase tracking-wide">
+                NO
+              </th>
+              <th className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wide">
+                Mahsulot
+              </th>
+              <th className="px-3 py-3 text-right text-xs font-bold uppercase tracking-wide">
+                Soni
+              </th>
+              <th className="px-3 py-3 text-right text-xs font-bold uppercase tracking-wide">
+                Dona narxi
+              </th>
+              <th className="rounded-r-lg px-3 py-3 text-right text-xs font-bold uppercase tracking-wide">
+                Umumiy
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {proposal.items.map((it, i) => (
+              <tr key={i} className="bg-emerald-50/70">
+                <td className="px-3 py-4 align-top text-ink-500">{i + 1}</td>
+                <td className="px-3 py-4 align-top font-medium">{it.name || "-"}</td>
+                <td className="px-3 py-4 align-top text-right">
+                  {Number(it.quantity).toLocaleString("uz-UZ")}
+                </td>
+                <td className="px-3 py-4 align-top text-right font-semibold">
+                  {formatMoney(it.price)}
+                </td>
+                <td className="px-3 py-4 align-top text-right font-bold">
+                  {formatMoney(it.total)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <div className="rounded-xl bg-emerald-50 p-4">
+            <div className="text-sm font-bold text-emerald-700">To'lov rekvizitlari</div>
+            {company?.bank_name && (
+              <div className="mt-2 text-sm text-ink-600">Bank: {company.bank_name}</div>
             )}
-            {customer?.phone && (
-              <div className="text-xs text-ink-600">{customer.phone}</div>
-            )}
-            {customer?.address && (
-              <div className="text-xs text-ink-500">{customer.address}</div>
-            )}
-            {brand && (
-              <div className="mt-2 inline-block rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700">
-                Brend: {brand.name}
-              </div>
+            {company?.bank_account && (
+              <div className="text-sm text-ink-600">Hisob/INN: {company.bank_account}</div>
             )}
           </div>
-          <div className="rounded-xl bg-brand-50 p-4">
-            <div className="text-[11px] font-semibold uppercase text-brand-700">
-              {proposal.title || "Tijorat taklifi"}
+          <div className="rounded-xl bg-emerald-600 p-5 text-white">
+            <div className="text-xs font-semibold uppercase tracking-wide opacity-90">
+              Umumiy
             </div>
-            <div className="mt-1 font-display text-lg font-bold text-brand-900">
-              Umumiy summa
-            </div>
-            <div className="mt-1 font-display text-2xl font-extrabold text-brand-800">
+            <div className="mt-1 font-display text-2xl font-extrabold">
               {formatMoney(proposal.total)}
             </div>
             {proposal.discount > 0 && (
-              <div className="text-xs text-ink-600">
+              <div className="mt-1 text-xs opacity-90">
                 Chegirma: {formatMoney(proposal.discount)}
               </div>
             )}
           </div>
-        </section>
+        </div>
 
-        <section className="mt-6">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-ink-900 text-white">
-                <th className="w-10 border border-ink-900 px-2 py-2 text-left">#</th>
-                <th className="border border-ink-900 px-2 py-2 text-left">Mahsulot</th>
-                <th className="w-20 border border-ink-900 px-2 py-2 text-center">
-                  O'lchov
-                </th>
-                <th className="w-20 border border-ink-900 px-2 py-2 text-center">
-                  Miqdor
-                </th>
-                <th className="w-28 border border-ink-900 px-2 py-2 text-right">
-                  Narxi
-                </th>
-                <th className="w-32 border border-ink-900 px-2 py-2 text-right">
-                  Jami
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {proposal.items.map((it, i) => (
-                <tr key={i} className="odd:bg-white even:bg-ink-50">
-                  <td className="border border-ink-200 px-2 py-2 text-ink-500">
-                    {i + 1}
-                  </td>
-                  <td className="border border-ink-200 px-2 py-2 font-medium">
-                    {it.name || "-"}
-                  </td>
-                  <td className="border border-ink-200 px-2 py-2 text-center">
-                    {it.unit}
-                  </td>
-                  <td className="border border-ink-200 px-2 py-2 text-center">
-                    {Number(it.quantity).toLocaleString("uz-UZ")}
-                  </td>
-                  <td className="border border-ink-200 px-2 py-2 text-right">
-                    {formatMoney(it.price)}
-                  </td>
-                  <td className="border border-ink-200 px-2 py-2 text-right font-semibold">
-                    {formatMoney(it.total)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={5} className="px-2 py-2 text-right text-sm text-ink-500">
-                  Oraliq:
-                </td>
-                <td className="px-2 py-2 text-right font-semibold">
-                  {formatMoney(proposal.subtotal)}
-                </td>
-              </tr>
-              {proposal.discount > 0 && (
-                <tr>
-                  <td colSpan={5} className="px-2 py-1 text-right text-sm text-rose-600">
-                    Chegirma:
-                  </td>
-                  <td className="px-2 py-1 text-right font-semibold text-rose-600">
-                    -{formatMoney(proposal.discount)}
-                  </td>
-                </tr>
-              )}
-              <tr className="bg-brand-50">
-                <td colSpan={5} className="px-2 py-2 text-right font-bold">
-                  UMUMIY:
-                </td>
-                <td className="px-2 py-2 text-right font-display text-lg font-extrabold text-brand-800">
-                  {formatMoney(proposal.total)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </section>
+        <div className="mt-6 text-base font-bold text-ink-900">Buyurtma uchun rahmat!</div>
 
         {proposal.note && (
-          <section className="mt-6 rounded-xl bg-ink-50 p-4 text-sm text-ink-700">
-            <div className="mb-1 text-[11px] font-semibold uppercase text-ink-500">
-              Izoh
-            </div>
+          <div className="mt-4 rounded-xl bg-ink-50 p-4 text-sm text-ink-700">
             <div className="whitespace-pre-line">{proposal.note}</div>
-          </section>
-        )}
-
-        {(company?.requisites || company?.bank_account) && (
-          <section className="mt-6 rounded-xl border border-ink-200 p-4 text-xs text-ink-700">
-            <div className="mb-1 text-[11px] font-semibold uppercase text-ink-500">
-              Rekvizitlar
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-              {company.bank_name && <div>Bank: {company.bank_name}</div>}
-              {company.bank_account && <div>H/r: {company.bank_account}</div>}
-              {company.mfo && <div>MFO: {company.mfo}</div>}
-              {company.stir && <div>STIR: {company.stir}</div>}
-            </div>
-            {company.requisites && (
-              <div className="mt-2 whitespace-pre-line">{company.requisites}</div>
-            )}
-          </section>
-        )}
-
-        <footer className="mt-8 flex items-end justify-between border-t border-ink-200 pt-5">
-          <div>
-            <div className="text-xs text-ink-500">Rahbar</div>
-            <div className="font-semibold">{company?.director_name || "—"}</div>
-            {company?.signature_url && (
-              <img
-                src={company.signature_url}
-                alt=""
-                className="mt-1 h-16 object-contain"
-              />
-            )}
           </div>
+        )}
+
+        {proposal.valid_until && (
+          <div className="mt-4 rounded-lg border-l-4 border-rose-600 bg-rose-50/50 p-4">
+            <div className="text-sm font-bold text-rose-600">ESLATMA!</div>
+            <div className="mt-1 text-sm text-ink-700">
+              Ushbu belgilangan narxlar {isoDate(proposal.valid_until)}gacha amal qiladi!
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 h-[2px] w-full bg-emerald-600" />
+
+        <div className="mt-4 flex items-end justify-end gap-3">
           {company?.stamp_url && (
-            <img
-              src={company.stamp_url}
-              alt=""
-              className="h-24 w-24 object-contain opacity-80"
-            />
+            <img src={company.stamp_url} alt="" className="h-16 w-16 object-contain opacity-80" />
           )}
-        </footer>
+          <div className="text-right">
+            {company?.signature_url && (
+              <img src={company.signature_url} alt="" className="ml-auto h-12 object-contain" />
+            )}
+            <div className="font-bold text-ink-900">
+              {company?.director_name || "—"} — Rahbar
+            </div>
+            <div className="mt-1 text-xs text-ink-400">Imzo</div>
+          </div>
+        </div>
+
+        <div className="mt-10 flex flex-wrap items-center gap-6 border-t border-ink-200 pt-4 text-xs text-ink-600">
+          {company?.phone && (
+            <span className="flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5 text-rose-600" /> {company.phone}
+            </span>
+          )}
+          {company?.email && (
+            <span className="flex items-center gap-1.5">
+              <Mail className="h-3.5 w-3.5 text-ink-500" /> {company.email}
+            </span>
+          )}
+          {company?.address && (
+            <span className="flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5 text-rose-600" /> {company.address}
+            </span>
+          )}
+        </div>
       </div>
     );
   },
