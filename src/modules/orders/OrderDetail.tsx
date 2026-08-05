@@ -16,6 +16,8 @@ import {
   Paperclip,
   Shirt,
   History,
+  CheckCircle2,
+  FileOutput,
 } from "lucide-react";
 import {
   getOne,
@@ -27,6 +29,7 @@ import {
 } from "../../lib/firestoreDb";
 import type {
   Brand,
+  CompanySettings,
   Customer,
   Holiday,
   Order,
@@ -40,6 +43,9 @@ import type {
 import StatusBadge from "../../components/ui/StatusBadge";
 import ProductionBadge from "../../components/ui/ProductionBadge";
 import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
+import TextileMatrixTable from "../../components/textile/TextileMatrixTable";
+import TextileMatrixExport from "../textile/TextileMatrixExport";
+import { pivotTextileBreakdown } from "../../lib/textileMatrix";
 import { formatDate, formatDateTime, formatMoney } from "../../lib/format";
 import { deadlineInfo } from "../../lib/workingDays";
 import { nextOrderNumber } from "../../lib/numbering";
@@ -69,6 +75,9 @@ export default function OrderDetail() {
   const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
+  const [company, setCompany] = useState<CompanySettings | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -76,7 +85,7 @@ export default function OrderDetail() {
     const ord = await getOne<Order>("orders", id);
     setOrder(ord);
     if (ord) {
-      const [b, c, pr, pay, f, h, tx, sh] = await Promise.all([
+      const [b, c, pr, pay, f, h, tx, sh, cs] = await Promise.all([
         ord.brand_id
           ? getOne<Brand>("brands", ord.brand_id)
           : Promise.resolve(null),
@@ -99,6 +108,7 @@ export default function OrderDetail() {
         listWhere<StatusHistoryEntry>("order_status_history", "order_id", ord.id, {
           orderBy: ["changed_at", "asc"],
         }),
+        getOne<CompanySettings>("company_settings", "main"),
       ]);
       setBrand(b);
       setCustomer(c);
@@ -108,6 +118,7 @@ export default function OrderDetail() {
       setTextile(tx);
       setHolidays(h);
       setStatusHistory(sh);
+      setCompany(cs);
     }
     setLoading(false);
   };
@@ -171,6 +182,22 @@ export default function OrderDetail() {
     await applyStatusChange(status);
   };
 
+  const confirmTextileSizes = async () => {
+    if (!order) return;
+    setConfirming(true);
+    try {
+      await updateOne("orders", order.id, {
+        textile_sizes_confirmed_at: new Date().toISOString(),
+        textile_sizes_confirmed_by: staff?.full_name || user?.email || "",
+      });
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Tasdiqlab bo'lmadi");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   const duplicate = async () => {
     if (!order) return;
     setDuplicating(true);
@@ -195,6 +222,10 @@ export default function OrderDetail() {
         remaining_amount: order.total_amount,
         is_draft: false,
         order_date: new Date().toISOString().slice(0, 10),
+        // A duplicated order is a fresh one — the client hasn't confirmed
+        // sizes for it yet, even if the original order had been confirmed.
+        textile_sizes_confirmed_at: null,
+        textile_sizes_confirmed_by: "",
       });
       if (products.length > 0) {
         await insertMany(
@@ -213,6 +244,7 @@ export default function OrderDetail() {
             discount: p.discount,
             total: p.total,
             note: p.note,
+            size_breakdown: p.size_breakdown,
           })),
         );
       }
@@ -248,6 +280,10 @@ export default function OrderDetail() {
     Number(order.remaining_amount || 0) ||
     Math.max(0, Number(order.total_amount) - Number(order.paid_amount));
   const dl = deadlineInfo(order.deadline, holidays);
+  const textileMatrix = pivotTextileBreakdown(products);
+  const textileProductName =
+    products.find((p) => p.category === "Textil" && p.size_breakdown.length > 0)
+      ?.product_name || "";
 
   return (
     <div className="space-y-5">
@@ -494,6 +530,46 @@ export default function OrderDetail() {
         </div>
       </div>
 
+      {textileMatrix.rows.length > 0 && (
+        <div className="card p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Shirt className="h-4 w-4 text-brand-700" />
+              <h2 className="font-display text-base font-bold text-ink-900">
+                Razmer/rang taqsimoti
+              </h2>
+            </div>
+            <button className="btn-secondary" onClick={() => setExportOpen(true)}>
+              <FileOutput className="h-4 w-4" /> Chop etish / Ulashish
+            </button>
+          </div>
+          <TextileMatrixTable matrix={textileMatrix} />
+          <div className="mt-3">
+            {order.textile_sizes_confirmed_at ? (
+              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                <CheckCircle2 className="h-4 w-4" />
+                Klent bilan ushbu razmerlar tasdiqlandi · Sana:{" "}
+                {formatDateTime(order.textile_sizes_confirmed_at)}
+                {order.textile_sizes_confirmed_by ? ` · ${order.textile_sizes_confirmed_by}` : ""}
+              </div>
+            ) : (
+              canEdit && (
+                <div className="flex items-center justify-between rounded-xl border border-dashed border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  <span>Razmerlar hali klent bilan tasdiqlanmagan</span>
+                  <button
+                    className="btn-primary"
+                    onClick={confirmTextileSizes}
+                    disabled={confirming}
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> Tasdiqlash
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="card p-5">
           <h2 className="font-display text-base font-bold text-ink-900">
@@ -736,6 +812,17 @@ export default function OrderDetail() {
         }}
         customers={allCustomers}
         onSelected={onCustomerSelected}
+      />
+
+      <TextileMatrixExport
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        company={company}
+        orderNumber={order.order_number || ""}
+        clientName={customer ? `${customer.first_name} ${customer.last_name}`.trim() : ""}
+        productName={textileProductName}
+        orderDate={order.order_date || order.created_at}
+        matrix={textileMatrix}
       />
     </div>
   );

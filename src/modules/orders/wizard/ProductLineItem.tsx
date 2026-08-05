@@ -1,5 +1,7 @@
-import { Trash2, GripVertical } from "lucide-react";
+import { useState } from "react";
+import { Trash2, GripVertical, Grid3x3, Pencil, X } from "lucide-react";
 import type { WizardProduct } from "../../../lib/orderService";
+import type { SizeBreakdownEntry } from "../../../lib/types";
 import {
   CATEGORY_PRODUCTS,
   PRODUCT_CATEGORIES,
@@ -8,6 +10,7 @@ import {
 } from "../../../lib/orderConstants";
 import { computeProductTotal } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
+import TextileSizeMatrixModal from "./TextileSizeMatrixModal";
 
 type Props = {
   index: number;
@@ -27,12 +30,25 @@ export default function ProductLineItem({
   const total = computeProductTotal(product);
   const suggestions = CATEGORY_PRODUCTS[product.category] || [];
   const isTextile = product.category === "Textil";
+  const [matrixOpen, setMatrixOpen] = useState(false);
+  const hasBreakdown = product.size_breakdown.length > 0;
 
   const patchAndRecalc = (patch: Partial<WizardProduct>) => {
     const merged = { ...product, ...patch };
     const newTotal = computeProductTotal(merged);
     onChange({ ...patch, total: newTotal });
   };
+
+  const applyBreakdown = (breakdown: SizeBreakdownEntry[]) => {
+    const qty = breakdown.reduce((s, e) => s + e.qty, 0);
+    patchAndRecalc({ size_breakdown: breakdown, quantity: qty, color: "", size: "" });
+  };
+
+  const clearBreakdown = () =>
+    patchAndRecalc({ size_breakdown: [], quantity: 0 });
+
+  const colorCount = new Set(product.size_breakdown.map((e) => e.color)).size;
+  const sizeCount = new Set(product.size_breakdown.map((e) => e.size)).size;
 
   return (
     <div className="rounded-2xl border border-ink-100 bg-white p-4 shadow-sm">
@@ -94,53 +110,98 @@ export default function ProductLineItem({
             onChange={(e) => patchAndRecalc({ variant: e.target.value })}
           />
         </div>
-        <div className="col-span-6 md:col-span-3">
-          <label className="label">Rangi</label>
-          {isTextile ? (
-            <>
-              <input
-                className="input"
-                list={`colors-${index}`}
-                value={product.color}
-                onChange={(e) => patchAndRecalc({ color: e.target.value })}
-              />
-              <datalist id={`colors-${index}`}>
-                {TEXTILE_COLORS.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </>
-          ) : (
-            <input
-              className="input"
-              value={product.color}
-              onChange={(e) => patchAndRecalc({ color: e.target.value })}
-            />
-          )}
-        </div>
-        <div className="col-span-6 md:col-span-3">
-          <label className="label">O'lchami</label>
-          {isTextile ? (
-            <select
-              className="input"
-              value={product.size}
-              onChange={(e) => patchAndRecalc({ size: e.target.value })}
-            >
-              <option value="">-- tanlang --</option>
-              {TEXTILE_SIZES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              className="input"
-              value={product.size}
-              onChange={(e) => patchAndRecalc({ size: e.target.value })}
-            />
-          )}
-        </div>
+        {isTextile && hasBreakdown ? (
+          <div className="col-span-12 md:col-span-6">
+            <label className="label">Razmer/rang taqsimoti</label>
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <div className="text-sm text-emerald-800">
+                <span className="font-semibold">{product.quantity} dona</span>
+                {" · "}
+                {colorCount} rang · {sizeCount} razmer
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => setMatrixOpen(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost text-rose-600 hover:bg-rose-50"
+                  onClick={clearBreakdown}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="col-span-6 md:col-span-3">
+              <label className="label">Rangi</label>
+              {isTextile ? (
+                <>
+                  <input
+                    className="input"
+                    list={`colors-${index}`}
+                    value={product.color}
+                    onChange={(e) => patchAndRecalc({ color: e.target.value })}
+                  />
+                  <datalist id={`colors-${index}`}>
+                    {TEXTILE_COLORS.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                </>
+              ) : (
+                <input
+                  className="input"
+                  value={product.color}
+                  onChange={(e) => patchAndRecalc({ color: e.target.value })}
+                />
+              )}
+            </div>
+            <div className="col-span-6 md:col-span-3">
+              <label className="label">O'lchami</label>
+              {isTextile ? (
+                <select
+                  className="input"
+                  value={product.size}
+                  onChange={(e) => patchAndRecalc({ size: e.target.value })}
+                >
+                  <option value="">-- tanlang --</option>
+                  {TEXTILE_SIZES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="input"
+                  value={product.size}
+                  onChange={(e) => patchAndRecalc({ size: e.target.value })}
+                />
+              )}
+            </div>
+            {isTextile && (
+              <div className="col-span-12 -mt-1">
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-brand-700 hover:underline"
+                  onClick={() => setMatrixOpen(true)}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <Grid3x3 className="h-3.5 w-3.5" /> Bir nechta razmer/rang
+                    uchun jadval orqali kiritish
+                  </span>
+                </button>
+              </div>
+            )}
+          </>
+        )}
         <div className="col-span-6 md:col-span-3">
           <label className="label">Materiali</label>
           <input
@@ -155,10 +216,14 @@ export default function ProductLineItem({
             type="number"
             className="input"
             value={product.quantity || ""}
+            disabled={hasBreakdown}
             onChange={(e) =>
               patchAndRecalc({ quantity: Number(e.target.value) || 0 })
             }
           />
+          {hasBreakdown && (
+            <div className="mt-1 text-[11px] text-ink-500">Jadvaldan hisoblanadi</div>
+          )}
         </div>
         <div className="col-span-4 md:col-span-2">
           <label className="label">Dona narxi</label>
@@ -196,6 +261,16 @@ export default function ProductLineItem({
           />
         </div>
       </div>
+
+      {isTextile && (
+        <TextileSizeMatrixModal
+          open={matrixOpen}
+          onClose={() => setMatrixOpen(false)}
+          productName={product.product_name}
+          initialBreakdown={product.size_breakdown}
+          onSave={applyBreakdown}
+        />
+      )}
     </div>
   );
 }

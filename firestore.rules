@@ -149,6 +149,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Reusable size/color quantity distributions (e.g. repeat school-uniform
+    // orders) — shared with whoever can edit orders, not admin-only, since
+    // sales/production staff are the ones filling these matrices in.
+    match /textile_size_templates/{id} {
+      allow read: if can('orders', 'edit') || can('production', 'view');
+      allow create, update: if can('orders', 'edit');
+      allow delete: if isAdmin();
+    }
+
     // ── Davomat va KPI ──────────────────────────────────────────────
     // Employee identity for attendance/KPI reuses the existing `staff`
     // collection (email-keyed) rather than a separate `employees`

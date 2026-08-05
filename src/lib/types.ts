@@ -90,6 +90,19 @@ export type Order = {
   deadline: string | null;
   completed_at: string | null;
   created_at: string;
+  // Client confirmation of the Textil size/color breakdown across this
+  // order's line items — a single yes/no per order, not per line, since the
+  // client signs off on the whole distribution at once.
+  textile_sizes_confirmed_at: string | null;
+  textile_sizes_confirmed_by: string;
+};
+
+// One cell of a Textil size/color quantity breakdown for a single order
+// line item (e.g. Qora/L -> 14 dona).
+export type SizeBreakdownEntry = {
+  color: string;
+  size: string;
+  qty: number;
 };
 
 export type OrderProduct = {
@@ -107,6 +120,21 @@ export type OrderProduct = {
   discount: number;
   total: number;
   note: string;
+  // Only used for Textil-category lines: a per color/size quantity
+  // distribution. When non-empty, `quantity` is the sum of its entries.
+  size_breakdown: SizeBreakdownEntry[];
+};
+
+// A saved color/size quantity distribution an employee can reuse on a
+// future order for the same or a similar product (e.g. school uniforms
+// ordered every term with the same breakdown).
+export type TextileSizeTemplate = {
+  id: string;
+  name: string;
+  product_name: string;
+  size_breakdown: SizeBreakdownEntry[];
+  created_by: string;
+  created_at: string;
 };
 
 export type OrderPayment = {

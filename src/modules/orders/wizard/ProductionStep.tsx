@@ -21,6 +21,7 @@ type Props = {
 const emptyProduct: WizardProduct = {
   position: 0, category: "", product_name: "", variant: "", size: "", material: "",
   color: "", quantity: 0, unit_price: 0, discount: 0, total: 0, note: "",
+  size_breakdown: [],
 };
 
 const emptyPayment: WizardPayment = {

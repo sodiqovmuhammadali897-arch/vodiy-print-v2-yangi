@@ -202,6 +202,7 @@ export default function OrderWizard() {
                 discount: Number(p.discount),
                 total: Number(p.total),
                 note: p.note,
+                size_breakdown: Array.isArray(p.size_breakdown) ? p.size_breakdown : [],
               })),
           );
           setPayments(
