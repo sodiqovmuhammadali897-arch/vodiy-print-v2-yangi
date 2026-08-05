@@ -23,6 +23,7 @@ import {
   insertOne,
   listAll,
   listWhere,
+  updateOne,
 } from "../../lib/firestoreDb";
 import type {
   Brand,
@@ -44,7 +45,9 @@ import { deadlineInfo } from "../../lib/workingDays";
 import { nextOrderNumber } from "../../lib/numbering";
 import { ORDER_STATUSES } from "../../lib/orderConstants";
 import { changeOrderStatus } from "../../lib/orderStatus";
+import { maybePromoteCustomer } from "../../lib/orderService";
 import { useAuth } from "../../lib/AuthContext";
+import RequireCustomerModal from "./RequireCustomerModal";
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -52,6 +55,9 @@ export default function OrderDetail() {
   const { user, staff, can } = useAuth();
   const canEdit = can("orders", "edit");
   const [statusSaving, setStatusSaving] = useState(false);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  const [requireCustomerOpen, setRequireCustomerOpen] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<OrderStatus | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -110,8 +116,8 @@ export default function OrderDetail() {
     void load();
   }, [id]);
 
-  const changeStatus = async (status: OrderStatus) => {
-    if (!order || status === order.status) return;
+  const applyStatusChange = async (status: OrderStatus) => {
+    if (!order) return;
     setStatusSaving(true);
     try {
       await changeOrderStatus(order.id, status, {
@@ -128,6 +134,41 @@ export default function OrderDetail() {
     } finally {
       setStatusSaving(false);
     }
+  };
+
+  // Delivery is the natural checkpoint to make sure a completed sale has a
+  // real customer behind it, so marking "Yetkazildi" without one linked
+  // pauses to ask for one first instead of silently completing the order.
+  const changeStatus = async (status: OrderStatus) => {
+    if (!order || status === order.status) return;
+    if (status === "delivered" && !order.customer_id) {
+      if (allCustomers.length === 0) {
+        const rows = await listAll<Customer>("customers", {
+          orderBy: ["first_name", "asc"],
+        });
+        setAllCustomers(rows);
+      }
+      setPendingStatus(status);
+      setRequireCustomerOpen(true);
+      return;
+    }
+    await applyStatusChange(status);
+  };
+
+  const onCustomerSelected = async (c: Customer) => {
+    setRequireCustomerOpen(false);
+    if (!order || !pendingStatus) return;
+    try {
+      await updateOne("orders", order.id, { customer_id: c.id });
+      await maybePromoteCustomer(c.id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+      setPendingStatus(null);
+      return;
+    }
+    const status = pendingStatus;
+    setPendingStatus(null);
+    await applyStatusChange(status);
   };
 
   const duplicate = async () => {
@@ -686,6 +727,16 @@ export default function OrderDetail() {
           ? ` · Yakunlandi: ${formatDateTime(order.completed_at)}`
           : ""}
       </div>
+
+      <RequireCustomerModal
+        open={requireCustomerOpen}
+        onClose={() => {
+          setRequireCustomerOpen(false);
+          setPendingStatus(null);
+        }}
+        customers={allCustomers}
+        onSelected={onCustomerSelected}
+      />
     </div>
   );
 }

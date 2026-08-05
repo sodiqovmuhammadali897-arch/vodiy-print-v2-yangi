@@ -168,7 +168,7 @@ export const saveOrder = async (
   }
 };
 
-const maybePromoteCustomer = async (customerId: string) => {
+export const maybePromoteCustomer = async (customerId: string) => {
   const customer = await getOne<{ customer_type: string }>("customers", customerId);
   const type = customer?.customer_type;
   if (type === "regular" || type === "vip") return;
