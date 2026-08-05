@@ -170,7 +170,9 @@ export default function ProposalEditor() {
       recipient_name: proposal.recipient_name,
       brand_id: proposal.brand_id,
       title: proposal.title,
-      items: proposal.items,
+      // JSON round-trip strips any accidental `undefined` fields (e.g. a
+      // stale product_id) — Firestore rejects those outright.
+      items: JSON.parse(JSON.stringify(proposal.items)) as ProposalItem[],
       subtotal: proposal.subtotal,
       discount: proposal.discount,
       total: proposal.total,
@@ -374,7 +376,22 @@ export default function ProposalEditor() {
                         if (found) {
                           pickProduct(i, found.id);
                         } else {
-                          setItem(i, { name: val, product_id: undefined });
+                          // Free-typed name no longer matches a catalog
+                          // product, so the stale product_id link must be
+                          // dropped entirely (not set to undefined — Firestore
+                          // rejects explicit undefined field values).
+                          setProposal((p) => {
+                            const items = p.items.map((item, idx) => {
+                              if (idx !== i) return item;
+                              const { product_id: _drop, ...rest } = item;
+                              return {
+                                ...rest,
+                                name: val,
+                                total: Number(item.quantity) * Number(item.price),
+                              };
+                            });
+                            return recompute({ ...p, items });
+                          });
                         }
                       }}
                     />
