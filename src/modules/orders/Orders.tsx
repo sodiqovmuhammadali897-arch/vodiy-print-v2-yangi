@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Search, Package, Send, Copy } from "lucide-react";
-import { listAll, subscribeAll } from "../../lib/firestoreDb";
+import { Plus, Search, Package, Send, Copy, Pencil, Trash2 } from "lucide-react";
+import { deleteOne, deleteWhere, listAll, subscribeAll, updateOne } from "../../lib/firestoreDb";
 import type {
   Brand,
   Customer,
@@ -11,12 +11,13 @@ import type {
   OrderStatus,
 } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
-import StatusBadge, {
-  ORDER_STATUS_OPTIONS,
-  orderStatusLabel,
-} from "../../components/ui/StatusBadge";
+import StatusBadge, { ORDER_STATUS_OPTIONS, orderStatusLabel } from "../../components/ui/StatusBadge";
+import { ORDER_STATUSES } from "../../lib/orderConstants";
+import { changeOrderStatus } from "../../lib/orderStatus";
+import { maybePromoteCustomer } from "../../lib/orderService";
 import ProductionBadge from "../../components/ui/ProductionBadge";
 import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
+import RequireCustomerModal from "./RequireCustomerModal";
 import { formatDate, formatMoney } from "../../lib/format";
 import { deadlineInfo } from "../../lib/workingDays";
 import { remainingTimeLabel } from "../../lib/remainingTime";
@@ -31,8 +32,9 @@ type Row = Order & {
 
 export default function Orders() {
   const navigate = useNavigate();
-  const { can } = useAuth();
+  const { user, staff, can } = useAuth();
   const canEdit = can("orders", "edit");
+  const canDelete = can("orders", "delete");
   const [orders, setOrders] = useState<Order[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -41,6 +43,8 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [requireCustomerFor, setRequireCustomerFor] = useState<Order | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +137,69 @@ export default function Orders() {
     }
   };
 
+  const applyStatusChange = async (orderId: string, status: OrderStatus) => {
+    setBusyId(orderId);
+    try {
+      await changeOrderStatus(orderId, status, {
+        email: user?.email || "",
+        name: staff?.full_name || user?.email || "",
+      });
+    } catch (e) {
+      alert(
+        e instanceof Error
+          ? `Statusni o'zgartirib bo'lmadi: ${e.message}`
+          : "Statusni o'zgartirib bo'lmadi",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Same safeguard as the order detail page: delivering an order with no
+  // linked customer pauses for one instead of quietly completing.
+  const changeStatus = (order: Order, status: OrderStatus) => {
+    if (status === order.status) return;
+    if (status === "delivered" && !order.customer_id) {
+      setRequireCustomerFor(order);
+      return;
+    }
+    void applyStatusChange(order.id, status);
+  };
+
+  const onCustomerSelected = async (c: Customer) => {
+    const order = requireCustomerFor;
+    setRequireCustomerFor(null);
+    if (!order) return;
+    try {
+      await updateOne("orders", order.id, { customer_id: c.id });
+      await maybePromoteCustomer(c.id);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+      return;
+    }
+    await applyStatusChange(order.id, "delivered");
+  };
+
+  const removeOrder = async (orderId: string) => {
+    if (!confirm("Ushbu buyurtmani butunlay o'chirishni tasdiqlaysizmi? Bu amalni orqaga qaytarib bo'lmaydi.")) {
+      return;
+    }
+    setBusyId(orderId);
+    try {
+      await Promise.all([
+        deleteWhere("order_products", "order_id", orderId),
+        deleteWhere("order_payments", "order_id", orderId),
+        deleteWhere("order_files", "order_id", orderId),
+        deleteWhere("order_status_history", "order_id", orderId),
+      ]);
+      await deleteOne("orders", orderId);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -202,6 +269,7 @@ export default function Orders() {
                   <th className="table-th">Deadline</th>
                   <th className="table-th">Status</th>
                   <th className="table-th">Pechatnik</th>
+                  {(canEdit || canDelete) && <th className="table-th text-right">Amallar</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
@@ -353,11 +421,49 @@ export default function Orders() {
                         )}
                       </td>
                       <td className="table-td">
-                        <StatusBadge status={o.status} />
+                        {canEdit ? (
+                          <select
+                            className="input w-auto py-1.5 text-xs"
+                            value={o.status}
+                            disabled={busyId === o.id}
+                            onChange={(e) => changeStatus(o, e.target.value as OrderStatus)}
+                          >
+                            {ORDER_STATUSES.map((s) => (
+                              <option key={s.key} value={s.key}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <StatusBadge status={o.status} />
+                        )}
                       </td>
                       <td className="table-td whitespace-nowrap text-ink-600">
                         {o.assigned_printer_name || "-"}
                       </td>
+                      {(canEdit || canDelete) && (
+                        <td className="table-td">
+                          <div className="flex items-center justify-end gap-1">
+                            {canEdit && (
+                              <button
+                                className="btn-ghost"
+                                onClick={() => navigate(`/orders/${o.id}/edit`)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                className="btn-ghost text-rose-600 hover:bg-rose-50"
+                                onClick={() => removeOrder(o.id)}
+                                disabled={busyId === o.id}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -366,6 +472,13 @@ export default function Orders() {
           </div>
         </AsyncState>
       </div>
+
+      <RequireCustomerModal
+        open={!!requireCustomerFor}
+        onClose={() => setRequireCustomerFor(null)}
+        customers={customers}
+        onSelected={onCustomerSelected}
+      />
     </div>
   );
 }

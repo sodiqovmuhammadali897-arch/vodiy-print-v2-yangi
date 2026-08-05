@@ -78,7 +78,10 @@ service cloud.firestore {
     match /order_status_history/{id} {
       allow read: if can('orders', 'view') || can('production', 'view');
       allow create: if can('orders', 'edit') || can('production', 'edit');
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+      // Deleting an order cascades to its history entries — allowed for
+      // whoever can delete the order itself, not just admins.
+      allow delete: if isAdmin() || can('orders', 'delete');
     }
 
     match /customers/{id} {
