@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Modal from "../../components/ui/Modal";
 import { insertOne, listAll, updateOne } from "../../lib/firestoreDb";
 import { nextCustomerNumber } from "../../lib/numbering";
-import { CUSTOMER_SOURCES, CUSTOMER_TYPES, INDUSTRIES } from "../../lib/orderConstants";
+import { CUSTOMER_SOURCES, CUSTOMER_TYPES, INDUSTRIES, UZBEKISTAN_REGIONS } from "../../lib/orderConstants";
 import type { Customer } from "../../lib/types";
 
 type Props = {
@@ -23,6 +23,7 @@ const emptyForm = {
   telegram: "",
   company: "",
   position: "",
+  region: "",
   address: "",
   note: "",
 };
@@ -51,6 +52,7 @@ export default function CustomerFormModal({
         telegram: customer.telegram,
         company: customer.company,
         position: customer.position,
+        region: customer.region || "",
         address: customer.address,
         note: customer.note,
       });
@@ -232,7 +234,22 @@ export default function CustomerFormModal({
             ))}
           </datalist>
         </div>
-        <div className="md:col-span-2">
+        <div>
+          <label className="label">Viloyat</label>
+          <select
+            className="input"
+            value={form.region}
+            onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))}
+          >
+            <option value="">-- tanlang --</option>
+            {UZBEKISTAN_REGIONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="label">Manzil</label>
           <input
             className="input"

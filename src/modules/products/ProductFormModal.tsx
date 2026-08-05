@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Lock, Plus, Trash2 } from "lucide-react";
 import { getOne, insertOne, updateOne, upsertOne } from "../../lib/firestoreDb";
-import { PRODUCT_CATEGORIES } from "../../lib/orderConstants";
+import { PRODUCT_CATEGORIES, TEXTILE_COLORS, TEXTILE_SIZES } from "../../lib/orderConstants";
 import { sortTiers } from "../../lib/priceTiers";
 import type { Product, ProductCost } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
@@ -24,8 +24,11 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
   const [category, setCategory] = useState<string>(PRODUCT_CATEGORIES[0]);
   const [unit, setUnit] = useState("dona");
   const [tiers, setTiers] = useState<TierRow[]>(emptyTiers);
+  const [sizes, setSizes] = useState<string[]>([]);
+  const [colors, setColors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isTextile = category === "Textil";
 
   useEffect(() => {
     if (!open) return;
@@ -33,6 +36,8 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
       setName(product.name);
       setCategory(product.category || PRODUCT_CATEGORIES[0]);
       setUnit(product.unit || "dona");
+      setSizes(product.sizes || []);
+      setColors(product.colors || []);
       const priceTiers = product.price_tiers?.length
         ? product.price_tiers
         : [{ min_qty: 1, price: 0 }];
@@ -56,9 +61,16 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
       setCategory(PRODUCT_CATEGORIES[0]);
       setUnit("dona");
       setTiers(emptyTiers);
+      setSizes([]);
+      setColors([]);
     }
     setError(null);
   }, [product, open, isAdmin]);
+
+  const toggleSize = (size: string) =>
+    setSizes((s) => (s.includes(size) ? s.filter((x) => x !== size) : [...s, size]));
+  const toggleColor = (color: string) =>
+    setColors((c) => (c.includes(color) ? c.filter((x) => x !== color) : [...c, color]));
 
   const updateTier = (i: number, patch: Partial<TierRow>) =>
     setTiers((t) => t.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
@@ -81,6 +93,8 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
         unit,
         price_tiers: validRows.map(({ min_qty, price }) => ({ min_qty, price })),
         base_price: validRows[0].price,
+        sizes: isTextile ? sizes : [],
+        colors: isTextile ? colors : [],
       };
       let productId = product?.id;
       if (product) {
@@ -144,6 +158,49 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
           </select>
         </div>
       </div>
+
+      {isTextile && (
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="label">Razmerlar</label>
+            <div className="flex flex-wrap gap-1.5">
+              {TEXTILE_SIZES.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => toggleSize(s)}
+                  className={`chip ${
+                    sizes.includes(s)
+                      ? "bg-brand-600 text-white"
+                      : "bg-ink-100 text-ink-700 hover:bg-ink-200"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="label">Ranglar</label>
+            <div className="flex flex-wrap gap-1.5">
+              {TEXTILE_COLORS.filter((c) => c !== "Boshqa").map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => toggleColor(c)}
+                  className={`chip ${
+                    colors.includes(c)
+                      ? "bg-brand-600 text-white"
+                      : "bg-ink-100 text-ink-700 hover:bg-ink-200"
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-5">
         <div className="mb-2 flex items-center justify-between">

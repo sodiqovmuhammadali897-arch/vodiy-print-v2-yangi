@@ -88,8 +88,11 @@ service cloud.firestore {
       allow delete: if can('customers', 'delete');
     }
 
+    // The Textil module is a read-only view over Textil-category catalog
+    // products, so staff who only have that permission (not Mahsulotlar)
+    // can still see it.
     match /products/{id} {
-      allow read: if can('products', 'view');
+      allow read: if can('products', 'view') || can('textile', 'view');
       allow create, update: if can('products', 'edit');
       allow delete: if can('products', 'delete');
     }

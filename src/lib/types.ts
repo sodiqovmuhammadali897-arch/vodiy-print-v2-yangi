@@ -13,6 +13,7 @@ export type Customer = {
   telegram: string;
   company: string;
   position: string;
+  region: string;
   address: string;
   note: string;
   created_at: string;
@@ -148,6 +149,8 @@ export type Product = {
   base_price: number;
   category: string;
   price_tiers: PriceTier[];
+  sizes: string[];
+  colors: string[];
   created_at: string;
 };
 

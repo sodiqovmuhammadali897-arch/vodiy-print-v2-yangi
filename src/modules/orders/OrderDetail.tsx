@@ -32,6 +32,7 @@ import type {
   OrderFile,
   OrderPayment,
   OrderProduct,
+  OrderStatus,
   StatusHistoryEntry,
   TextileCompany,
 } from "../../lib/types";
@@ -41,13 +42,16 @@ import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
 import { formatDate, formatDateTime, formatMoney } from "../../lib/format";
 import { deadlineInfo } from "../../lib/workingDays";
 import { nextOrderNumber } from "../../lib/numbering";
+import { ORDER_STATUSES } from "../../lib/orderConstants";
+import { changeOrderStatus } from "../../lib/orderStatus";
 import { useAuth } from "../../lib/AuthContext";
 
 export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { can } = useAuth();
+  const { user, staff, can } = useAuth();
   const canEdit = can("orders", "edit");
+  const [statusSaving, setStatusSaving] = useState(false);
   const [order, setOrder] = useState<Order | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -105,6 +109,20 @@ export default function OrderDetail() {
   useEffect(() => {
     void load();
   }, [id]);
+
+  const changeStatus = async (status: OrderStatus) => {
+    if (!order || status === order.status) return;
+    setStatusSaving(true);
+    try {
+      await changeOrderStatus(order.id, status, {
+        email: user?.email || "",
+        name: staff?.full_name || user?.email || "",
+      });
+      await load();
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   const duplicate = async () => {
     if (!order) return;
@@ -192,6 +210,18 @@ export default function OrderDetail() {
         </button>
         {canEdit && (
           <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="input w-auto"
+              value={order.status}
+              disabled={statusSaving}
+              onChange={(e) => changeStatus(e.target.value as OrderStatus)}
+            >
+              {ORDER_STATUSES.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
             <button
               className="btn-secondary"
               onClick={duplicate}

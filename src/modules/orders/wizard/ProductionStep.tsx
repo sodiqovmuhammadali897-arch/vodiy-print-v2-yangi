@@ -139,38 +139,12 @@ export default function ProductionStep({
 
       <div className="card p-5">
         <h2 className="mb-3 font-display text-lg font-bold text-ink-900">Yetkazish</h2>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div>
-            <label className="label">Turi</label>
-            <select className="input" value={payload.delivery_type} onChange={(e) => onPayloadChange({ delivery_type: e.target.value })}>
-              <option value="">-- tanlang --</option>
-              {DELIVERY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">Sana</label>
-            <input type="date" className="input" value={payload.delivery_date || ""} onChange={(e) => onPayloadChange({ delivery_date: e.target.value || null })} />
-          </div>
-          <div>
-            <label className="label">Vaqti</label>
-            <input type="time" className="input" value={payload.delivery_time} onChange={(e) => onPayloadChange({ delivery_time: e.target.value })} />
-          </div>
-          <div>
-            <label className="label">Kuryer</label>
-            <input className="input" value={payload.courier} onChange={(e) => onPayloadChange({ courier: e.target.value })} />
-          </div>
-          <div>
-            <label className="label">Narxi</label>
-            <input type="number" className="input" value={payload.delivery_cost || ""} onChange={(e) => onPayloadChange({ delivery_cost: Number(e.target.value) || 0 })} />
-          </div>
-          <div>
-            <label className="label">Telefon</label>
-            <input className="input" value={payload.delivery_phone} onChange={(e) => onPayloadChange({ delivery_phone: e.target.value })} />
-          </div>
-          <div className="md:col-span-3">
-            <label className="label">Manzil</label>
-            <input className="input" value={payload.delivery_address} onChange={(e) => onPayloadChange({ delivery_address: e.target.value })} />
-          </div>
+        <div className="max-w-xs">
+          <label className="label">Turi</label>
+          <select className="input" value={payload.delivery_type} onChange={(e) => onPayloadChange({ delivery_type: e.target.value })}>
+            <option value="">-- tanlang --</option>
+            {DELIVERY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
         </div>
       </div>
 

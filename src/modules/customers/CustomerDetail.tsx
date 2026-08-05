@@ -214,6 +214,9 @@ export default function CustomerDetail() {
               }
             />
           )}
+          {customer.region && (
+            <InfoRow icon={<MapPin className="h-4 w-4" />} label="Viloyat" value={customer.region} />
+          )}
           {customer.address && (
             <InfoRow icon={<MapPin className="h-4 w-4" />} label="Manzil" value={customer.address} />
           )}

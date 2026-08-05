@@ -229,3 +229,20 @@ export const TEXTILE_COLORS = [
   "To'q sariq",
   "Boshqa",
 ] as const;
+
+export const UZBEKISTAN_REGIONS = [
+  "Toshkent shahri",
+  "Toshkent viloyati",
+  "Andijon",
+  "Buxoro",
+  "Farg'ona",
+  "Jizzax",
+  "Xorazm",
+  "Namangan",
+  "Navoiy",
+  "Qashqadaryo",
+  "Qoraqalpog'iston Respublikasi",
+  "Samarqand",
+  "Sirdaryo",
+  "Surxondaryo",
+] as const;

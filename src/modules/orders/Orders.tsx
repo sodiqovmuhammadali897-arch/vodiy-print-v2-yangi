@@ -19,6 +19,7 @@ import ProductionBadge from "../../components/ui/ProductionBadge";
 import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
 import { formatDate, formatMoney } from "../../lib/format";
 import { deadlineInfo } from "../../lib/workingDays";
+import { remainingTimeLabel } from "../../lib/remainingTime";
 import { useAuth } from "../../lib/AuthContext";
 
 type Row = Order & {
@@ -206,6 +207,7 @@ export default function Orders() {
               <tbody className="divide-y divide-ink-100">
                 {filtered.map((o) => {
                   const dl = deadlineInfo(o.deadline, holidays);
+                  const rt = remainingTimeLabel(o.deadline);
                   const remaining =
                     Number(o.remaining_amount || 0) ||
                     Math.max(
@@ -221,9 +223,15 @@ export default function Orders() {
                         >
                           {o.order_number || "-"}
                         </Link>
-                        <div className="max-w-[200px] truncate text-xs text-ink-500">
-                          {o.title}
-                        </div>
+                        {rt && (
+                          <div
+                            className={`text-xs ${
+                              rt.overdue ? "font-semibold text-rose-600" : "text-ink-500"
+                            }`}
+                          >
+                            {rt.label}
+                          </div>
+                        )}
                       </td>
                       <td className="table-td whitespace-nowrap text-ink-600">
                         {formatDate(o.order_date || o.created_at)}

@@ -230,31 +230,13 @@ export default function ReviewStep({
         </div>
       )}
 
-      {(payload.delivery_type || payload.delivery_address) && (
+      {payload.delivery_type && (
         <div className="card p-5">
           <h3 className="font-display text-base font-bold text-ink-900">
             Yetkazish
           </h3>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-            <Field label="Turi" value={payload.delivery_type || "-"} />
-            <Field
-              label="Sana"
-              value={
-                payload.delivery_date
-                  ? `${payload.delivery_date} ${payload.delivery_time || ""}`
-                  : "-"
-              }
-            />
-            <Field label="Kuryer" value={payload.courier || "-"} />
-            <Field
-              label="Narxi"
-              value={formatMoney(payload.delivery_cost || 0)}
-            />
-            {payload.delivery_address && (
-              <div className="col-span-2 md:col-span-4">
-                <Field label="Manzil" value={payload.delivery_address} />
-              </div>
-            )}
+          <div className="mt-3">
+            <Field label="Turi" value={payload.delivery_type} />
           </div>
         </div>
       )}
