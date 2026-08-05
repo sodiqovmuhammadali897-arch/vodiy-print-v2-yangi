@@ -14,6 +14,7 @@ type Props = {
   onClose: () => void;
   company: CompanySettings | null;
   orderNumber: string;
+  idLabel?: string;
   clientName: string;
   productName: string;
   orderDate: string | null;
@@ -25,6 +26,7 @@ export default function TextileMatrixExport({
   onClose,
   company,
   orderNumber,
+  idLabel = "ID",
   clientName,
   productName,
   orderDate,
@@ -102,7 +104,8 @@ export default function TextileMatrixExport({
       }
     >
       <div ref={docRef} className="space-y-4 bg-white p-2">
-        <div className="flex items-start justify-between gap-4 border-b border-ink-100 pb-3">
+        <div className="-mx-2 -mt-2 h-1.5 rounded-t bg-gradient-to-r from-emerald-600 to-emerald-400" />
+        <div className="flex items-start justify-between gap-4 border-b border-emerald-100 pb-3">
           <div className="flex items-center gap-3">
             {company?.logo_url ? (
               <img src={company.logo_url} alt="" className="h-12 w-12 rounded object-contain" />
@@ -112,7 +115,7 @@ export default function TextileMatrixExport({
               </div>
             )}
             <div>
-              <div className="font-display text-lg font-bold text-ink-900">
+              <div className="font-display text-lg font-bold text-emerald-800">
                 {company?.name || "Vodiy Print"}
               </div>
               <div className="text-xs text-ink-500">Razmerlar taqsimoti</div>
@@ -123,7 +126,7 @@ export default function TextileMatrixExport({
               Klent: <span className="font-semibold">{clientName || "-"}</span>
             </div>
             <div>
-              ID: <span className="font-semibold">{orderNumber || "-"}</span>
+              {idLabel}: <span className="font-semibold">{orderNumber || "-"}</span>
             </div>
             <div>Sana: {formatDate(orderDate)}</div>
           </div>

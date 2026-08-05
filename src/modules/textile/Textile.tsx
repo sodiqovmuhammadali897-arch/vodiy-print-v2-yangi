@@ -7,6 +7,7 @@ import AsyncState from "../../components/ui/AsyncState";
 import StatusBadge from "../../components/ui/StatusBadge";
 import TextileMatrixTable from "../../components/textile/TextileMatrixTable";
 import TextileMatrixExport from "./TextileMatrixExport";
+import RazmerlarTab from "./RazmerlarTab";
 import { pivotTextileBreakdown } from "../../lib/textileMatrix";
 
 type TextileOrderSummary = {
@@ -16,7 +17,7 @@ type TextileOrderSummary = {
 };
 
 export default function Textile() {
-  const [tab, setTab] = useState<"catalog" | "orders">("catalog");
+  const [tab, setTab] = useState<"catalog" | "orders" | "sizes">("catalog");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -106,7 +107,9 @@ export default function Textile() {
           <p className="text-sm text-ink-500">
             {tab === "catalog"
               ? "Mahsulotlar katalogidagi Textil kategoriyali mahsulotlar"
-              : "Buyurtmalardagi razmer/rang taqsimoti"}
+              : tab === "orders"
+              ? "Buyurtmalardagi razmer/rang taqsimoti"
+              : "Buyurtmadan oldin razmer/rang taqsimotini tayyorlab, klentga tasdiqlatib qo'ying"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -127,6 +130,14 @@ export default function Textile() {
             >
               Buyurtmalar
             </button>
+            <button
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                tab === "sizes" ? "bg-brand-600 text-white" : "text-ink-600"
+              }`}
+              onClick={() => setTab("sizes")}
+            >
+              Razmerlar
+            </button>
           </div>
           {tab === "catalog" && (
             <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
@@ -142,7 +153,9 @@ export default function Textile() {
         </div>
       </div>
 
-      {tab === "catalog" ? (
+      {tab === "sizes" ? (
+        <RazmerlarTab />
+      ) : tab === "catalog" ? (
         <AsyncState
           loading={loading}
           empty={filtered.length === 0}

@@ -154,8 +154,7 @@ service cloud.firestore {
     // sales/production staff are the ones filling these matrices in.
     match /textile_size_templates/{id} {
       allow read: if can('orders', 'edit') || can('production', 'view');
-      allow create, update: if can('orders', 'edit');
-      allow delete: if isAdmin();
+      allow create, update, delete: if can('orders', 'edit');
     }
 
     // ── Davomat va KPI ──────────────────────────────────────────────

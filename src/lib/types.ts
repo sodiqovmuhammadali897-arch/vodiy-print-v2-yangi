@@ -132,6 +132,7 @@ export type TextileSizeTemplate = {
   id: string;
   name: string;
   product_name: string;
+  client_name: string;
   size_breakdown: SizeBreakdownEntry[];
   created_by: string;
   created_at: string;
