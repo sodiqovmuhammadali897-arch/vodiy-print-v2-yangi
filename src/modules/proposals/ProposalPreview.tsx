@@ -17,9 +17,11 @@ type Props = {
 const ProposalPreview = forwardRef<HTMLDivElement, Props>(
   ({ proposal, company, customer, brand }, ref) => {
     const companyName = company?.name || "Kompaniya";
-    const customerName = customer
-      ? `${customer.first_name} ${customer.last_name}`.trim()
-      : "";
+    // The recipient is free text (may not match a saved Customer record at
+    // all), so it always wins over the linked customer's name.
+    const customerName =
+      proposal.recipient_name?.trim() ||
+      (customer ? `${customer.first_name} ${customer.last_name}`.trim() : "");
 
     return (
       <div

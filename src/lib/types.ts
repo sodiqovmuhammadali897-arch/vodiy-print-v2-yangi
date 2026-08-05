@@ -176,6 +176,7 @@ export type Proposal = {
   id: string;
   number: string;
   customer_id: string | null;
+  recipient_name: string;
   brand_id: string | null;
   title: string;
   items: ProposalItem[];

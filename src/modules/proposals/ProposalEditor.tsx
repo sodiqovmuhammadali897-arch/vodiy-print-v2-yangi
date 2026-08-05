@@ -53,6 +53,7 @@ export default function ProposalEditor() {
     id: "",
     number: genNumber(),
     customer_id: null,
+    recipient_name: "",
     brand_id: null,
     title: "Tijorat taklifi",
     items: [emptyItem()],
@@ -85,7 +86,7 @@ export default function ProposalEditor() {
           const items = Array.isArray(data.items)
             ? (data.items as ProposalItem[])
             : [];
-          setProposal({ ...data, items });
+          setProposal({ ...data, items, recipient_name: data.recipient_name || "" });
         }
       }
     };
@@ -156,6 +157,7 @@ export default function ProposalEditor() {
     const payload = {
       number: proposal.number,
       customer_id: proposal.customer_id,
+      recipient_name: proposal.recipient_name,
       brand_id: proposal.brand_id,
       title: proposal.title,
       items: proposal.items,
@@ -236,24 +238,32 @@ export default function ProposalEditor() {
               </div>
               <div>
                 <label className="label">Mijoz</label>
-                <select
+                <input
                   className="input"
-                  value={proposal.customer_id || ""}
-                  onChange={(e) =>
+                  list="proposal-customers-list"
+                  placeholder="Ro'yxatdan tanlang yoki qo'lda yozing..."
+                  value={proposal.recipient_name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    const match = customers.find(
+                      (c) => `${c.first_name} ${c.last_name}`.trim() === name.trim(),
+                    );
                     setProposal((p) => ({
                       ...p,
-                      customer_id: e.target.value || null,
-                    }))
-                  }
-                >
-                  <option value="">-- tanlang --</option>
+                      recipient_name: name,
+                      customer_id: match ? match.id : null,
+                    }));
+                  }}
+                />
+                <datalist id="proposal-customers-list">
                   {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.first_name} {c.last_name}
-                      {c.company ? ` (${c.company})` : ""}
-                    </option>
+                    <option key={c.id} value={`${c.first_name} ${c.last_name}`.trim()} />
                   ))}
-                </select>
+                </datalist>
+                <p className="mt-1 text-xs text-ink-500">
+                  Ro'yxatdagi mijozni tanlashingiz ham, har qanday nomni qo'lda
+                  yozishingiz ham mumkin.
+                </p>
               </div>
               <div>
                 <label className="label">Brend</label>
@@ -263,10 +273,14 @@ export default function ProposalEditor() {
                   onChange={(e) => {
                     const brand_id = e.target.value || null;
                     const b = brands.find((x) => x.id === brand_id);
+                    const c = b ? customers.find((x) => x.id === b.customer_id) : null;
                     setProposal((p) => ({
                       ...p,
                       brand_id,
                       customer_id: b ? b.customer_id : p.customer_id,
+                      recipient_name: c
+                        ? `${c.first_name} ${c.last_name}`.trim()
+                        : p.recipient_name,
                     }));
                   }}
                 >

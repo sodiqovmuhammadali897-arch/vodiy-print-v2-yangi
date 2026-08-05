@@ -92,11 +92,10 @@ export default function Proposals() {
                       </Link>
                     </td>
                     <td className="table-td">
-                      {p.customer ? (
-                        `${p.customer.first_name} ${p.customer.last_name}`
-                      ) : (
-                        <span className="text-ink-400">-</span>
-                      )}
+                      {p.recipient_name?.trim() ||
+                        (p.customer && `${p.customer.first_name} ${p.customer.last_name}`) || (
+                          <span className="text-ink-400">-</span>
+                        )}
                     </td>
                     <td className="table-td">{formatDate(p.created_at)}</td>
                     <td className="table-td font-semibold">
