@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
 import type {
+  CostTier,
   Customer,
   Expense,
   MonthlyPlan,
@@ -24,6 +25,7 @@ import type {
   Product,
   ProductCost,
 } from "../../lib/types";
+import { tierCostFor } from "../../lib/priceTiers";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
 import {
   defaultDateRange,
@@ -56,7 +58,7 @@ export default function Finance() {
   const [customers, setCustomers] = useState<Map<string, Customer>>(new Map());
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
   const [orderProducts, setOrderProducts] = useState<OrderProduct[]>([]);
-  const [costByProductName, setCostByProductName] = useState<Map<string, number>>(new Map());
+  const [costByProductName, setCostByProductName] = useState<Map<string, CostTier[]>>(new Map());
 
   const load = async () => {
     setLoading(true);
@@ -82,11 +84,11 @@ export default function Finance() {
         listAll<ProductCost>("product_costs"),
       ]);
       setOrderProducts(orderProductsData);
-      const costById = new Map(costsData.map((c) => [c.id, Number(c.cost_price || 0)]));
-      const byName = new Map<string, number>();
+      const costById = new Map(costsData.map((c) => [c.id, c.cost_tiers || []]));
+      const byName = new Map<string, CostTier[]>();
       for (const p of productsData) {
-        const cost = costById.get(p.id);
-        if (cost !== undefined) byName.set(p.name, cost);
+        const costTiers = costById.get(p.id);
+        if (costTiers && costTiers.length > 0) byName.set(p.name, costTiers);
       }
       setCostByProductName(byName);
     }
@@ -149,8 +151,10 @@ export default function Finance() {
     return orderProducts
       .filter((p) => orderIdsInRange.has(p.order_id))
       .reduce((s, p) => {
-        const cost = costByProductName.get(p.product_name?.trim() || "");
-        return cost === undefined ? s : s + cost * Number(p.quantity || 0);
+        const quantity = Number(p.quantity || 0);
+        const costTiers = costByProductName.get(p.product_name?.trim() || "");
+        if (!costTiers) return s;
+        return s + tierCostFor(costTiers, quantity) * quantity;
       }, 0);
   }, [isAdmin, orderProducts, costByProductName, ordersInRange]);
   const realProfit = profit - cogs;

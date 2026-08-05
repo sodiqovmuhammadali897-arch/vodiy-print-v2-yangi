@@ -136,6 +136,11 @@ export type PriceTier = {
   price: number;
 };
 
+export type CostTier = {
+  min_qty: number;
+  cost_price: number;
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -148,10 +153,11 @@ export type Product = {
 
 // Kept in a separate collection with its own Firestore rules so cost price
 // stays readable by admins only, even though the product itself is visible
-// to anyone with products.view.
+// to anyone with products.view. Cost tiers mirror price_tiers by min_qty,
+// since the supplier's unit cost usually drops with volume too.
 export type ProductCost = {
   id: string;
-  cost_price: number;
+  cost_tiers: CostTier[];
 };
 
 export type ProposalItem = {

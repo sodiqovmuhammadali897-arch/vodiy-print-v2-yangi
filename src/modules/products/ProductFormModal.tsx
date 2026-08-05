@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Lock, Plus, Trash2 } from "lucide-react";
 import { getOne, insertOne, updateOne, upsertOne } from "../../lib/firestoreDb";
 import { PRODUCT_CATEGORIES } from "../../lib/orderConstants";
 import { sortTiers } from "../../lib/priceTiers";
-import type { PriceTier, Product, ProductCost } from "../../lib/types";
+import type { Product, ProductCost } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
 import Modal from "../../components/ui/Modal";
 
@@ -14,15 +14,16 @@ type Props = {
   onSaved: () => void;
 };
 
-const emptyTiers: PriceTier[] = [{ min_qty: 1, price: 0 }];
+type TierRow = { min_qty: number; price: number; cost_price: number };
+
+const emptyTiers: TierRow[] = [{ min_qty: 1, price: 0, cost_price: 0 }];
 
 export default function ProductFormModal({ open, onClose, product, onSaved }: Props) {
   const { isAdmin } = useAuth();
   const [name, setName] = useState("");
   const [category, setCategory] = useState<string>(PRODUCT_CATEGORIES[0]);
   const [unit, setUnit] = useState("dona");
-  const [tiers, setTiers] = useState<PriceTier[]>(emptyTiers);
-  const [costPrice, setCostPrice] = useState(0);
+  const [tiers, setTiers] = useState<TierRow[]>(emptyTiers);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,34 +33,43 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
       setName(product.name);
       setCategory(product.category || PRODUCT_CATEGORIES[0]);
       setUnit(product.unit || "dona");
-      setTiers(product.price_tiers?.length ? product.price_tiers : emptyTiers);
+      const priceTiers = product.price_tiers?.length
+        ? product.price_tiers
+        : [{ min_qty: 1, price: 0 }];
+
       if (isAdmin) {
-        void getOne<ProductCost>("product_costs", product.id).then((c) =>
-          setCostPrice(c?.cost_price || 0),
-        );
+        void getOne<ProductCost>("product_costs", product.id).then((c) => {
+          const costByQty = new Map((c?.cost_tiers || []).map((t) => [t.min_qty, t.cost_price]));
+          setTiers(
+            priceTiers.map((t) => ({
+              min_qty: t.min_qty,
+              price: t.price,
+              cost_price: costByQty.get(t.min_qty) ?? 0,
+            })),
+          );
+        });
       } else {
-        setCostPrice(0);
+        setTiers(priceTiers.map((t) => ({ ...t, cost_price: 0 })));
       }
     } else {
       setName("");
       setCategory(PRODUCT_CATEGORIES[0]);
       setUnit("dona");
       setTiers(emptyTiers);
-      setCostPrice(0);
     }
     setError(null);
   }, [product, open, isAdmin]);
 
-  const updateTier = (i: number, patch: Partial<PriceTier>) =>
+  const updateTier = (i: number, patch: Partial<TierRow>) =>
     setTiers((t) => t.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
-  const addTier = () => setTiers((t) => [...t, { min_qty: 0, price: 0 }]);
+  const addTier = () => setTiers((t) => [...t, { min_qty: 0, price: 0, cost_price: 0 }]);
   const removeTier = (i: number) =>
     setTiers((t) => (t.length === 1 ? t : t.filter((_, idx) => idx !== i)));
 
   const submit = async () => {
     if (!name.trim()) return setError("Mahsulot nomi kiritilishi shart");
-    const validTiers = sortTiers(tiers.filter((t) => t.min_qty > 0 && t.price >= 0));
-    if (validTiers.length === 0) {
+    const validRows = sortTiers(tiers.filter((t) => t.min_qty > 0 && t.price >= 0));
+    if (validRows.length === 0) {
       return setError("Kamida bitta narx pog'onasi to'g'ri kiritilishi kerak");
     }
     setSaving(true);
@@ -69,8 +79,8 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
         name: name.trim(),
         category,
         unit,
-        price_tiers: validTiers,
-        base_price: validTiers[0].price,
+        price_tiers: validRows.map(({ min_qty, price }) => ({ min_qty, price })),
+        base_price: validRows[0].price,
       };
       let productId = product?.id;
       if (product) {
@@ -80,9 +90,9 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
         productId = created.id;
       }
       if (isAdmin && productId) {
-        await upsertOne<ProductCost>("product_costs", productId, {
-          cost_price: costPrice,
-        } as ProductCost);
+        await upsertOne("product_costs", productId, {
+          cost_tiers: validRows.map(({ min_qty, cost_price }) => ({ min_qty, cost_price })),
+        });
       }
       setSaving(false);
       onSaved();
@@ -145,7 +155,7 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
         <div className="space-y-2">
           {tiers.map((t, i) => (
             <div key={i} className="grid grid-cols-12 items-end gap-2">
-              <div className="col-span-5">
+              <div className={isAdmin ? "col-span-3" : "col-span-5"}>
                 <label className="label">Nechtadan boshlab</label>
                 <input
                   type="number"
@@ -154,7 +164,7 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
                   onChange={(e) => updateTier(i, { min_qty: Number(e.target.value) || 0 })}
                 />
               </div>
-              <div className="col-span-5">
+              <div className={isAdmin ? "col-span-3" : "col-span-5"}>
                 <label className="label">Narxi (1 {unit || "dona"})</label>
                 <input
                   type="number"
@@ -163,6 +173,19 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
                   onChange={(e) => updateTier(i, { price: Number(e.target.value) || 0 })}
                 />
               </div>
+              {isAdmin && (
+                <div className="col-span-4">
+                  <label className="label flex items-center gap-1 text-amber-700">
+                    <Lock className="h-3 w-3" /> Tan narx (1 {unit || "dona"})
+                  </label>
+                  <input
+                    type="number"
+                    className="input border-amber-200 bg-amber-50"
+                    value={t.cost_price || ""}
+                    onChange={(e) => updateTier(i, { cost_price: Number(e.target.value) || 0 })}
+                  />
+                </div>
+              )}
               <div className="col-span-2 flex justify-end pb-1">
                 <button
                   className="btn-ghost text-rose-600 hover:bg-rose-50"
@@ -178,21 +201,13 @@ export default function ProductFormModal({ open, onClose, product, onSaved }: Pr
         <p className="mt-2 text-xs text-ink-500">
           Masalan: 1 dan → 5000 so'm, 10 dan → 4500 so'm, 100 dan → 4000 so'm
         </p>
+        {isAdmin && (
+          <p className="mt-1 text-xs text-amber-700">
+            Tan narx faqat sizga (admin) ko'rinadi — har bir pog'ona uchun alohida, chunki
+            miqdor ko'p bo'lsa ta'minotchidan tan narx ham pasayishi mumkin.
+          </p>
+        )}
       </div>
-
-      {isAdmin && (
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <label className="label">
-            Tan narx (1 {unit || "dona"}) — faqat admin ko'radi
-          </label>
-          <input
-            type="number"
-            className="input max-w-xs"
-            value={costPrice || ""}
-            onChange={(e) => setCostPrice(Number(e.target.value) || 0)}
-          />
-        </div>
-      )}
     </Modal>
   );
 }

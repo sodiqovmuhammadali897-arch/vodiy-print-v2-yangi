@@ -174,17 +174,28 @@ export default function Products() {
 }
 
 function ProductCostCell({ productId }: { productId: string }) {
-  const [cost, setCost] = useState<number | null>(null);
+  const [costTiers, setCostTiers] = useState<ProductCost["cost_tiers"] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void getOne<ProductCost>("product_costs", productId).then((c) => {
-      if (!cancelled) setCost(c?.cost_price ?? 0);
+      if (!cancelled) setCostTiers(c?.cost_tiers ?? []);
     });
     return () => {
       cancelled = true;
     };
   }, [productId]);
 
-  return <span className="text-ink-600">{cost === null ? "..." : formatMoney(cost)}</span>;
+  if (costTiers === null) return <span className="text-ink-400">...</span>;
+  if (costTiers.length === 0) return <span className="text-ink-400">-</span>;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {costTiers.map((t, i) => (
+        <span key={i} className="chip bg-amber-50 text-amber-800">
+          {t.min_qty}+ · {formatMoney(t.cost_price)}
+        </span>
+      ))}
+    </div>
+  );
 }
