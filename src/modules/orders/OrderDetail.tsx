@@ -289,8 +289,9 @@ export default function OrderDetail() {
   const dl = deadlineInfo(order.deadline, holidays);
   const textileMatrix = pivotTextileBreakdown(products);
   const textileProductName =
-    products.find((p) => p.category === "Textil" && p.size_breakdown.length > 0)
-      ?.product_name || "";
+    products.find(
+      (p) => p.category === "Textil" && Array.isArray(p.size_breakdown) && p.size_breakdown.length > 0,
+    )?.product_name || "";
 
   return (
     <div className="space-y-5">

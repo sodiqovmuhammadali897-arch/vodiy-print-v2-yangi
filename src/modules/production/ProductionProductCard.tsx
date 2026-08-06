@@ -40,15 +40,20 @@ export default function ProductionProductCard(props: Props) {
   const { product, order, customer, brand, holidays, mode } = props;
   const dl = deadlineInfo(order.deadline, holidays);
   const isTextile = product.category === "Textil";
-  const colorCount = new Set(product.size_breakdown.map((e) => e.color)).size;
-  const sizeCount = new Set(product.size_breakdown.map((e) => e.size)).size;
+  // Order lines created before this feature shipped don't have these
+  // fields in Firestore at all (undefined, not just empty) — fall back
+  // instead of crashing the whole page on old data.
+  const sizeBreakdown = Array.isArray(product.size_breakdown) ? product.size_breakdown : [];
+  const productionStatus = product.production_status || "new";
+  const colorCount = new Set(sizeBreakdown.map((e) => e.color)).size;
+  const sizeCount = new Set(sizeBreakdown.map((e) => e.size)).size;
 
   const canAccept =
     mode === "pechatnik" &&
     props.canAct &&
-    (product.production_status === "new" || product.production_status === "accepted");
+    (productionStatus === "new" || productionStatus === "accepted");
   const canFinish =
-    mode === "pechatnik" && props.canAct && product.production_status === "production";
+    mode === "pechatnik" && props.canAct && productionStatus === "production";
 
   return (
     <div className="card space-y-3 p-4">
@@ -64,7 +69,7 @@ export default function ProductionProductCard(props: Props) {
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="chip bg-ink-100 text-ink-700">{product.category || "-"}</span>
-          <StatusBadge status={product.production_status} />
+          <StatusBadge status={productionStatus} />
           {dl?.overdue && (
             <span className="chip gap-1 bg-rose-100 text-rose-700">
               <AlertTriangle className="h-3 w-3" /> Kechikkan
@@ -97,7 +102,7 @@ export default function ProductionProductCard(props: Props) {
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm text-ink-800">
           <span className="font-medium">{product.product_name || "-"}</span>
           <span className="text-ink-500">× {product.quantity}</span>
-          {isTextile && product.size_breakdown.length > 0 ? (
+          {isTextile && sizeBreakdown.length > 0 ? (
             <span className="chip bg-white text-ink-600">
               {colorCount} rang · {sizeCount} razmer
             </span>
@@ -132,7 +137,7 @@ export default function ProductionProductCard(props: Props) {
             <span className="text-xs font-semibold uppercase text-ink-500">Pechatnik</span>
             <select
               className="input w-auto py-1.5 text-sm"
-              value={product.assigned_printer_email}
+              value={product.assigned_printer_email || ""}
               onChange={(e) => {
                 const email = e.target.value;
                 const found = props.printers.find((p) => p.email === email);
