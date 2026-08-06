@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles } from "lucide-react";
+import { LayoutDashboard, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import type { ModuleKey } from "../../lib/permissions";
 
@@ -10,6 +10,7 @@ const navItems = [
   { to: "/products", label: "Mahsulotlar", icon: Boxes, module: "products" as ModuleKey },
   { to: "/proposals", label: "Tijorat taklifi", icon: FileText, module: "proposals" as ModuleKey },
   { to: "/production", label: "Ishlab chiqarish", icon: Printer, module: "production" as ModuleKey },
+  { to: "/pechatnik", label: "Pechatnik", icon: Stamp, module: "pechatnik" as ModuleKey },
   { to: "/textile", label: "Textil", icon: Shirt, module: "textile" as ModuleKey },
   { to: "/warehouse", label: "Ombor", icon: Warehouse, module: "warehouse" as ModuleKey },
   { to: "/finance", label: "Moliya", icon: Wallet, module: "finance" as ModuleKey },

@@ -245,6 +245,13 @@ export default function OrderDetail() {
             total: p.total,
             note: p.note,
             size_breakdown: p.size_breakdown,
+            // A duplicated order's production work hasn't started yet,
+            // even if the original line was already finished.
+            production_status: "new",
+            assigned_printer_email: "",
+            assigned_printer_name: "",
+            production_accepted_at: null,
+            production_completed_at: null,
           })),
         );
       }

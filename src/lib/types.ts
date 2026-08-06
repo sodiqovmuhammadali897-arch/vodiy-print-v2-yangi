@@ -105,6 +105,10 @@ export type SizeBreakdownEntry = {
   qty: number;
 };
 
+// Each order line item moves through production independently of the
+// others (and independently of the order's own customer-facing status) —
+// only new/accepted/production/quality_control/ready are meaningful here,
+// reusing OrderStatus purely so StatusBadge/orderStatusLabel work as-is.
 export type OrderProduct = {
   id: string;
   order_id: string;
@@ -123,6 +127,11 @@ export type OrderProduct = {
   // Only used for Textil-category lines: a per color/size quantity
   // distribution. When non-empty, `quantity` is the sum of its entries.
   size_breakdown: SizeBreakdownEntry[];
+  production_status: OrderStatus;
+  assigned_printer_email: string;
+  assigned_printer_name: string;
+  production_accepted_at: string | null;
+  production_completed_at: string | null;
 };
 
 // A saved color/size quantity distribution an employee can reuse on a

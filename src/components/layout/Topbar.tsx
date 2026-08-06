@@ -9,6 +9,7 @@ const titleMap: Record<string, string> = {
   "/products": "Mahsulotlar",
   "/proposals": "Tijorat taklifi",
   "/production": "Ishlab chiqarish",
+  "/pechatnik": "Pechatnik",
   "/textile": "Textil",
   "/warehouse": "Ombor",
   "/finance": "Moliya",

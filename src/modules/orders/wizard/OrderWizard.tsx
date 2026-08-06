@@ -116,7 +116,7 @@ export default function OrderWizard() {
       setManagerNames(m.map((x) => x.name));
       setTextileCompanies(tx);
       setPrinters(
-        st.filter((s) => s.role === "admin" || s.permissions?.production?.edit),
+        st.filter((s) => s.role === "admin" || s.permissions?.pechatnik?.edit),
       );
 
       const prices: Record<string, number> = {};
@@ -203,6 +203,11 @@ export default function OrderWizard() {
                 total: Number(p.total),
                 note: p.note,
                 size_breakdown: Array.isArray(p.size_breakdown) ? p.size_breakdown : [],
+                production_status: p.production_status || "new",
+                assigned_printer_email: p.assigned_printer_email || "",
+                assigned_printer_name: p.assigned_printer_name || "",
+                production_accepted_at: p.production_accepted_at || null,
+                production_completed_at: p.production_completed_at || null,
               })),
           );
           setPayments(

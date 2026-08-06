@@ -47,12 +47,12 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Pechatnik (production staff) only has the "production" permission, not
-    // "orders" — but they still need to read the order and flip its status
-    // for their own assigned work. The update branch limits them to touching
-    // only status/completed_at, never the rest of the order.
+    // Ishlab chiqarish (dispatch) staff only has the "production" permission,
+    // not "orders" — but they still need to read the order and flip its
+    // status for their own assigned work. The update branch limits them to
+    // touching only status/completed_at, never the rest of the order.
     match /orders/{id} {
-      allow read: if can('orders', 'view') || can('production', 'view');
+      allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view');
       allow create: if can('orders', 'edit');
       allow update: if can('orders', 'edit') ||
         (can('production', 'edit') &&
@@ -60,16 +60,32 @@ service cloud.firestore {
            .hasOnly(['status', 'completed_at']));
       allow delete: if can('orders', 'delete');
     }
+    // Production tracking moved from the order level to the product-line
+    // level: each item has its own production_status/assigned printer, so a
+    // mixed order (e.g. one Tipografiya line + one Textil line) can move
+    // through the shop floor independently per line.
     match /order_products/{id} {
-      allow read: if can('orders', 'view') || can('production', 'view');
+      allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view');
       allow create, update, delete: if can('orders', 'edit');
+      // Ishlab chiqarish (mas'ul hodim): may only assign a printer, never
+      // touch pricing/quantity/breakdown.
+      allow update: if can('production', 'edit') &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['assigned_printer_email', 'assigned_printer_name']);
+      // Pechatnik: may only move their own assigned item through the
+      // production_status stages, never reassign themselves or edit the
+      // product itself.
+      allow update: if can('pechatnik', 'edit') &&
+        resource.data.assigned_printer_email == email() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['production_status', 'production_accepted_at', 'production_completed_at']);
     }
     match /order_payments/{id} {
       allow read: if can('orders', 'view');
       allow create, update, delete: if can('orders', 'edit');
     }
     match /order_files/{id} {
-      allow read: if can('orders', 'view') || can('production', 'view');
+      allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view');
       allow create, update, delete: if can('orders', 'edit');
     }
 
@@ -85,7 +101,7 @@ service cloud.firestore {
     }
 
     match /customers/{id} {
-      allow read: if can('customers', 'view') || can('production', 'view');
+      allow read: if can('customers', 'view') || can('production', 'view') || can('pechatnik', 'view');
       allow create, update: if can('customers', 'edit');
       allow delete: if can('customers', 'delete');
     }
@@ -93,7 +109,7 @@ service cloud.firestore {
     // Brands are managed from within a customer's profile, so they share
     // the customers permission rather than having their own module.
     match /brands/{id} {
-      allow read: if can('customers', 'view') || can('production', 'view');
+      allow read: if can('customers', 'view') || can('production', 'view') || can('pechatnik', 'view');
       allow create, update: if can('customers', 'edit');
       allow delete: if can('customers', 'delete');
     }

@@ -5,6 +5,7 @@ export type ModuleKey =
   | "products"
   | "proposals"
   | "production"
+  | "pechatnik"
   | "textile"
   | "warehouse"
   | "finance"
@@ -39,6 +40,7 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "products", label: "Mahsulotlar" },
   { key: "proposals", label: "Tijorat taklifi" },
   { key: "production", label: "Ishlab chiqarish" },
+  { key: "pechatnik", label: "Pechatnik" },
   { key: "textile", label: "Textil" },
   { key: "warehouse", label: "Ombor" },
   { key: "finance", label: "Moliya" },

@@ -1,46 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
-import { Printer, Search } from "lucide-react";
+import { Shirt, Search } from "lucide-react";
 import { listAll, subscribeAll, updateOne } from "../../lib/firestoreDb";
-import type { Brand, Customer, Holiday, Order, OrderProduct } from "../../lib/types";
-import type { Staff } from "../../lib/permissions";
+import type { Brand, Customer, Holiday, Order, OrderProduct, OrderStatus } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
+import { orderStatusLabel } from "../../components/ui/StatusBadge";
 import AsyncState from "../../components/ui/AsyncState";
 import ProductionProductCard from "./ProductionProductCard";
 
-// A row this panel can act on: the order_product plus its parent order,
-// since every card needs both (deadline/customer come from the order, the
-// item itself comes from the product).
+const PRINTER_STATUSES: OrderStatus[] = [
+  "new",
+  "accepted",
+  "production",
+  "quality_control",
+  "ready",
+];
+
 type Row = { product: OrderProduct; order: Order };
 
-export default function Production() {
-  const { can } = useAuth();
-  const canEdit = can("production", "edit");
+export default function Pechatnik() {
+  const { user, isAdmin, can } = useAuth();
+  const canEdit = can("pechatnik", "edit");
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<OrderProduct[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [printers, setPrinters] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [onlyUnassigned, setOnlyUnassigned] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [customersData, brandsData, holidaysData, staffData] = await Promise.all([
+      const [customersData, brandsData, holidaysData] = await Promise.all([
         listAll<Customer>("customers"),
         listAll<Brand>("brands"),
         listAll<Holiday>("holidays"),
-        listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }),
       ]);
       if (cancelled) return;
       setCustomers(customersData);
       setBrands(brandsData);
       setHolidays(holidaysData);
-      setPrinters(staffData.filter((s) => s.role === "admin" || s.permissions?.pechatnik?.edit));
     })();
 
     const unsubOrders = subscribeAll<Order>("orders", (rows) => {
@@ -60,37 +62,27 @@ export default function Production() {
   const brandsMap = useMemo(() => new Map(brands.map((b) => [b.id, b])), [brands]);
   const ordersMap = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders]);
 
-  const categories = useMemo(
-    () => Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort(),
-    [products],
-  );
-
+  const myEmail = (user?.email || "").toLowerCase();
   const rows = useMemo<Row[]>(() => {
     return products
+      .filter((p) => p.category === "Textil")
+      .filter((p) => isAdmin || (p.assigned_printer_email || "").toLowerCase() === myEmail)
       .map((product) => {
         const order = ordersMap.get(product.order_id);
         return order ? { product, order } : null;
       })
       .filter((r): r is Row => r !== null);
-  }, [products, ordersMap]);
+  }, [products, ordersMap, isAdmin, myEmail]);
 
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows
-      .filter((r) => categoryFilter === "all" || r.product.category === categoryFilter)
-      .filter((r) => !onlyUnassigned || (r.product.category === "Textil" && !r.product.assigned_printer_email))
+      .filter((r) => statusFilter === "all" || r.product.production_status === statusFilter)
       .filter((r) => {
         if (!q) return true;
         const customer = r.order.customer_id ? customersMap.get(r.order.customer_id) : null;
         const brand = r.order.brand_id ? brandsMap.get(r.order.brand_id) : null;
-        return [
-          r.order.order_number,
-          r.order.title,
-          r.product.product_name,
-          customer?.first_name,
-          customer?.last_name,
-          brand?.name,
-        ]
+        return [r.order.order_number, r.order.title, r.product.product_name, customer?.first_name, customer?.last_name, brand?.name]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -101,21 +93,33 @@ export default function Production() {
         const db_ = b.order.deadline ? new Date(b.order.deadline).getTime() : Infinity;
         return da - db_;
       });
-  }, [rows, categoryFilter, onlyUnassigned, search, customersMap, brandsMap]);
+  }, [rows, statusFilter, search, customersMap, brandsMap]);
 
-  const unassignedCount = useMemo(
-    () => rows.filter((r) => r.product.category === "Textil" && !r.product.assigned_printer_email).length,
-    [rows],
-  );
-
-  const assign = async (productId: string, email: string, name: string) => {
+  const accept = async (productId: string) => {
+    setBusyId(productId);
     try {
       await updateOne("order_products", productId, {
-        assigned_printer_email: email,
-        assigned_printer_name: name,
+        production_status: "production",
+        production_accepted_at: new Date().toISOString(),
       });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const finish = async (productId: string) => {
+    setBusyId(productId);
+    try {
+      await updateOne("order_products", productId, {
+        production_status: "ready",
+        production_completed_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -124,41 +128,31 @@ export default function Production() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 font-display text-2xl font-bold text-ink-900">
-            <Printer className="h-6 w-6 text-brand-600" /> Ishlab chiqarish
+            <Shirt className="h-6 w-6 text-brand-600" /> Pechatnik
           </h1>
           <p className="text-sm text-ink-500">
-            Barcha buyurtmalar mahsulotlari — Textil mahsulotlarga pechatnik biriktiring
+            {isAdmin ? "Barcha Textil mahsulotlar" : "Sizga biriktirilgan Textil mahsulotlar"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
             className="input w-auto"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as OrderStatus | "all")}
           >
-            <option value="all">Barcha kategoriyalar</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            <option value="all">Barcha statuslar</option>
+            {PRINTER_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {orderStatusLabel(s)}
               </option>
             ))}
           </select>
-          {unassignedCount > 0 && (
-            <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
-              <input
-                type="checkbox"
-                checked={onlyUnassigned}
-                onChange={(e) => setOnlyUnassigned(e.target.checked)}
-              />
-              Faqat biriktirilmagan ({unassignedCount})
-            </label>
-          )}
           <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
             <Search className="h-4 w-4 text-ink-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="ID, mijoz, brend, mahsulot..."
+              placeholder="ID, mijoz, brend..."
               className="w-52 bg-transparent text-sm outline-none placeholder-ink-400"
             />
           </div>
@@ -168,23 +162,31 @@ export default function Production() {
       <AsyncState
         loading={loading}
         empty={visibleRows.length === 0}
-        emptyLabel="Mahsulotlar topilmadi"
-        emptyDescription="Buyurtmaga mahsulot qo'shilsa, u shu yerda avtomatik ko'rinadi"
-        emptyIcon={<Printer className="h-5 w-5" />}
+        emptyLabel="Textil mahsulotlar topilmadi"
+        emptyDescription={
+          isAdmin
+            ? "Ishlab chiqarish panelida Textil mahsulotga pechatnik biriktirilsa, u shu yerda ko'rinadi"
+            : "Sizga hozircha mahsulot biriktirilmagan"
+        }
+        emptyIcon={<Shirt className="h-5 w-5" />}
       >
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {visibleRows.map(({ product, order }) => (
             <ProductionProductCard
               key={product.id}
-              mode="dispatch"
+              mode="pechatnik"
               product={product}
               order={order}
               customer={order.customer_id ? customersMap.get(order.customer_id) || null : null}
               brand={order.brand_id ? brandsMap.get(order.brand_id) || null : null}
               holidays={holidays}
-              canAssign={canEdit}
-              printers={printers}
-              onAssign={(email, name) => assign(product.id, email, name)}
+              canAct={
+                isAdmin ||
+                (canEdit && (product.assigned_printer_email || "").toLowerCase() === myEmail)
+              }
+              busy={busyId === product.id}
+              onAccept={() => accept(product.id)}
+              onReady={() => finish(product.id)}
             />
           ))}
         </div>
