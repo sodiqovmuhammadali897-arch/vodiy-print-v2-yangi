@@ -4,16 +4,9 @@ import { listAll, subscribeAll, updateOne } from "../../lib/firestoreDb";
 import type { Brand, Customer, Holiday, Order, OrderProduct, OrderStatus } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
 import { orderStatusLabel } from "../../components/ui/StatusBadge";
+import { PRODUCTION_LINE_STATUSES } from "../../lib/orderConstants";
 import AsyncState from "../../components/ui/AsyncState";
 import ProductionProductCard from "./ProductionProductCard";
-
-const PRINTER_STATUSES: OrderStatus[] = [
-  "new",
-  "accepted",
-  "production",
-  "quality_control",
-  "ready",
-];
 
 type Row = { product: OrderProduct; order: Order };
 
@@ -123,6 +116,20 @@ export default function Pechatnik() {
     }
   };
 
+  // Admin-only override so a mistaken click (or a test run) can be
+  // corrected without needing to delete/recreate the order — mirrors the
+  // free-form status <select> admins already get on Orders/OrderDetail.
+  const setStatus = async (productId: string, status: OrderStatus) => {
+    setBusyId(productId);
+    try {
+      await updateOne("order_products", productId, { production_status: status });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -141,7 +148,7 @@ export default function Pechatnik() {
             onChange={(e) => setStatusFilter(e.target.value as OrderStatus | "all")}
           >
             <option value="all">Barcha statuslar</option>
-            {PRINTER_STATUSES.map((s) => (
+            {PRODUCTION_LINE_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {orderStatusLabel(s)}
               </option>
@@ -184,9 +191,11 @@ export default function Pechatnik() {
                 isAdmin ||
                 (canEdit && (product.assigned_printer_email || "").toLowerCase() === myEmail)
               }
+              isAdmin={isAdmin}
               busy={busyId === product.id}
               onAccept={() => accept(product.id)}
               onReady={() => finish(product.id)}
+              onStatusChange={(status) => setStatus(product.id, status)}
             />
           ))}
         </div>

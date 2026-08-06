@@ -105,6 +105,17 @@ export const FILE_LINK_TYPES = [
   "Boshqa",
 ] as const;
 
+// The subset of OrderStatus that a production line item (order_product)
+// actually cycles through — the rest (delivered/closed/cancelled etc.) only
+// ever apply to the order as a whole, never to an individual line.
+export const PRODUCTION_LINE_STATUSES: OrderStatus[] = [
+  "new",
+  "accepted",
+  "production",
+  "quality_control",
+  "ready",
+];
+
 export const ORDER_STATUSES: { key: OrderStatus; label: string; cls: string }[] = [
   { key: "new", label: "Yangi", cls: "bg-sky-100 text-sky-700" },
   {

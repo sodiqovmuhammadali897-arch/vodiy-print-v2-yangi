@@ -7,9 +7,10 @@ import {
   Phone,
   User,
 } from "lucide-react";
-import type { Brand, Customer, Holiday, Order, OrderProduct } from "../../lib/types";
+import type { Brand, Customer, Holiday, Order, OrderProduct, OrderStatus } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
-import StatusBadge from "../../components/ui/StatusBadge";
+import StatusBadge, { orderStatusLabel } from "../../components/ui/StatusBadge";
+import { PRODUCTION_LINE_STATUSES } from "../../lib/orderConstants";
 import { deadlineInfo } from "../../lib/workingDays";
 import { formatDate } from "../../lib/format";
 
@@ -23,9 +24,13 @@ type DispatchProps = {
 type PechatnikProps = {
   mode: "pechatnik";
   canAct: boolean;
+  // Admins get a free-form status <select> (can move forward or back to
+  // correct a mistaken click) instead of the fixed two-button flow.
+  isAdmin: boolean;
   busy: boolean;
   onAccept: () => void;
   onReady: () => void;
+  onStatusChange: (status: OrderStatus) => void;
 };
 
 type Props = (DispatchProps | PechatnikProps) & {
@@ -163,7 +168,25 @@ export default function ProductionProductCard(props: Props) {
           )
         ))}
 
-      {mode === "pechatnik" && (canAccept || canFinish) && (
+      {mode === "pechatnik" && props.canAct && props.isAdmin && (
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-xs font-semibold uppercase text-ink-500">Holat</span>
+          <select
+            className="input w-auto py-1.5 text-sm"
+            value={productionStatus}
+            disabled={props.busy}
+            onChange={(e) => props.onStatusChange(e.target.value as OrderStatus)}
+          >
+            {PRODUCTION_LINE_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {orderStatusLabel(s)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {mode === "pechatnik" && !props.isAdmin && (canAccept || canFinish) && (
         <div className="flex flex-wrap gap-2 pt-1">
           {canAccept && (
             <button className="btn-primary" onClick={props.onAccept} disabled={props.busy}>
