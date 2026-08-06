@@ -141,7 +141,7 @@ export default function ProductionProductCard(props: Props) {
       </div>
 
       {mode === "dispatch" &&
-        (isTextile && props.canAssign ? (
+        (props.canAssign ? (
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase text-ink-500">Pechatnik</span>
             <select
@@ -162,14 +162,12 @@ export default function ProductionProductCard(props: Props) {
             </select>
           </div>
         ) : (
-          isTextile && (
-            <div className="text-xs text-ink-500">
-              Pechatnik:{" "}
-              <span className="font-semibold text-ink-700">
-                {product.assigned_printer_name || "biriktirilmagan"}
-              </span>
-            </div>
-          )
+          <div className="text-xs text-ink-500">
+            Pechatnik:{" "}
+            <span className="font-semibold text-ink-700">
+              {product.assigned_printer_name || "biriktirilmagan"}
+            </span>
+          </div>
         ))}
 
       {mode === "dispatch" && props.canAssign && (

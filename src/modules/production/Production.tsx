@@ -80,7 +80,7 @@ export default function Production() {
     const q = search.trim().toLowerCase();
     return rows
       .filter((r) => categoryFilter === "all" || r.product.category === categoryFilter)
-      .filter((r) => !onlyUnassigned || (r.product.category === "Textil" && !r.product.assigned_printer_email))
+      .filter((r) => !onlyUnassigned || !r.product.assigned_printer_email)
       .filter((r) => {
         if (!q) return true;
         const customer = r.order.customer_id ? customersMap.get(r.order.customer_id) : null;
@@ -106,7 +106,7 @@ export default function Production() {
   }, [rows, categoryFilter, onlyUnassigned, search, customersMap, brandsMap]);
 
   const unassignedCount = useMemo(
-    () => rows.filter((r) => r.product.category === "Textil" && !r.product.assigned_printer_email).length,
+    () => rows.filter((r) => !r.product.assigned_printer_email).length,
     [rows],
   );
 
