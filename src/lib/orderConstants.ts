@@ -116,6 +116,11 @@ export const PRODUCTION_LINE_STATUSES: OrderStatus[] = [
   "ready",
 ];
 
+// An order in one of these states is done, one way or another — its
+// products have no business sitting in an active production queue
+// (Ishlab chiqarish / Pechatnik) waiting to be assigned or worked on.
+export const ORDER_CLOSED_STATUSES: OrderStatus[] = ["delivered", "closed", "cancelled"];
+
 export const ORDER_STATUSES: { key: OrderStatus; label: string; cls: string }[] = [
   { key: "new", label: "Yangi", cls: "bg-sky-100 text-sky-700" },
   {

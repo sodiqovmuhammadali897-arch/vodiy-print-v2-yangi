@@ -3,6 +3,7 @@ import { Printer, Search } from "lucide-react";
 import { listAll, subscribeAll, updateOne } from "../../lib/firestoreDb";
 import type { Brand, Customer, Holiday, Order, OrderProduct } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
+import { ORDER_CLOSED_STATUSES } from "../../lib/orderConstants";
 import { useAuth } from "../../lib/AuthContext";
 import AsyncState from "../../components/ui/AsyncState";
 import ProductionProductCard from "./ProductionProductCard";
@@ -71,7 +72,8 @@ export default function Production() {
         const order = ordersMap.get(product.order_id);
         return order ? { product, order } : null;
       })
-      .filter((r): r is Row => r !== null);
+      .filter((r): r is Row => r !== null)
+      .filter((r) => !ORDER_CLOSED_STATUSES.includes(r.order.status));
   }, [products, ordersMap]);
 
   const visibleRows = useMemo(() => {

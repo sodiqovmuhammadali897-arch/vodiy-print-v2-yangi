@@ -4,7 +4,7 @@ import { listAll, subscribeAll, updateOne } from "../../lib/firestoreDb";
 import type { Brand, Customer, Holiday, Order, OrderProduct, OrderStatus } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
 import { orderStatusLabel } from "../../components/ui/StatusBadge";
-import { PRODUCTION_LINE_STATUSES } from "../../lib/orderConstants";
+import { ORDER_CLOSED_STATUSES, PRODUCTION_LINE_STATUSES } from "../../lib/orderConstants";
 import AsyncState from "../../components/ui/AsyncState";
 import ProductionProductCard from "./ProductionProductCard";
 
@@ -64,7 +64,8 @@ export default function Pechatnik() {
         const order = ordersMap.get(product.order_id);
         return order ? { product, order } : null;
       })
-      .filter((r): r is Row => r !== null);
+      .filter((r): r is Row => r !== null)
+      .filter((r) => !ORDER_CLOSED_STATUSES.includes(r.order.status));
   }, [products, ordersMap, isAdmin, myEmail]);
 
   const visibleRows = useMemo(() => {
