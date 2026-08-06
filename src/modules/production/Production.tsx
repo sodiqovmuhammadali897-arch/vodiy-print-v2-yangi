@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Printer, Search } from "lucide-react";
 import { listAll, subscribeAll, updateOne } from "../../lib/firestoreDb";
-import type { Brand, Customer, Holiday, Order, OrderProduct, OrderStatus } from "../../lib/types";
+import type { Brand, Customer, Holiday, Order, OrderFile, OrderProduct, OrderStatus } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { ORDER_CLOSED_STATUSES } from "../../lib/orderConstants";
 import { useAuth } from "../../lib/AuthContext";
@@ -22,6 +22,7 @@ export default function Production() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [files, setFiles] = useState<OrderFile[]>([]);
   const [printers, setPrinters] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -31,16 +32,18 @@ export default function Production() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [customersData, brandsData, holidaysData, staffData] = await Promise.all([
+      const [customersData, brandsData, holidaysData, filesData, staffData] = await Promise.all([
         listAll<Customer>("customers"),
         listAll<Brand>("brands"),
         listAll<Holiday>("holidays"),
+        listAll<OrderFile>("order_files"),
         listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }),
       ]);
       if (cancelled) return;
       setCustomers(customersData);
       setBrands(brandsData);
       setHolidays(holidaysData);
+      setFiles(filesData);
       setPrinters(staffData.filter((s) => s.role === "admin" || s.permissions?.pechatnik?.edit));
     })();
 
@@ -60,6 +63,15 @@ export default function Production() {
   const customersMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const brandsMap = useMemo(() => new Map(brands.map((b) => [b.id, b])), [brands]);
   const ordersMap = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders]);
+  const filesByOrder = useMemo(() => {
+    const map = new Map<string, OrderFile[]>();
+    for (const f of files) {
+      const arr = map.get(f.order_id) || [];
+      arr.push(f);
+      map.set(f.order_id, arr);
+    }
+    return map;
+  }, [files]);
 
   const categories = useMemo(
     () => Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort(),
@@ -192,6 +204,7 @@ export default function Production() {
               customer={order.customer_id ? customersMap.get(order.customer_id) || null : null}
               brand={order.brand_id ? brandsMap.get(order.brand_id) || null : null}
               holidays={holidays}
+              files={filesByOrder.get(order.id) || []}
               canAssign={canEdit}
               printers={printers}
               onAssign={(email, name) => assign(product.id, email, name)}

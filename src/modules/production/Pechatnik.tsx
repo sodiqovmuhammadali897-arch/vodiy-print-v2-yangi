@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Shirt, Search } from "lucide-react";
 import { listAll, subscribeAll, updateOne } from "../../lib/firestoreDb";
-import type { Brand, Customer, Holiday, Order, OrderProduct, OrderStatus } from "../../lib/types";
+import type { Brand, Customer, Holiday, Order, OrderFile, OrderProduct, OrderStatus } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
 import { orderStatusLabel } from "../../components/ui/StatusBadge";
 import { ORDER_CLOSED_STATUSES, PRODUCTION_LINE_STATUSES } from "../../lib/orderConstants";
@@ -19,6 +19,7 @@ export default function Pechatnik() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [files, setFiles] = useState<OrderFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
@@ -27,15 +28,17 @@ export default function Pechatnik() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [customersData, brandsData, holidaysData] = await Promise.all([
+      const [customersData, brandsData, holidaysData, filesData] = await Promise.all([
         listAll<Customer>("customers"),
         listAll<Brand>("brands"),
         listAll<Holiday>("holidays"),
+        listAll<OrderFile>("order_files"),
       ]);
       if (cancelled) return;
       setCustomers(customersData);
       setBrands(brandsData);
       setHolidays(holidaysData);
+      setFiles(filesData);
     })();
 
     const unsubOrders = subscribeAll<Order>("orders", (rows) => {
@@ -54,6 +57,15 @@ export default function Pechatnik() {
   const customersMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const brandsMap = useMemo(() => new Map(brands.map((b) => [b.id, b])), [brands]);
   const ordersMap = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders]);
+  const filesByOrder = useMemo(() => {
+    const map = new Map<string, OrderFile[]>();
+    for (const f of files) {
+      const arr = map.get(f.order_id) || [];
+      arr.push(f);
+      map.set(f.order_id, arr);
+    }
+    return map;
+  }, [files]);
 
   const myEmail = (user?.email || "").toLowerCase();
   const rows = useMemo<Row[]>(() => {
@@ -188,6 +200,7 @@ export default function Pechatnik() {
               customer={order.customer_id ? customersMap.get(order.customer_id) || null : null}
               brand={order.brand_id ? brandsMap.get(order.brand_id) || null : null}
               holidays={holidays}
+              files={filesByOrder.get(order.id) || []}
               canAct={
                 isAdmin ||
                 (canEdit && (product.assigned_printer_email || "").toLowerCase() === myEmail)

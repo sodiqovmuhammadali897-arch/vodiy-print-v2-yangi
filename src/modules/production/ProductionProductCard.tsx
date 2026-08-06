@@ -3,11 +3,13 @@ import {
   AlertTriangle,
   Building2,
   CheckCircle2,
+  ExternalLink,
+  Paperclip,
   PackageCheck,
   Phone,
   User,
 } from "lucide-react";
-import type { Brand, Customer, Holiday, Order, OrderProduct, OrderStatus } from "../../lib/types";
+import type { Brand, Customer, Holiday, Order, OrderFile, OrderProduct, OrderStatus } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import StatusBadge, { orderStatusLabel } from "../../components/ui/StatusBadge";
 import { PRODUCTION_LINE_STATUSES } from "../../lib/orderConstants";
@@ -43,10 +45,11 @@ type Props = (DispatchProps | PechatnikProps) & {
   customer: Customer | null;
   brand: Brand | null;
   holidays: Holiday[];
+  files: OrderFile[];
 };
 
 export default function ProductionProductCard(props: Props) {
-  const { product, order, customer, brand, holidays, mode } = props;
+  const { product, order, customer, brand, holidays, files, mode } = props;
   const dl = deadlineInfo(order.deadline, holidays);
   const isTextile = product.category === "Textil";
   // Order lines created before this feature shipped don't have these
@@ -139,6 +142,23 @@ export default function ProductionProductCard(props: Props) {
         </div>
         <div>Menejer: <span className="font-semibold text-ink-700">{order.manager_name || "-"}</span></div>
       </div>
+
+      {files.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Paperclip className="h-3.5 w-3.5 text-ink-400" />
+          {files.map((f) => (
+            <a
+              key={f.id}
+              href={f.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 rounded-lg bg-ink-100 px-2 py-1 text-xs text-ink-700 hover:bg-ink-200"
+            >
+              {f.filename || "Fayl"} <ExternalLink className="h-3 w-3" />
+            </a>
+          ))}
+        </div>
+      )}
 
       {mode === "dispatch" &&
         (props.canAssign ? (
