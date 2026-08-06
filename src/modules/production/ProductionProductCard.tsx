@@ -19,6 +19,10 @@ type DispatchProps = {
   canAssign: boolean;
   printers: Staff[];
   onAssign: (email: string, name: string) => void;
+  // Non-Textil categories have no dedicated worker panel yet, so this is
+  // the only way to move them past "Yangi" — the mas'ul hodim sets it
+  // directly here instead of through a per-role accept/finish flow.
+  onStatusChange: (status: OrderStatus) => void;
 };
 
 type PechatnikProps = {
@@ -167,6 +171,23 @@ export default function ProductionProductCard(props: Props) {
             </div>
           )
         ))}
+
+      {mode === "dispatch" && props.canAssign && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase text-ink-500">Holat</span>
+          <select
+            className="input w-auto py-1.5 text-sm"
+            value={productionStatus}
+            onChange={(e) => props.onStatusChange(e.target.value as OrderStatus)}
+          >
+            {PRODUCTION_LINE_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {orderStatusLabel(s)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {mode === "pechatnik" && props.canAct && props.isAdmin && (
         <div className="flex items-center gap-2 pt-1">

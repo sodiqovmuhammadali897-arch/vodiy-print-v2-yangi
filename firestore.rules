@@ -67,11 +67,13 @@ service cloud.firestore {
     match /order_products/{id} {
       allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view');
       allow create, update, delete: if can('orders', 'edit');
-      // Ishlab chiqarish (mas'ul hodim): may only assign a printer, never
-      // touch pricing/quantity/breakdown.
+      // Ishlab chiqarish (mas'ul hodim): may assign a printer and/or move
+      // the line's own status (non-Textil categories have no dedicated
+      // worker panel yet, so this is their only way to progress past
+      // "Yangi") — never pricing/quantity/breakdown.
       allow update: if can('production', 'edit') &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['assigned_printer_email', 'assigned_printer_name']);
+          .hasOnly(['assigned_printer_email', 'assigned_printer_name', 'production_status']);
       // Pechatnik: may only move their own assigned item through the
       // production_status stages, never reassign themselves or edit the
       // product itself.

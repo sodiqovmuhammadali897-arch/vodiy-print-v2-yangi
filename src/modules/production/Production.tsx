@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Printer, Search } from "lucide-react";
 import { listAll, subscribeAll, updateOne } from "../../lib/firestoreDb";
-import type { Brand, Customer, Holiday, Order, OrderProduct } from "../../lib/types";
+import type { Brand, Customer, Holiday, Order, OrderProduct, OrderStatus } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { ORDER_CLOSED_STATUSES } from "../../lib/orderConstants";
 import { useAuth } from "../../lib/AuthContext";
@@ -121,6 +121,14 @@ export default function Production() {
     }
   };
 
+  const setStatus = async (productId: string, status: OrderStatus) => {
+    try {
+      await updateOne("order_products", productId, { production_status: status });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -187,6 +195,7 @@ export default function Production() {
               canAssign={canEdit}
               printers={printers}
               onAssign={(email, name) => assign(product.id, email, name)}
+              onStatusChange={(status) => setStatus(product.id, status)}
             />
           ))}
         </div>
