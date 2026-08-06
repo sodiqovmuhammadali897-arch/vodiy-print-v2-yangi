@@ -12,7 +12,7 @@ import type {
 } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import StatusBadge, { ORDER_STATUS_OPTIONS, orderStatusLabel } from "../../components/ui/StatusBadge";
-import { ORDER_STATUSES } from "../../lib/orderConstants";
+import { ORDER_CLOSED_STATUSES, ORDER_STATUSES } from "../../lib/orderConstants";
 import { changeOrderStatus } from "../../lib/orderStatus";
 import { maybePromoteCustomer } from "../../lib/orderService";
 import ProductionBadge from "../../components/ui/ProductionBadge";
@@ -23,11 +23,27 @@ import { deadlineInfo } from "../../lib/workingDays";
 import { remainingTimeLabel } from "../../lib/remainingTime";
 import { useAuth } from "../../lib/AuthContext";
 
+// A quick at-a-glance production indicator for managers who don't have
+// access to Ishlab chiqarish/Pechatnik — the "worst" (least progressed)
+// line item wins, so a single unstarted item keeps the whole order red
+// even if everything else is done.
+type ProductionDot = "red" | "green" | "blue" | null;
+
+const NOT_STARTED_STATUSES = new Set(["new", "accepted"]);
+
+const productionDotFor = (order: Order, items: OrderProduct[]): ProductionDot => {
+  if (items.length === 0 || ORDER_CLOSED_STATUSES.includes(order.status)) return null;
+  if (items.some((p) => NOT_STARTED_STATUSES.has(p.production_status || "new"))) return "red";
+  if (items.every((p) => p.production_status === "ready")) return "blue";
+  return "green";
+};
+
 type Row = Order & {
   brand?: Brand;
   customer?: Customer;
   productPreview: string;
   productCount: number;
+  productionDot: ProductionDot;
 };
 
 // Delivered/closed orders stay fully in Firestore (history, payments,
@@ -55,16 +71,14 @@ export default function Orders() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [brandsData, customersData, productsData, holidaysData] = await Promise.all([
+      const [brandsData, customersData, holidaysData] = await Promise.all([
         listAll<Brand>("brands"),
         listAll<Customer>("customers"),
-        listAll<OrderProduct>("order_products", { orderBy: ["position", "asc"] }),
         listAll<Holiday>("holidays"),
       ]);
       if (cancelled) return;
       setBrands(brandsData);
       setCustomers(customersData);
-      setProducts(productsData);
       setHolidays(holidaysData);
     })();
 
@@ -76,10 +90,16 @@ export default function Orders() {
       },
       { orderBy: ["created_at", "desc"] },
     );
+    // Real-time so the production dot updates the moment Ishlab
+    // chiqarish/Pechatnik changes a line's status, without a page reload.
+    const unsubProducts = subscribeAll<OrderProduct>("order_products", setProducts, {
+      orderBy: ["position", "asc"],
+    });
 
     return () => {
       cancelled = true;
       unsubOrders();
+      unsubProducts();
     };
   }, []);
 
@@ -105,6 +125,7 @@ export default function Orders() {
         customer: ord.customer_id ? customersMap.get(ord.customer_id) : undefined,
         productPreview: preview + (items.length > 2 ? ` +${items.length - 2}` : ""),
         productCount: items.length,
+        productionDot: productionDotFor(ord, items),
       };
     });
   }, [orders, brands, customers, products]);
@@ -310,12 +331,32 @@ export default function Orders() {
                   return (
                     <tr key={o.id} className="hover:bg-ink-50/50">
                       <td className="table-td">
-                        <Link
-                          to={`/orders/${o.id}`}
-                          className="font-display font-extrabold text-brand-700 hover:underline"
-                        >
-                          {o.order_number || "-"}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          {o.productionDot && (
+                            <span
+                              title={
+                                o.productionDot === "red"
+                                  ? "Hali ishga olinmagan"
+                                  : o.productionDot === "green"
+                                  ? "Ishlab chiqarilmoqda"
+                                  : "Tayyor"
+                              }
+                              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                                o.productionDot === "red"
+                                  ? "bg-rose-500"
+                                  : o.productionDot === "green"
+                                  ? "bg-emerald-500"
+                                  : "bg-sky-500"
+                              } ${o.productionDot === "red" && rt?.overdue ? "animate-pulse" : ""}`}
+                            />
+                          )}
+                          <Link
+                            to={`/orders/${o.id}`}
+                            className="font-display font-extrabold text-brand-700 hover:underline"
+                          >
+                            {o.order_number || "-"}
+                          </Link>
+                        </div>
                         {rt && (
                           <div
                             className={`text-xs ${
