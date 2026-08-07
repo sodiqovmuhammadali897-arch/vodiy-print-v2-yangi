@@ -1,25 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Plus, Search, Package, Send, Copy, Pencil, Trash2 } from "lucide-react";
-import { deleteOne, deleteWhere, listAll, subscribeAll, updateOne } from "../../lib/firestoreDb";
+import { useNavigate } from "react-router-dom";
+import {
+  Plus,
+  Search,
+  Package,
+  Inbox,
+  Factory,
+  CheckCircle2,
+  Truck,
+  AlertTriangle,
+} from "lucide-react";
+import {
+  deleteOne,
+  deleteWhere,
+  insertMany,
+  insertOne,
+  listAll,
+  subscribeAll,
+  updateOne,
+} from "../../lib/firestoreDb";
 import type {
   Brand,
   Customer,
   Holiday,
   Order,
+  OrderFile,
+  OrderPayment,
   OrderProduct,
   OrderStatus,
 } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
+import StatCard from "../../components/ui/StatCard";
 import StatusBadge, { ORDER_STATUS_OPTIONS, orderStatusLabel } from "../../components/ui/StatusBadge";
-import { ORDER_CLOSED_STATUSES, ORDER_STATUSES } from "../../lib/orderConstants";
+import { ORDER_CLOSED_STATUSES, ORDER_STAGE_GROUPS } from "../../lib/orderConstants";
 import { changeOrderStatus } from "../../lib/orderStatus";
-import { maybePromoteCustomer } from "../../lib/orderService";
-import ProductionBadge from "../../components/ui/ProductionBadge";
-import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
+import { maybePromoteCustomer, type WizardProduct } from "../../lib/orderService";
+import { nextOrderNumber } from "../../lib/numbering";
 import RequireCustomerModal from "./RequireCustomerModal";
-import { formatDate, formatMoney } from "../../lib/format";
-import { deadlineInfo } from "../../lib/workingDays";
+import OrdersSidePanel from "./OrdersSidePanel";
+import { formatDate, formatMoneyShort, initialsOf } from "../../lib/format";
 import { remainingTimeLabel } from "../../lib/remainingTime";
 import { useAuth } from "../../lib/AuthContext";
 
@@ -43,13 +62,18 @@ type Row = Order & {
   customer?: Customer;
   productPreview: string;
   productCount: number;
+  totalQty: number;
   productionDot: ProductionDot;
 };
 
-// Delivered/closed orders stay fully in Firestore (history, payments,
-// reports all depend on them) — they're just hidden from the default list
-// view so the working panel doesn't fill up with finished work.
-const CLOSED_STATUSES: OrderStatus[] = ["delivered", "closed"];
+const PAGE_SIZES = [20, 50, 100];
+
+const inCurrentMonth = (iso: string | null | undefined) => {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+};
 
 export default function Orders() {
   const navigate = useNavigate();
@@ -60,13 +84,31 @@ export default function Orders() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<OrderProduct[]>([]);
+  const [payments, setPayments] = useState<OrderPayment[]>([]);
+  const [files, setFiles] = useState<OrderFile[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+  const [managerFilter, setManagerFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [showClosed, setShowClosed] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [requireCustomerFor, setRequireCustomerFor] = useState<Order | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  const loadAux = async () => {
+    const [paymentsData, filesData] = await Promise.all([
+      listAll<OrderPayment>("order_payments"),
+      listAll<OrderFile>("order_files"),
+    ]);
+    setPayments(paymentsData);
+    setFiles(filesData);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +122,7 @@ export default function Orders() {
       setBrands(brandsData);
       setCustomers(customersData);
       setHolidays(holidaysData);
+      void loadAux();
     })();
 
     const unsubOrders = subscribeAll<Order>(
@@ -90,8 +133,6 @@ export default function Orders() {
       },
       { orderBy: ["created_at", "desc"] },
     );
-    // Real-time so the production dot updates the moment Ishlab
-    // chiqarish/Pechatnik changes a line's status, without a page reload.
     const unsubProducts = subscribeAll<OrderProduct>("order_products", setProducts, {
       orderBy: ["position", "asc"],
     });
@@ -103,21 +144,25 @@ export default function Orders() {
     };
   }, []);
 
+  const productsByOrder = useMemo(() => {
+    const map = new Map<string, OrderProduct[]>();
+    products.forEach((row) => {
+      const arr = map.get(row.order_id) || [];
+      arr.push(row);
+      map.set(row.order_id, arr);
+    });
+    return map;
+  }, [products]);
+
   const rows = useMemo<Row[]>(() => {
     const brandsMap = new Map(brands.map((x) => [x.id, x]));
     const customersMap = new Map(customers.map((x) => [x.id, x]));
-    const productsByOrder = new Map<string, OrderProduct[]>();
-    products.forEach((row) => {
-      const arr = productsByOrder.get(row.order_id) || [];
-      arr.push(row);
-      productsByOrder.set(row.order_id, arr);
-    });
 
     return orders.map((ord) => {
       const items = productsByOrder.get(ord.id) || [];
       const preview = items
         .slice(0, 2)
-        .map((it) => `${it.product_name || "?"} × ${it.quantity || 0}`)
+        .map((it) => it.product_name || "?")
         .join(", ");
       return {
         ...ord,
@@ -125,13 +170,40 @@ export default function Orders() {
         customer: ord.customer_id ? customersMap.get(ord.customer_id) : undefined,
         productPreview: preview + (items.length > 2 ? ` +${items.length - 2}` : ""),
         productCount: items.length,
+        totalQty: items.reduce((s, it) => s + Number(it.quantity || 0), 0),
         productionDot: productionDotFor(ord, items),
       };
     });
-  }, [orders, brands, customers, products]);
+  }, [orders, brands, customers, productsByOrder]);
+
+  const managers = useMemo(
+    () => Array.from(new Set(orders.map((o) => o.manager_name).filter(Boolean))).sort(),
+    [orders],
+  );
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort(),
+    [products],
+  );
+
+  const stats = useMemo(() => {
+    const monthOrders = rows.filter((r) => inCurrentMonth(r.order_date || r.created_at));
+    const countIn = (group: (typeof ORDER_STAGE_GROUPS)[number]) =>
+      monthOrders.filter((r) => group.statuses.includes(r.status)).length;
+    const overdue = monthOrders.filter(
+      (r) => !ORDER_CLOSED_STATUSES.includes(r.status) && remainingTimeLabel(r.deadline)?.overdue,
+    ).length;
+    return {
+      total: monthOrders.length,
+      newCount: countIn(ORDER_STAGE_GROUPS[0]),
+      productionCount: countIn(ORDER_STAGE_GROUPS[1]),
+      readyCount: countIn(ORDER_STAGE_GROUPS[2]),
+      deliveredCount: countIn(ORDER_STAGE_GROUPS[3]),
+      overdue,
+    };
+  }, [rows]);
 
   const closedCount = useMemo(
-    () => rows.filter((r) => CLOSED_STATUSES.includes(r.status)).length,
+    () => rows.filter((r) => ORDER_CLOSED_STATUSES.includes(r.status)).length,
     [rows],
   );
 
@@ -140,14 +212,21 @@ export default function Orders() {
     return rows.filter((r) => {
       if (statusFilter !== "all") {
         if (r.status !== statusFilter) return false;
-      } else if (!showClosed && CLOSED_STATUSES.includes(r.status)) {
+      } else if (!showClosed && ORDER_CLOSED_STATUSES.includes(r.status)) {
         return false;
       }
+      if (managerFilter && r.manager_name !== managerFilter) return false;
+      if (categoryFilter) {
+        const items = productsByOrder.get(r.id) || [];
+        if (!items.some((p) => p.category === categoryFilter)) return false;
+      }
+      const d = r.order_date || r.created_at;
+      if (dateFrom && (!d || d.slice(0, 10) < dateFrom)) return false;
+      if (dateTo && (!d || d.slice(0, 10) > dateTo)) return false;
       if (!q) return true;
       return [
         r.order_number,
         r.title,
-        r.description,
         r.manager_name,
         r.brand?.name,
         r.customer?.customer_number,
@@ -155,7 +234,6 @@ export default function Orders() {
         r.customer?.last_name,
         r.customer?.company,
         r.customer?.phone,
-        r.customer?.telegram,
         r.productPreview,
       ]
         .filter(Boolean)
@@ -163,15 +241,31 @@ export default function Orders() {
         .toLowerCase()
         .includes(q);
     });
-  }, [rows, search, statusFilter]);
+  }, [rows, search, statusFilter, showClosed, managerFilter, categoryFilter, dateFrom, dateTo, productsByOrder]);
 
-  const copy = async (v: string) => {
-    try {
-      await navigator.clipboard.writeText(v);
-    } catch {
-      /* ignored */
-    }
-  };
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, showClosed, managerFilter, categoryFilter, dateFrom, dateTo, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageRows = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize],
+  );
+
+  const selected = useMemo(() => rows.find((r) => r.id === selectedId) || null, [rows, selectedId]);
+  const selectedProducts = useMemo(
+    () => (selected ? productsByOrder.get(selected.id) || [] : []),
+    [selected, productsByOrder],
+  );
+  const selectedPayments = useMemo(
+    () => (selected ? payments.filter((p) => p.order_id === selected.id) : []),
+    [selected, payments],
+  );
+  const selectedFiles = useMemo(
+    () => (selected ? files.filter((f) => f.order_id === selected.id) : []),
+    [selected, files],
+  );
 
   const applyStatusChange = async (orderId: string, status: OrderStatus) => {
     setBusyId(orderId);
@@ -181,18 +275,12 @@ export default function Orders() {
         name: staff?.full_name || user?.email || "",
       });
     } catch (e) {
-      alert(
-        e instanceof Error
-          ? `Statusni o'zgartirib bo'lmadi: ${e.message}`
-          : "Statusni o'zgartirib bo'lmadi",
-      );
+      alert(e instanceof Error ? `Statusni o'zgartirib bo'lmadi: ${e.message}` : "Statusni o'zgartirib bo'lmadi");
     } finally {
       setBusyId(null);
     }
   };
 
-  // Same safeguard as the order detail page: delivering an order with no
-  // linked customer pauses for one instead of quietly completing.
   const changeStatus = (order: Order, status: OrderStatus) => {
     if (status === order.status) return;
     if (status === "delivered" && !order.customer_id) {
@@ -229,8 +317,70 @@ export default function Orders() {
         deleteWhere("order_status_history", "order_id", orderId),
       ]);
       await deleteOne("orders", orderId);
+      if (selectedId === orderId) setSelectedId(null);
+      void loadAux();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const duplicateOrder = async (order: Order) => {
+    setBusyId(order.id);
+    try {
+      const number = await nextOrderNumber();
+      const {
+        id: _id,
+        order_number: _on,
+        created_at: _ca,
+        completed_at: _cd,
+        ...rest
+      } = order;
+      void _id;
+      void _on;
+      void _ca;
+      void _cd;
+      const created = await insertOne("orders", {
+        ...rest,
+        order_number: number,
+        status: "new",
+        paid_amount: 0,
+        remaining_amount: order.total_amount,
+        is_draft: false,
+        order_date: new Date().toISOString().slice(0, 10),
+        textile_sizes_confirmed_at: null,
+        textile_sizes_confirmed_by: "",
+      });
+      const items = productsByOrder.get(order.id) || [];
+      if (items.length > 0) {
+        await insertMany<WizardProduct & { order_id: string }>(
+          "order_products",
+          items.map((p) => ({
+            order_id: created.id,
+            position: p.position,
+            category: p.category,
+            product_name: p.product_name,
+            variant: p.variant,
+            size: p.size,
+            material: p.material,
+            color: p.color,
+            quantity: p.quantity,
+            unit_price: p.unit_price,
+            discount: p.discount,
+            total: p.total,
+            note: p.note,
+            size_breakdown: p.size_breakdown,
+            production_status: "new",
+            assigned_printer_email: "",
+            assigned_printer_name: "",
+            production_accepted_at: null,
+            production_completed_at: null,
+          })),
+        );
+      }
+      setSelectedId(null);
+      navigate(`/orders/${created.id}/edit`);
     } finally {
       setBusyId(null);
     }
@@ -240,303 +390,229 @@ export default function Orders() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">
-            Buyurtmalar
-          </h1>
-          <p className="text-sm text-ink-500">Barcha buyurtmalar tarixi</p>
+          <h1 className="font-display text-2xl font-bold text-ink-900">Buyurtmalar</h1>
+          <p className="text-sm text-ink-500">Barcha buyurtmalar ro'yxati va holati</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            className="input w-auto"
-            value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value as OrderStatus | "all")
-            }
-          >
-            <option value="all">Barcha statuslar</option>
-            {ORDER_STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {orderStatusLabel(s)}
+        {canEdit && (
+          <button className="btn-primary" onClick={() => navigate("/orders/new")}>
+            <Plus className="h-4 w-4" /> Yangi buyurtma
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <StatCard title="Jami buyurtmalar" value={`${stats.total} ta`} tone="brand" icon={<Package className="h-5 w-5" />} />
+        <StatCard title="Yangi" value={`${stats.newCount} ta`} tone="sky" icon={<Inbox className="h-5 w-5" />} />
+        <StatCard title="Ishlab chiqarilmoqda" value={`${stats.productionCount} ta`} tone="amber" icon={<Factory className="h-5 w-5" />} />
+        <StatCard title="Tayyor" value={`${stats.readyCount} ta`} tone="emerald" icon={<CheckCircle2 className="h-5 w-5" />} />
+        <StatCard title="Yetkazildi" value={`${stats.deliveredCount} ta`} tone="emerald" icon={<Truck className="h-5 w-5" />} />
+        <StatCard title="Kechikkan" value={`${stats.overdue} ta`} tone="rose" icon={<AlertTriangle className="h-5 w-5" />} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-1 items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
+          <Search className="h-4 w-4 text-ink-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ID, mijoz, telefon, mahsulot..."
+            className="w-full min-w-[160px] bg-transparent text-sm outline-none placeholder-ink-400"
+          />
+        </div>
+        <input type="date" className="input w-auto" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        <input type="date" className="input w-auto" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | "all")}>
+          <option value="all">Barcha statuslar</option>
+          {ORDER_STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>
+              {orderStatusLabel(s)}
+            </option>
+          ))}
+        </select>
+        {managers.length > 0 && (
+          <select className="input w-auto" value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)}>
+            <option value="">Barcha manager</option>
+            {managers.map((m) => (
+              <option key={m} value={m}>
+                {m}
               </option>
             ))}
           </select>
-          {statusFilter === "all" && closedCount > 0 && (
-            <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
-              <input
-                type="checkbox"
-                checked={showClosed}
-                onChange={(e) => setShowClosed(e.target.checked)}
-              />
-              Yopilganlarni ko'rsatish ({closedCount})
-            </label>
-          )}
-          <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
-            <Search className="h-4 w-4 text-ink-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="ID, mijoz, telefon, mahsulot..."
-              className="w-64 bg-transparent text-sm outline-none placeholder-ink-400"
-            />
-          </div>
-          {canEdit && (
-            <button
-              className="btn-primary"
-              onClick={() => navigate("/orders/new")}
-            >
-              <Plus className="h-4 w-4" /> Yangi buyurtma
-            </button>
-          )}
-        </div>
+        )}
+        {categories.length > 0 && (
+          <select className="input w-auto" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <option value="">Barcha mahsulot</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
+        {statusFilter === "all" && closedCount > 0 && (
+          <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
+            <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+            Yopilganlarni ko'rsatish ({closedCount})
+          </label>
+        )}
       </div>
 
-      <div className="card overflow-hidden">
-        <AsyncState
-          loading={loading}
-          empty={filtered.length === 0}
-          emptyLabel="Buyurtmalar mavjud emas"
-          emptyIcon={<Package className="h-5 w-5" />}
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-ink-50/60">
-                <tr>
-                  <th className="table-th">ID</th>
-                  <th className="table-th">Sana</th>
-                  <th className="table-th">Menejer</th>
-                  <th className="table-th">Mijoz</th>
-                  <th className="table-th">Brend</th>
-                  <th className="table-th">Aloqa</th>
-                  <th className="table-th">Mahsulotlar</th>
-                  <th className="table-th">Ishlab chiqaruvchi</th>
-                  <th className="table-th text-right">Summa</th>
-                  <th className="table-th text-right">To'langan</th>
-                  <th className="table-th text-right">Qoldiq</th>
-                  <th className="table-th">Deadline</th>
-                  <th className="table-th">Status</th>
-                  <th className="table-th">Pechatnik</th>
-                  {(canEdit || canDelete) && <th className="table-th text-right">Amallar</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink-100">
-                {filtered.map((o) => {
-                  const dl = deadlineInfo(o.deadline, holidays);
-                  const rt = remainingTimeLabel(o.deadline);
-                  const remaining =
-                    Number(o.remaining_amount || 0) ||
-                    Math.max(
-                      0,
-                      Number(o.total_amount || 0) - Number(o.paid_amount || 0),
-                    );
-                  return (
-                    <tr key={o.id} className="hover:bg-ink-50/50">
-                      <td className="table-td">
-                        <div className="flex items-center gap-1.5">
-                          {o.productionDot && (
-                            <span
-                              title={
-                                o.productionDot === "red"
-                                  ? "Hali ishga olinmagan"
-                                  : o.productionDot === "green"
-                                  ? "Ishlab chiqarilmoqda"
-                                  : "Tayyor"
-                              }
-                              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                                o.productionDot === "red"
-                                  ? "bg-rose-500"
-                                  : o.productionDot === "green"
-                                  ? "bg-emerald-500"
-                                  : "bg-sky-500"
-                              } ${o.productionDot === "red" && rt?.overdue ? "animate-pulse" : ""}`}
-                            />
-                          )}
-                          <Link
-                            to={`/orders/${o.id}`}
-                            className="font-display font-extrabold text-brand-700 hover:underline"
-                          >
-                            {o.order_number || "-"}
-                          </Link>
-                        </div>
-                        {rt && (
-                          <div
-                            className={`text-xs ${
-                              rt.overdue ? "font-semibold text-rose-600" : "text-ink-500"
-                            }`}
-                          >
-                            {rt.label}
-                          </div>
-                        )}
-                      </td>
-                      <td className="table-td whitespace-nowrap text-ink-600">
-                        {formatDate(o.order_date || o.created_at)}
-                      </td>
-                      <td className="table-td whitespace-nowrap">
-                        {o.manager_name || "-"}
-                      </td>
-                      <td className="table-td">
-                        {o.customer ? (
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-semibold text-brand-700">
-                                {o.customer.customer_number || ""}
-                              </span>
-                              <span className="font-medium text-ink-800">
-                                {o.customer.first_name} {o.customer.last_name}
-                              </span>
-                            </div>
-                            <CustomerTypeBadge type={o.customer.customer_type} />
-                          </div>
-                        ) : (
-                          <span className="text-ink-400">-</span>
-                        )}
-                      </td>
-                      <td className="table-td text-ink-700">
-                        {o.brand?.name || "-"}
-                      </td>
-                      <td className="table-td">
-                        {o.customer?.phone && (
-                          <div className="flex items-center gap-1 text-xs text-ink-600">
-                            <a
-                              href={`tel:${o.customer.phone}`}
-                              className="hover:text-brand-700"
-                            >
-                              {o.customer.phone}
-                            </a>
-                            <button
-                              onClick={() => copy(o.customer!.phone)}
-                              className="rounded p-0.5 hover:bg-ink-100"
-                            >
-                              <Copy className="h-3 w-3" />
-                            </button>
-                            <a
-                              target="_blank"
-                              rel="noreferrer"
-                              href={`https://wa.me/${o.customer.phone.replace(
-                                /[^\d]/g,
-                                "",
-                              )}`}
-                              className="rounded p-0.5 hover:bg-ink-100"
-                              title="WhatsApp"
-                            >
-                              <Send className="h-3 w-3" />
-                            </a>
-                          </div>
-                        )}
-                        {o.customer?.telegram && (
-                          <a
-                            target="_blank"
-                            rel="noreferrer"
-                            href={`https://t.me/${o.customer.telegram.replace(
-                              /^@/,
-                              "",
-                            )}`}
-                            className="text-xs text-brand-700 hover:underline"
-                          >
-                            {o.customer.telegram}
-                          </a>
-                        )}
-                      </td>
-                      <td className="table-td">
-                        <div className="max-w-[220px] truncate text-ink-700">
-                          {o.productPreview || "-"}
-                        </div>
-                        <div className="text-[11px] text-ink-500">
-                          {o.productCount > 0
-                            ? `${o.productCount} ta pozitsiya`
-                            : ""}
-                        </div>
-                      </td>
-                      <td className="table-td">
-                        <ProductionBadge name={o.production_company} />
-                      </td>
-                      <td className="table-td whitespace-nowrap text-right font-semibold">
-                        {formatMoney(o.total_amount)}
-                      </td>
-                      <td className="table-td whitespace-nowrap text-right text-emerald-700">
-                        {formatMoney(o.paid_amount)}
-                      </td>
-                      <td className="table-td whitespace-nowrap text-right">
-                        <span
-                          className={
-                            remaining > 0
-                              ? "font-semibold text-rose-600"
-                              : "text-ink-500"
-                          }
-                        >
-                          {formatMoney(remaining)}
-                        </span>
-                      </td>
-                      <td className="table-td whitespace-nowrap">
-                        <div>{formatDate(o.deadline)}</div>
-                        {dl && (
-                          <div
-                            className={`text-[11px] ${
-                              dl.tone === "rose"
-                                ? "text-rose-600"
-                                : dl.tone === "amber"
-                                ? "text-amber-700"
-                                : "text-emerald-700"
-                            }`}
-                          >
-                            {dl.overdue
-                              ? `${dl.days} kun kechikdi`
-                              : dl.days === 0
-                              ? "Bugun"
-                              : `${dl.days} ish kuni`}
-                          </div>
-                        )}
-                      </td>
-                      <td className="table-td">
-                        {canEdit ? (
-                          <select
-                            className="input w-auto py-1.5 text-xs"
-                            value={o.status}
-                            disabled={busyId === o.id}
-                            onChange={(e) => changeStatus(o, e.target.value as OrderStatus)}
-                          >
-                            {ORDER_STATUSES.map((s) => (
-                              <option key={s.key} value={s.key}>
-                                {s.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <StatusBadge status={o.status} />
-                        )}
-                      </td>
-                      <td className="table-td whitespace-nowrap text-ink-600">
-                        {o.assigned_printer_name || "-"}
-                      </td>
-                      {(canEdit || canDelete) && (
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="card flex-1 overflow-hidden">
+          <AsyncState
+            loading={loading}
+            empty={filtered.length === 0}
+            emptyLabel="Buyurtmalar mavjud emas"
+            emptyIcon={<Package className="h-5 w-5" />}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-ink-50/60">
+                  <tr>
+                    <th className="table-th">ID</th>
+                    <th className="table-th">Mijoz</th>
+                    <th className="table-th">Mahsulotlar</th>
+                    <th className="table-th text-right">Soni</th>
+                    <th className="table-th text-right">Jami summa</th>
+                    <th className="table-th">Status</th>
+                    <th className="table-th">Topshirish sana</th>
+                    <th className="table-th">Manager</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-100">
+                  {pageRows.map((o) => {
+                    const rt = remainingTimeLabel(o.deadline);
+                    return (
+                      <tr
+                        key={o.id}
+                        onClick={() => setSelectedId(o.id)}
+                        className={`cursor-pointer hover:bg-ink-50/50 ${selectedId === o.id ? "bg-brand-50/60" : ""}`}
+                      >
                         <td className="table-td">
-                          <div className="flex items-center justify-end gap-1">
-                            {canEdit && (
-                              <button
-                                className="btn-ghost"
-                                onClick={() => navigate(`/orders/${o.id}/edit`)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
+                          <div className="flex items-center gap-1.5 font-display font-extrabold text-brand-700">
+                            {o.productionDot && (
+                              <span
+                                title={
+                                  o.productionDot === "red"
+                                    ? "Hali ishga olinmagan"
+                                    : o.productionDot === "green"
+                                    ? "Ishlab chiqarilmoqda"
+                                    : "Tayyor"
+                                }
+                                className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                                  o.productionDot === "red"
+                                    ? "bg-rose-500"
+                                    : o.productionDot === "green"
+                                    ? "bg-emerald-500"
+                                    : "bg-sky-500"
+                                } ${o.productionDot === "red" && rt?.overdue ? "animate-pulse" : ""}`}
+                              />
                             )}
-                            {canDelete && (
-                              <button
-                                className="btn-ghost text-rose-600 hover:bg-rose-50"
-                                onClick={() => removeOrder(o.id)}
-                                disabled={busyId === o.id}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
+                            {o.order_number || "-"}
                           </div>
                         </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </AsyncState>
+                        <td className="table-td">
+                          {o.customer ? (
+                            <div>
+                              <div className="font-medium text-ink-800">
+                                {o.customer.first_name} {o.customer.last_name}
+                              </div>
+                              <div className="text-xs text-ink-500">{o.customer.phone}</div>
+                            </div>
+                          ) : (
+                            <span className="text-ink-400">-</span>
+                          )}
+                        </td>
+                        <td className="table-td">
+                          <div className="max-w-[220px] truncate text-ink-700">{o.productPreview || "-"}</div>
+                        </td>
+                        <td className="table-td whitespace-nowrap text-right text-ink-700">{o.totalQty} dona</td>
+                        <td className="table-td whitespace-nowrap text-right font-semibold text-ink-800">
+                          {formatMoneyShort(o.total_amount)}
+                        </td>
+                        <td className="table-td">
+                          <StatusBadge status={o.status} />
+                        </td>
+                        <td className="table-td whitespace-nowrap">
+                          <div>{formatDate(o.deadline)}</div>
+                          {rt && (
+                            <div className={`text-[11px] ${rt.overdue ? "font-semibold text-rose-600" : "text-ink-500"}`}>
+                              {rt.overdue ? `${rt.days} kun kechikdi` : `${rt.days} kun qoldi`}
+                            </div>
+                          )}
+                        </td>
+                        <td className="table-td whitespace-nowrap">
+                          {o.manager_name ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[10px] font-bold text-white">
+                                {initialsOf(o.manager_name)}
+                              </div>
+                              <span className="text-xs text-ink-700">{o.manager_name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-ink-400">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-100 px-4 py-3 text-sm text-ink-600">
+              <span>Jami {filtered.length} ta buyurtma</span>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <button
+                    className="btn-ghost px-2 py-1 disabled:opacity-40"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    ‹
+                  </button>
+                  <span className="px-2 text-xs font-semibold text-ink-700">
+                    {page} / {totalPages}
+                  </span>
+                  <button
+                    className="btn-ghost px-2 py-1 disabled:opacity-40"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    ›
+                  </button>
+                </div>
+                <select className="input w-auto py-1.5 text-xs" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                  {PAGE_SIZES.map((s) => (
+                    <option key={s} value={s}>
+                      {s} / sahifa
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </AsyncState>
+        </div>
+
+        {selected && (
+          <OrdersSidePanel
+            order={selected}
+            customer={selected.customer || null}
+            brand={selected.brand || null}
+            products={selectedProducts}
+            payments={selectedPayments}
+            files={selectedFiles}
+            holidays={holidays}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            busy={busyId === selected.id}
+            onClose={() => setSelectedId(null)}
+            onStatusChange={(status) => changeStatus(selected, status)}
+            onDuplicate={() => void duplicateOrder(selected)}
+            onDelete={() => void removeOrder(selected.id)}
+            onPaymentSaved={() => void loadAux()}
+          />
+        )}
       </div>
 
       <RequireCustomerModal

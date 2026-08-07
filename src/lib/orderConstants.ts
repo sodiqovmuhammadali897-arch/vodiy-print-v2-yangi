@@ -180,6 +180,28 @@ export const orderStatusLabel = (s: OrderStatus): string =>
 export const orderStatusClass = (s: OrderStatus): string =>
   ORDER_STATUSES.find((x) => x.key === s)?.cls ?? "bg-ink-100 text-ink-700";
 
+// A simplified 4-milestone view over the 14 real statuses, for the
+// "Buyurtma jarayoni" stepper — staff still change the precise status via
+// the full ORDER_STATUSES select, this is just the at-a-glance summary.
+// "cancelled" deliberately has no group; callers should show it separately.
+export const ORDER_STAGE_GROUPS: { key: string; label: string; statuses: OrderStatus[] }[] = [
+  {
+    key: "new",
+    label: "Yangi",
+    statuses: ["new", "accepted", "calculating", "awaiting_advance", "design", "approving"],
+  },
+  {
+    key: "production",
+    label: "Ishlab chiqarilmoqda",
+    statuses: ["sent_to_production", "production", "quality_control"],
+  },
+  { key: "ready", label: "Tayyor", statuses: ["ready", "ready_to_deliver"] },
+  { key: "delivered", label: "Yetkazildi", statuses: ["delivered", "closed"] },
+];
+
+export const orderStageIndex = (s: OrderStatus): number =>
+  ORDER_STAGE_GROUPS.findIndex((g) => g.statuses.includes(s));
+
 export const CUSTOMER_TYPES = [
   { key: "new", label: "Yangi mijoz", cls: "bg-sky-100 text-sky-700" },
   { key: "regular", label: "Doimiy mijoz", cls: "bg-emerald-100 text-emerald-700" },
