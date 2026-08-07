@@ -3,7 +3,7 @@ import Modal from "../../components/ui/Modal";
 import { insertOne, listAll, updateOne } from "../../lib/firestoreDb";
 import { nextCustomerNumber } from "../../lib/numbering";
 import { CUSTOMER_SOURCES, CUSTOMER_TYPES, INDUSTRIES, UZBEKISTAN_REGIONS } from "../../lib/orderConstants";
-import type { Customer } from "../../lib/types";
+import type { Customer, Manager } from "../../lib/types";
 
 type Props = {
   open: boolean;
@@ -26,6 +26,7 @@ const emptyForm = {
   region: "",
   address: "",
   note: "",
+  manager_name: "",
 };
 
 export default function CustomerFormModal({
@@ -38,6 +39,7 @@ export default function CustomerFormModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existing, setExisting] = useState<Customer[]>([]);
+  const [managerNames, setManagerNames] = useState<string[]>([]);
 
   useEffect(() => {
     if (customer) {
@@ -55,6 +57,7 @@ export default function CustomerFormModal({
         region: customer.region || "",
         address: customer.address,
         note: customer.note,
+        manager_name: customer.manager_name || "",
       });
     } else {
       setForm(emptyForm);
@@ -65,6 +68,9 @@ export default function CustomerFormModal({
   useEffect(() => {
     if (!open) return;
     void listAll<Customer>("customers").then(setExisting);
+    void listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }).then((m) =>
+      setManagerNames(m.map((x) => x.name)),
+    );
   }, [open]);
 
   const submit = async () => {
@@ -200,6 +206,21 @@ export default function CustomerFormModal({
             {CUSTOMER_TYPES.map((t) => (
               <option key={t.key} value={t.key}>
                 {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">Menejer</label>
+          <select
+            className="input"
+            value={form.manager_name}
+            onChange={(e) => setForm((f) => ({ ...f, manager_name: e.target.value }))}
+          >
+            <option value="">-- tanlang --</option>
+            {managerNames.map((m) => (
+              <option key={m} value={m}>
+                {m}
               </option>
             ))}
           </select>

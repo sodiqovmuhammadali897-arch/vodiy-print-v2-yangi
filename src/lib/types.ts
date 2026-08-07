@@ -16,6 +16,19 @@ export type Customer = {
   region: string;
   address: string;
   note: string;
+  manager_name: string;
+  created_at: string;
+};
+
+// Chat-style comment thread on a customer — each entry is its own record
+// (unlike Customer.note, a single free-text field) so who-said-what stays
+// visible over time.
+export type CustomerNote = {
+  id: string;
+  customer_id: string;
+  author_email: string;
+  author_name: string;
+  text: string;
   created_at: string;
 };
 

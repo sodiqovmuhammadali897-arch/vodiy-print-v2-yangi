@@ -108,6 +108,15 @@ service cloud.firestore {
       allow delete: if can('customers', 'delete');
     }
 
+    // Chat-style comment thread on a customer (Mijozlar side panel "Izohlar"
+    // tab) — append-only from the client; editing/deleting someone else's
+    // note is an admin-only correction, not a normal user action.
+    match /customer_notes/{id} {
+      allow read: if can('customers', 'view');
+      allow create: if can('customers', 'edit');
+      allow update, delete: if isAdmin();
+    }
+
     // Brands are managed from within a customer's profile, so they share
     // the customers permission rather than having their own module.
     match /brands/{id} {
