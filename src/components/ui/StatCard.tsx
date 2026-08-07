@@ -1,14 +1,15 @@
 import { ReactNode } from "react";
+import Sparkline from "./Sparkline";
 
 export type StatCardTone = "brand" | "emerald" | "amber" | "rose" | "sky" | "violet";
 
-const toneMap: Record<StatCardTone, { bg: string; iconBg: string; text: string }> = {
-  brand: { bg: "bg-brand-50", iconBg: "bg-brand-100 text-brand-700", text: "text-brand-700" },
-  emerald: { bg: "bg-emerald-50", iconBg: "bg-emerald-100 text-emerald-700", text: "text-emerald-700" },
-  amber: { bg: "bg-amber-50", iconBg: "bg-amber-100 text-amber-700", text: "text-amber-700" },
-  rose: { bg: "bg-rose-50", iconBg: "bg-rose-100 text-rose-700", text: "text-rose-700" },
-  sky: { bg: "bg-sky-50", iconBg: "bg-sky-100 text-sky-700", text: "text-sky-700" },
-  violet: { bg: "bg-slate-50", iconBg: "bg-slate-100 text-slate-700", text: "text-slate-700" },
+const toneMap: Record<StatCardTone, { bg: string; iconBg: string; text: string; line: string }> = {
+  brand: { bg: "bg-brand-50", iconBg: "bg-brand-100 text-brand-700", text: "text-brand-700", line: "#4f46e5" },
+  emerald: { bg: "bg-emerald-50", iconBg: "bg-emerald-100 text-emerald-700", text: "text-emerald-700", line: "#10b981" },
+  amber: { bg: "bg-amber-50", iconBg: "bg-amber-100 text-amber-700", text: "text-amber-700", line: "#f59e0b" },
+  rose: { bg: "bg-rose-50", iconBg: "bg-rose-100 text-rose-700", text: "text-rose-700", line: "#f43f5e" },
+  sky: { bg: "bg-sky-50", iconBg: "bg-sky-100 text-sky-700", text: "text-sky-700", line: "#0ea5e9" },
+  violet: { bg: "bg-slate-50", iconBg: "bg-slate-100 text-slate-700", text: "text-slate-700", line: "#64748b" },
 };
 
 type Props = {
@@ -19,6 +20,7 @@ type Props = {
   tone?: StatCardTone;
   progress?: number;
   progressLabel?: string;
+  sparkline?: number[];
 };
 
 export default function StatCard({
@@ -29,6 +31,7 @@ export default function StatCard({
   tone = "brand",
   progress,
   progressLabel,
+  sparkline,
 }: Props) {
   const t = toneMap[tone];
   return (
@@ -45,10 +48,15 @@ export default function StatCard({
             <div className="mt-1 text-xs text-ink-500">{hint}</div>
           )}
         </div>
-        <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${t.iconBg}`}>
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.iconBg}`}>
           {icon}
         </div>
       </div>
+      {sparkline && sparkline.length >= 2 && (
+        <div className="mt-3">
+          <Sparkline data={sparkline} color={t.line} />
+        </div>
+      )}
       {typeof progress === "number" && (
         <div className="mt-4">
           <div className="progress-track">

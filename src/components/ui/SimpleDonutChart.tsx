@@ -5,14 +5,20 @@ export type DonutSlice = { label: string; value: number; color: string };
 type Props = {
   data: DonutSlice[];
   size?: number;
+  // Money donuts (the default) format the center/legend as currency;
+  // count donuts (e.g. "156 ta") show the raw number with a unit suffix.
+  valueFormat?: "money" | "count";
+  unit?: string;
 };
 
-export default function SimpleDonutChart({ data, size = 160 }: Props) {
+export default function SimpleDonutChart({ data, size = 160, valueFormat = "money", unit = "ta" }: Props) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const radius = size / 2;
   const stroke = size * 0.22;
   const r = radius - stroke / 2;
   const circumference = 2 * Math.PI * r;
+
+  const fmt = (v: number) => (valueFormat === "money" ? formatMoney(v).replace(" so'm", "") : `${v} ${unit}`);
 
   if (total <= 0) {
     return (
@@ -54,13 +60,23 @@ export default function SimpleDonutChart({ data, size = 160 }: Props) {
         </g>
         <text
           x={radius}
-          y={radius}
+          y={radius - size * 0.06}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          className="fill-ink-400"
+          style={{ fontSize: size * 0.07, fontWeight: 600 }}
+        >
+          Jami
+        </text>
+        <text
+          x={radius}
+          y={radius + size * 0.06}
           textAnchor="middle"
           dominantBaseline="middle"
           className="fill-ink-800"
           style={{ fontSize: size * 0.11, fontWeight: 700 }}
         >
-          {formatMoney(total).replace(" so'm", "")}
+          {fmt(total)}
         </text>
       </svg>
       <div className="space-y-1.5">
@@ -72,7 +88,7 @@ export default function SimpleDonutChart({ data, size = 160 }: Props) {
             />
             <span className="text-ink-600">{d.label}</span>
             <span className="font-semibold text-ink-800">
-              {total > 0 ? ((d.value / total) * 100).toFixed(0) : 0}%
+              {fmt(d.value)} ({total > 0 ? ((d.value / total) * 100).toFixed(0) : 0}%)
             </span>
           </div>
         ))}
