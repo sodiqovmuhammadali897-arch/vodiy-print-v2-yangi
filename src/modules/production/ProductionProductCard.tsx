@@ -67,6 +67,21 @@ export default function ProductionProductCard(props: Props) {
   const canFinish =
     mode === "pechatnik" && props.canAct && productionStatus === "production";
 
+  // "Tayyor" is hidden by default on both Ishlab chiqarish and Pechatnik,
+  // so a mistaken click here makes the card vanish immediately with no way
+  // to notice/undo — confirm first, same as other one-way actions in the app.
+  const confirmedStatusChange = (status: OrderStatus) => {
+    if (status === "ready" && !confirm("Bu mahsulotni \"Tayyor\" deb belgilaysizmi? Tasdiqlagach ro'yxatdan yashiriladi.")) {
+      return;
+    }
+    props.onStatusChange(status);
+  };
+  const confirmedReady = () => {
+    if (mode !== "pechatnik") return;
+    if (!confirm("Bu mahsulotni \"Tayyor\" deb belgilaysizmi? Tasdiqlagach ro'yxatdan yashiriladi.")) return;
+    props.onReady();
+  };
+
   return (
     <div className="card space-y-3 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -196,7 +211,7 @@ export default function ProductionProductCard(props: Props) {
           <select
             className="input w-auto py-1.5 text-sm"
             value={productionStatus}
-            onChange={(e) => props.onStatusChange(e.target.value as OrderStatus)}
+            onChange={(e) => confirmedStatusChange(e.target.value as OrderStatus)}
           >
             {PRODUCTION_LINE_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -214,7 +229,7 @@ export default function ProductionProductCard(props: Props) {
             className="input w-auto py-1.5 text-sm"
             value={productionStatus}
             disabled={props.busy}
-            onChange={(e) => props.onStatusChange(e.target.value as OrderStatus)}
+            onChange={(e) => confirmedStatusChange(e.target.value as OrderStatus)}
           >
             {PRODUCTION_LINE_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -235,7 +250,7 @@ export default function ProductionProductCard(props: Props) {
           {canFinish && (
             <button
               className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
-              onClick={props.onReady}
+              onClick={confirmedReady}
               disabled={props.busy}
             >
               <PackageCheck className="h-4 w-4" /> Tayyor bo'ldi
