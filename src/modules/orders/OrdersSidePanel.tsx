@@ -176,7 +176,7 @@ export default function OrdersSidePanel({
               <MoreVertical className="h-4 w-4" />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-9 z-10 w-44 rounded-xl border border-ink-100 bg-white py-1 shadow-pop">
+              <div className="absolute right-0 top-9 z-10 w-44 rounded-xl border border-ink-100 bg-surface py-1 shadow-pop">
                 <Link
                   to={`/orders/${order.id}`}
                   className="block px-3 py-2 text-sm text-ink-700 hover:bg-ink-50"

@@ -71,7 +71,7 @@ export default function PriceCalculator({ products }: Props) {
         <div className="mt-5">
           <div
             ref={cardRef}
-            className="mx-auto max-w-sm rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm"
+            className="mx-auto max-w-sm rounded-2xl border border-emerald-200 bg-surface p-6 shadow-sm"
           >
             <div className="text-center text-xs font-semibold uppercase tracking-wide text-ink-500">
               Narx taklifi

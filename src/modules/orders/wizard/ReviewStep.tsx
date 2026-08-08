@@ -221,7 +221,7 @@ export default function ReviewStep({
                 className="flex items-center justify-between rounded-lg bg-ink-50 px-3 py-2"
               >
                 <span className="truncate text-ink-700">
-                  <span className="mr-2 rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase text-ink-500">
+                  <span className="mr-2 rounded bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase text-ink-500">
                     {f.link_type}
                   </span>
                   {f.filename || f.url}

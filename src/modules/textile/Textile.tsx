@@ -113,7 +113,7 @@ export default function Textile() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-xl border border-ink-200 bg-white p-1 shadow-sm">
+          <div className="flex rounded-xl border border-ink-200 bg-surface p-1 shadow-sm">
             <button
               className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
                 tab === "catalog" ? "bg-brand-600 text-white" : "text-ink-600"
@@ -140,7 +140,7 @@ export default function Textile() {
             </button>
           </div>
           {tab === "catalog" && (
-            <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
+            <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-surface px-3 py-2 shadow-sm">
               <Search className="h-4 w-4 text-ink-400" />
               <input
                 value={search}

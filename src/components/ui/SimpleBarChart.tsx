@@ -37,7 +37,7 @@ export default function SimpleBarChart({ data, height = 180, color = "#4f46e5" }
               className="group relative flex flex-1 flex-col items-center justify-end"
               style={{ minWidth: 10 }}
             >
-              <div className="pointer-events-none absolute -top-8 z-10 hidden rounded-md bg-ink-900 px-2 py-1 text-[10px] text-white group-hover:block">
+              <div className="pointer-events-none absolute -top-8 z-10 hidden rounded-md bg-slate-900 px-2 py-1 text-[10px] text-white group-hover:block">
                 {d.label}: {formatMoneyShort(d.value)}
               </div>
               <div

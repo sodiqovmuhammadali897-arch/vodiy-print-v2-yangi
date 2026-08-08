@@ -165,7 +165,7 @@ function Preview({ label, url }: { label: string; url: string }) {
       <img
         src={url}
         alt=""
-        className="h-16 w-16 rounded-lg border border-ink-200 bg-white object-contain"
+        className="h-16 w-16 rounded-lg border border-ink-200 bg-surface object-contain"
       />
       <div className="text-[11px] font-semibold text-ink-500">{label}</div>
     </div>

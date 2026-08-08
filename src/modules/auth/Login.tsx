@@ -52,7 +52,7 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-ink-50 px-4 py-8">
-      <div className="w-full max-w-md rounded-2xl border border-ink-200 bg-white p-8 shadow-lg">
+      <div className="w-full max-w-md rounded-2xl border border-ink-200 bg-surface p-8 shadow-lg">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-white">
             <LogIn className="h-5 w-5" />
@@ -83,7 +83,7 @@ export default function Login() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              className="w-full rounded-lg border border-ink-200 bg-surface px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               placeholder="you@example.com"
               disabled={submitting}
             />
@@ -99,7 +99,7 @@ export default function Login() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              className="w-full rounded-lg border border-ink-200 bg-surface px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               placeholder="********"
               disabled={submitting}
             />

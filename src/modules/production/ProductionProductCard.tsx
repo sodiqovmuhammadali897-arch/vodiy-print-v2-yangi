@@ -130,13 +130,13 @@ export default function ProductionProductCard(props: Props) {
           <span className="font-medium">{product.product_name || "-"}</span>
           <span className="text-ink-500">× {product.quantity}</span>
           {isTextile && sizeBreakdown.length > 0 ? (
-            <span className="chip bg-white text-ink-600">
+            <span className="chip bg-surface text-ink-600">
               {colorCount} rang · {sizeCount} razmer
             </span>
           ) : (
             <>
-              {product.size && <span className="chip bg-white text-ink-600">{product.size}</span>}
-              {product.color && <span className="chip bg-white text-ink-600">{product.color}</span>}
+              {product.size && <span className="chip bg-surface text-ink-600">{product.size}</span>}
+              {product.color && <span className="chip bg-surface text-ink-600">{product.color}</span>}
             </>
           )}
         </div>

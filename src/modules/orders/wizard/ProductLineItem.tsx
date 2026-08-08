@@ -51,7 +51,7 @@ export default function ProductLineItem({
   const sizeCount = new Set(product.size_breakdown.map((e) => e.size)).size;
 
   return (
-    <div className="rounded-2xl border border-ink-100 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-ink-100 bg-surface p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-ink-500">
           <GripVertical className="h-4 w-4" />

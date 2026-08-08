@@ -26,7 +26,7 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
     return (
       <div
         ref={ref}
-        className="mx-auto bg-white text-ink-900"
+        className="force-light mx-auto bg-white text-ink-900"
         style={{ width: 794, minHeight: 1123, padding: 48 }}
       >
         <header className="flex items-start justify-between">

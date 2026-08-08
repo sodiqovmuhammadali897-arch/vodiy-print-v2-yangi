@@ -24,7 +24,7 @@ export default function DateRangeFilter({ value, onChange }: Props) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex flex-wrap gap-1 rounded-xl border border-ink-200 bg-white p-1 shadow-sm">
+      <div className="flex flex-wrap gap-1 rounded-xl border border-ink-200 bg-surface p-1 shadow-sm">
         {PRESETS.map((p) => (
           <button
             key={p.key}

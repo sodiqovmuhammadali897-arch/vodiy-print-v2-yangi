@@ -44,7 +44,7 @@ export default function Modal({
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${sizeMap[size]} animate-fade-in overflow-hidden rounded-2xl bg-white shadow-pop`}
+        className={`relative w-full ${sizeMap[size]} animate-fade-in overflow-hidden rounded-2xl bg-surface shadow-pop`}
       >
         <div className="flex items-start justify-between border-b border-ink-100 px-6 py-4">
           <div>

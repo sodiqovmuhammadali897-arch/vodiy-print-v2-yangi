@@ -47,7 +47,7 @@ export default function CustomerStep({
           </button>
         </div>
 
-        <div className="mb-3 flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2">
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-ink-200 bg-surface px-3 py-2">
           <Search className="h-4 w-4 text-ink-400" />
           <input
             value={search}

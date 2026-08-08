@@ -29,7 +29,7 @@ export default function CheckOutButton({ schedule, onDone }: Props) {
   return (
     <div>
       <button
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink-800 px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-ink-900 disabled:opacity-60"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-900 disabled:opacity-60"
         onClick={run}
         disabled={busy}
       >

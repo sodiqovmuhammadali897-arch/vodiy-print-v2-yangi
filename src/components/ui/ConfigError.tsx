@@ -4,7 +4,7 @@ import { missingFirebaseKeys } from "../../lib/firebase";
 export default function ConfigError() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-ink-50 px-4 py-8">
-      <div className="w-full max-w-xl rounded-2xl border border-amber-200 bg-white p-6 shadow-lg">
+      <div className="w-full max-w-xl rounded-2xl border border-amber-200 bg-surface p-6 shadow-lg">
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
             <AlertTriangle className="h-5 w-5" />

@@ -410,7 +410,7 @@ export default function Orders() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-1 items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
+        <div className="flex flex-1 items-center gap-2 rounded-xl border border-ink-200 bg-surface px-3 py-2 shadow-sm">
           <Search className="h-4 w-4 text-ink-400" />
           <input
             value={search}
@@ -450,7 +450,7 @@ export default function Orders() {
           </select>
         )}
         {statusFilter === "all" && closedCount > 0 && (
-          <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
+          <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-surface px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
             <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
             Yopilganlarni ko'rsatish ({closedCount})
           </label>

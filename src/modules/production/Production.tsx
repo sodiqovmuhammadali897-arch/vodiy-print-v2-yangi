@@ -173,7 +173,7 @@ export default function Production() {
             ))}
           </select>
           {unassignedCount > 0 && (
-            <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
+            <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-surface px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
               <input
                 type="checkbox"
                 checked={onlyUnassigned}
@@ -183,7 +183,7 @@ export default function Production() {
             </label>
           )}
           {readyCount > 0 && (
-            <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
+            <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-surface px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
               <input
                 type="checkbox"
                 checked={showReady}
@@ -192,7 +192,7 @@ export default function Production() {
               Tayyorlarni ko'rsatish ({readyCount})
             </label>
           )}
-          <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-surface px-3 py-2 shadow-sm">
             <Search className="h-4 w-4 text-ink-400" />
             <input
               value={search}

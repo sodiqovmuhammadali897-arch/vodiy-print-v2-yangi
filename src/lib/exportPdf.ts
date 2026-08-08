@@ -2,11 +2,25 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
 export const exportNodeToPdf = async (node: HTMLElement, fileBase: string): Promise<void> => {
-  const canvas = await html2canvas(node, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: "#ffffff",
-  });
+  // Exported PDFs are always meant to read as a plain document, regardless
+  // of the app's current theme — capturing a dark-mode page onto the
+  // forced-white canvas background below would otherwise render light text
+  // as invisible. Dropping .dark for the capture reverts every CSS
+  // variable-backed color back to its light value.
+  const root = document.documentElement;
+  const wasDark = root.classList.contains("dark");
+  if (wasDark) root.classList.remove("dark");
+
+  let canvas: HTMLCanvasElement;
+  try {
+    canvas = await html2canvas(node, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+    });
+  } finally {
+    if (wasDark) root.classList.add("dark");
+  }
   const img = canvas.toDataURL("image/png");
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = pdf.internal.pageSize.getWidth();

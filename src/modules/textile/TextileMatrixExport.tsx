@@ -103,7 +103,7 @@ export default function TextileMatrixExport({
         </>
       }
     >
-      <div ref={docRef} className="space-y-4 bg-white p-2">
+      <div ref={docRef} className="force-light space-y-4 bg-white p-2">
         <div className="-mx-2 -mt-2 h-1.5 rounded-t bg-gradient-to-r from-emerald-600 to-emerald-400" />
         <div className="flex items-start justify-between gap-4 border-b border-emerald-100 pb-3">
           <div className="flex items-center gap-3">

@@ -5,6 +5,7 @@ import App from "./App";
 import ConfigError from "./components/ui/ConfigError";
 import { isFirebaseConfigured } from "./lib/firebase";
 import { AuthProvider } from "./lib/AuthContext";
+import { ThemeProvider } from "./lib/ThemeContext";
 import "./index.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
@@ -12,17 +13,21 @@ const root = ReactDOM.createRoot(document.getElementById("root")!);
 if (!isFirebaseConfigured) {
   root.render(
     <React.StrictMode>
-      <ConfigError />
+      <ThemeProvider>
+        <ConfigError />
+      </ThemeProvider>
     </React.StrictMode>,
   );
 } else {
   root.render(
     <React.StrictMode>
-      <AuthProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
     </React.StrictMode>,
   );
 }
