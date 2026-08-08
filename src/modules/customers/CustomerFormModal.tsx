@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/ui/Modal";
-import { insertOne, listAll, updateOne } from "../../lib/firestoreDb";
+import { insertOne, listAll, listWhere, updateOne } from "../../lib/firestoreDb";
 import { nextCustomerNumber } from "../../lib/numbering";
 import { CUSTOMER_SOURCES, CUSTOMER_TYPES, INDUSTRIES, UZBEKISTAN_REGIONS } from "../../lib/orderConstants";
-import type { Customer, Manager } from "../../lib/types";
+import { ensureBrandForCustomer } from "../../lib/brandSync";
+import type { Brand, Customer, Manager } from "../../lib/types";
 
 type Props = {
   open: boolean;
@@ -92,18 +93,27 @@ export default function CustomerFormModal({
     setSaving(true);
     setError(null);
     try {
+      let savedCustomer: Customer;
       if (customer) {
         await updateOne("customers", customer.id, form);
-        onSaved({ ...customer, ...form });
+        savedCustomer = { ...customer, ...form };
       } else {
         const customer_number = await nextCustomerNumber();
-        const saved = await insertOne("customers", {
+        savedCustomer = (await insertOne("customers", {
           ...form,
           customer_number,
-        });
-        onSaved(saved as Customer);
+        })) as Customer;
       }
+      onSaved(savedCustomer);
       setSaving(false);
+      // Best-effort: keep the customer's implied Brand in sync with the
+      // "Brend" field they just typed. Never blocks the save itself.
+      try {
+        const brands = await listWhere<Brand>("brands", "customer_id", savedCustomer.id);
+        await ensureBrandForCustomer(savedCustomer, brands);
+      } catch {
+        /* non-critical, ignore */
+      }
     } catch (e) {
       setSaving(false);
       setError(e instanceof Error ? e.message : "Xatolik");
@@ -176,7 +186,7 @@ export default function CustomerFormModal({
           />
         </div>
         <div>
-          <label className="label">Kompaniya</label>
+          <label className="label">Brend</label>
           <input
             className="input"
             value={form.company}

@@ -12,13 +12,14 @@ import {
   Landmark,
 } from "lucide-react";
 import { listAll } from "../../lib/firestoreDb";
-import type { Customer, Manager, Order, OrderFile, OrderPayment } from "../../lib/types";
+import type { Brand, Customer, Manager, Order, OrderFile, OrderPayment } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import StatCard from "../../components/ui/StatCard";
 import CustomerFormModal from "./CustomerFormModal";
 import CustomerSidePanel from "./CustomerSidePanel";
 import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
 import { formatMoneyShort, initialsOf } from "../../lib/format";
+import { ensureBrandForCustomer } from "../../lib/brandSync";
 import { useAuth } from "../../lib/AuthContext";
 
 type Row = Customer & { lastOrderAt: string | null; lifetimeValue: number; orderCount: number; debt: number };
@@ -44,7 +45,7 @@ export default function Customers() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const load = async () => {
+  const load = async (backfillBrands: boolean) => {
     setLoading(true);
     const [customersData, ordersData, paymentsData, filesData, managersData] = await Promise.all([
       listAll<Customer>("customers", { orderBy: ["created_at", "desc"] }),
@@ -59,10 +60,35 @@ export default function Customers() {
     setFiles(filesData);
     setManagerNames(managersData.map((m) => m.name));
     setLoading(false);
+
+    // One-time (per session) best-effort backfill: customers saved before
+    // "Brend" replaced "Kompaniya" have a company name but no matching
+    // Brand record yet, which is why Hisobot's brand revenue report used
+    // to come back empty. Safe to repeat — ensureBrandForCustomer no-ops
+    // once a brand already matches.
+    if (backfillBrands && canEdit) {
+      void (async () => {
+        try {
+          const brands = await listAll<Brand>("brands");
+          const brandsByCustomer = new Map<string, Brand[]>();
+          for (const b of brands) {
+            const arr = brandsByCustomer.get(b.customer_id) || [];
+            arr.push(b);
+            brandsByCustomer.set(b.customer_id, arr);
+          }
+          for (const c of customersData) {
+            if (!c.company?.trim()) continue;
+            await ensureBrandForCustomer(c, brandsByCustomer.get(c.id) || []);
+          }
+        } catch {
+          /* non-critical, ignore */
+        }
+      })();
+    }
   };
 
   useEffect(() => {
-    void load();
+    void load(true);
   }, []);
 
   const ordersByCustomer = useMemo(() => {
@@ -151,7 +177,8 @@ export default function Customers() {
   const onSaved = () => {
     setModalOpen(false);
     setEditing(null);
-    void load();
+    // CustomerFormModal already synced this one customer's brand itself.
+    void load(false);
   };
 
   return (

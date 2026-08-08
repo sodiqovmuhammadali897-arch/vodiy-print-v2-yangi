@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -35,6 +35,7 @@ import StatusBadge, { ORDER_STATUS_OPTIONS, orderStatusLabel } from "../../compo
 import { ORDER_CLOSED_STATUSES, ORDER_STAGE_GROUPS } from "../../lib/orderConstants";
 import { changeOrderStatus } from "../../lib/orderStatus";
 import { maybePromoteCustomer, type WizardProduct } from "../../lib/orderService";
+import { backfillOrderBrand } from "../../lib/brandSync";
 import { nextOrderNumber } from "../../lib/numbering";
 import RequireCustomerModal from "./RequireCustomerModal";
 import OrdersSidePanel from "./OrdersSidePanel";
@@ -100,6 +101,8 @@ export default function Orders() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [brandsLoaded, setBrandsLoaded] = useState(false);
+  const brandBackfillRan = useRef(false);
 
   const loadAux = async () => {
     const [paymentsData, filesData] = await Promise.all([
@@ -122,6 +125,7 @@ export default function Orders() {
       setBrands(brandsData);
       setCustomers(customersData);
       setHolidays(holidaysData);
+      setBrandsLoaded(true);
       void loadAux();
     })();
 
@@ -143,6 +147,30 @@ export default function Orders() {
       unsubProducts();
     };
   }, []);
+
+  // One-time (per session) best-effort backfill: orders placed before a
+  // customer had a "Brend" no-op silently with no brand_id — link them now
+  // that the customer's implied brand exists, so Hisobot's "Brendlar
+  // bo'yicha daromad" covers historical orders too, not just new ones.
+  useEffect(() => {
+    if (!canEdit || !brandsLoaded || orders.length === 0 || brandBackfillRan.current) return;
+    brandBackfillRan.current = true;
+    const brandsByCustomer = new Map<string, Brand[]>();
+    for (const b of brands) {
+      const arr = brandsByCustomer.get(b.customer_id) || [];
+      arr.push(b);
+      brandsByCustomer.set(b.customer_id, arr);
+    }
+    void (async () => {
+      try {
+        for (const o of orders) {
+          await backfillOrderBrand(o, brandsByCustomer);
+        }
+      } catch {
+        /* non-critical, ignore */
+      }
+    })();
+  }, [canEdit, brandsLoaded, orders, brands]);
 
   const productsByOrder = useMemo(() => {
     const map = new Map<string, OrderProduct[]>();

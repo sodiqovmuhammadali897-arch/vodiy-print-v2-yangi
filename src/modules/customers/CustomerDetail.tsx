@@ -169,7 +169,7 @@ export default function CustomerDetail() {
         </div>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {customer.company && (
-            <InfoRow icon={<Building2 className="h-4 w-4" />} label="Kompaniya" value={customer.company} />
+            <InfoRow icon={<Building2 className="h-4 w-4" />} label="Brend" value={customer.company} />
           )}
           {customer.industry && (
             <InfoRow icon={<Briefcase className="h-4 w-4" />} label="Soha" value={customer.industry} />

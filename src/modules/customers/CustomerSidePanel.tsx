@@ -189,7 +189,7 @@ export default function CustomerSidePanel({
                 </InfoLine>
               )}
               {customer.company && (
-                <InfoLine icon={<Building2 className="h-3.5 w-3.5" />} label="Kompaniya">
+                <InfoLine icon={<Building2 className="h-3.5 w-3.5" />} label="Brend">
                   {customer.company}
                 </InfoLine>
               )}
