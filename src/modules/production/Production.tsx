@@ -28,6 +28,7 @@ export default function Production() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [onlyUnassigned, setOnlyUnassigned] = useState(false);
+  const [showReady, setShowReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,9 +89,15 @@ export default function Production() {
       .filter((r) => !ORDER_CLOSED_STATUSES.includes(r.order.status));
   }, [products, ordersMap]);
 
+  const readyCount = useMemo(
+    () => rows.filter((r) => r.product.production_status === "ready").length,
+    [rows],
+  );
+
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows
+      .filter((r) => showReady || r.product.production_status !== "ready")
       .filter((r) => categoryFilter === "all" || r.product.category === categoryFilter)
       .filter((r) => !onlyUnassigned || !r.product.assigned_printer_email)
       .filter((r) => {
@@ -115,7 +122,7 @@ export default function Production() {
         const db_ = b.order.deadline ? new Date(b.order.deadline).getTime() : Infinity;
         return da - db_;
       });
-  }, [rows, categoryFilter, onlyUnassigned, search, customersMap, brandsMap]);
+  }, [rows, showReady, categoryFilter, onlyUnassigned, search, customersMap, brandsMap]);
 
   const unassignedCount = useMemo(
     () => rows.filter((r) => !r.product.assigned_printer_email).length,
@@ -173,6 +180,16 @@ export default function Production() {
                 onChange={(e) => setOnlyUnassigned(e.target.checked)}
               />
               Faqat biriktirilmagan ({unassignedCount})
+            </label>
+          )}
+          {readyCount > 0 && (
+            <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
+              <input
+                type="checkbox"
+                checked={showReady}
+                onChange={(e) => setShowReady(e.target.checked)}
+              />
+              Tayyorlarni ko'rsatish ({readyCount})
             </label>
           )}
           <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
