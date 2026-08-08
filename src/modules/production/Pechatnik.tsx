@@ -69,8 +69,11 @@ export default function Pechatnik() {
 
   const myEmail = (user?.email || "").toLowerCase();
   const rows = useMemo<Row[]>(() => {
+    // Ishlab chiqarish can assign a pechatnik on any category now (not
+    // just Textil), so this panel has to show whatever landed on them
+    // regardless of category — filtering to Textil here would silently
+    // hide work a non-Textil item's assigned printer needs to see.
     return products
-      .filter((p) => p.category === "Textil")
       .filter((p) => isAdmin || (p.assigned_printer_email || "").toLowerCase() === myEmail)
       .map((product) => {
         const order = ordersMap.get(product.order_id);
@@ -151,7 +154,7 @@ export default function Pechatnik() {
             <Shirt className="h-6 w-6 text-brand-600" /> Pechatnik
           </h1>
           <p className="text-sm text-ink-500">
-            {isAdmin ? "Barcha Textil mahsulotlar" : "Sizga biriktirilgan Textil mahsulotlar"}
+            {isAdmin ? "Barcha biriktirilgan mahsulotlar" : "Sizga biriktirilgan mahsulotlar"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -182,10 +185,10 @@ export default function Pechatnik() {
       <AsyncState
         loading={loading}
         empty={visibleRows.length === 0}
-        emptyLabel="Textil mahsulotlar topilmadi"
+        emptyLabel="Mahsulotlar topilmadi"
         emptyDescription={
           isAdmin
-            ? "Ishlab chiqarish panelida Textil mahsulotga pechatnik biriktirilsa, u shu yerda ko'rinadi"
+            ? "Ishlab chiqarish panelida mahsulotga pechatnik biriktirilsa, u shu yerda ko'rinadi"
             : "Sizga hozircha mahsulot biriktirilmagan"
         }
         emptyIcon={<Shirt className="h-5 w-5" />}
