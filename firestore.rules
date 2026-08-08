@@ -103,7 +103,7 @@ service cloud.firestore {
     }
 
     match /customers/{id} {
-      allow read: if can('customers', 'view') || can('production', 'view') || can('pechatnik', 'view');
+      allow read: if can('customers', 'view') || can('production', 'view') || can('pechatnik', 'view') || can('proposals', 'view');
       allow create, update: if can('customers', 'edit');
       allow delete: if can('customers', 'delete');
     }
@@ -120,7 +120,7 @@ service cloud.firestore {
     // Brands are managed from within a customer's profile, so they share
     // the customers permission rather than having their own module.
     match /brands/{id} {
-      allow read: if can('customers', 'view') || can('production', 'view') || can('pechatnik', 'view');
+      allow read: if can('customers', 'view') || can('production', 'view') || can('pechatnik', 'view') || can('proposals', 'view');
       allow create, update: if can('customers', 'edit');
       allow delete: if can('customers', 'delete');
     }
@@ -129,7 +129,7 @@ service cloud.firestore {
     // products, so staff who only have that permission (not Mahsulotlar)
     // can still see it.
     match /products/{id} {
-      allow read: if can('products', 'view') || can('textile', 'view');
+      allow read: if can('products', 'view') || can('textile', 'view') || can('proposals', 'view');
       allow create, update: if can('products', 'edit');
       allow delete: if can('products', 'delete');
     }
