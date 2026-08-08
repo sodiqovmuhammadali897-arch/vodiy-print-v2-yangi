@@ -23,6 +23,7 @@ export default function Pechatnik() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+  const [showReady, setShowReady] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,10 +84,16 @@ export default function Pechatnik() {
       .filter((r) => !ORDER_CLOSED_STATUSES.includes(r.order.status));
   }, [products, ordersMap, isAdmin, myEmail]);
 
+  const readyCount = useMemo(
+    () => rows.filter((r) => r.product.production_status === "ready").length,
+    [rows],
+  );
+
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows
       .filter((r) => statusFilter === "all" || r.product.production_status === statusFilter)
+      .filter((r) => statusFilter !== "all" || showReady || r.product.production_status !== "ready")
       .filter((r) => {
         if (!q) return true;
         const customer = r.order.customer_id ? customersMap.get(r.order.customer_id) : null;
@@ -102,7 +109,7 @@ export default function Pechatnik() {
         const db_ = b.order.deadline ? new Date(b.order.deadline).getTime() : Infinity;
         return da - db_;
       });
-  }, [rows, statusFilter, search, customersMap, brandsMap]);
+  }, [rows, statusFilter, showReady, search, customersMap, brandsMap]);
 
   const accept = async (productId: string) => {
     setBusyId(productId);
@@ -170,6 +177,16 @@ export default function Pechatnik() {
               </option>
             ))}
           </select>
+          {statusFilter === "all" && readyCount > 0 && (
+            <label className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-3 py-2 text-xs font-medium text-ink-600 shadow-sm">
+              <input
+                type="checkbox"
+                checked={showReady}
+                onChange={(e) => setShowReady(e.target.checked)}
+              />
+              Tayyorlarni ko'rsatish ({readyCount})
+            </label>
+          )}
           <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-3 py-2 shadow-sm">
             <Search className="h-4 w-4 text-ink-400" />
             <input
