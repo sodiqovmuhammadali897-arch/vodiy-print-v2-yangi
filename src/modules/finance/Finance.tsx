@@ -114,7 +114,13 @@ export default function Finance() {
     [expenses, range],
   );
 
-  const income = paymentsInRange.reduce((s, p) => s + Number(p.amount || 0), 0);
+  // "Kirim" is order revenue for the period (matches how Dashboard/Reports
+  // define revenue), not just cash already collected — an order counts the
+  // moment it's placed, even if it's still unpaid (see Umumiy qarzdorlik).
+  const income = ordersInRange
+    .filter((o) => o.status !== "cancelled")
+    .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  const collected = paymentsInRange.reduce((s, p) => s + Number(p.amount || 0), 0);
   const expenseTotal = expensesInRange.reduce((s, e) => s + Number(e.amount || 0), 0);
   const profit = income - expenseTotal;
   const discountTotal = ordersInRange.reduce(
@@ -174,7 +180,8 @@ export default function Finance() {
   const exportOverviewCsv = () => {
     exportCsv(`moliya-${range.from}_${range.to}`, ["Ko'rsatkich", "Qiymat"], [
       ["Davr", `${range.from} - ${range.to}`],
-      ["Kirim", income],
+      ["Kirim (buyurtmalar summasi)", income],
+      ["To'langan (naqd kirim)", collected],
       ["Chiqim", expenseTotal],
       ["Sof foyda", profit],
       ["Chegirmalar", discountTotal],
@@ -216,7 +223,7 @@ export default function Finance() {
         <StatCard
           title="Kirim"
           value={formatMoneyShort(income)}
-          hint={formatMoney(income)}
+          hint={`${formatMoney(income)} · Buyurtmalar summasi`}
           tone="emerald"
           icon={<TrendingUp className="h-5 w-5" />}
         />
@@ -244,6 +251,13 @@ export default function Finance() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <StatCard
+          title="To'langan (naqd kirim)"
+          value={formatMoneyShort(collected)}
+          hint={`${formatMoney(collected)} · Qarzdorlik: ${formatMoney(debtTotal)}`}
+          tone="emerald"
+          icon={<Wallet className="h-5 w-5" />}
+        />
         {plan && range.preset === "month" && (
           <StatCard
             title="Reja / Fakt (bu oy)"
@@ -321,7 +335,7 @@ export default function Finance() {
 
       <div className="card p-5">
         <h2 className="mb-4 font-display text-base font-bold text-ink-900">
-          To'lov turlari bo'yicha kirim
+          To'lov turlari bo'yicha to'langan summalar
         </h2>
         <SimpleDonutChart data={paymentTypeDonut} />
       </div>

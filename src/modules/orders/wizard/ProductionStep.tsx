@@ -115,12 +115,23 @@ export default function ProductionStep({
 
       <div className="card p-5">
         <h2 className="mb-3 font-display text-lg font-bold text-ink-900">Yetkazish</h2>
-        <div className="max-w-xs">
-          <label className="label">Turi</label>
-          <select className="input" value={payload.delivery_type} onChange={(e) => onPayloadChange({ delivery_type: e.target.value })}>
-            <option value="">-- tanlang --</option>
-            {DELIVERY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:max-w-md">
+          <div>
+            <label className="label">Turi</label>
+            <select className="input" value={payload.delivery_type} onChange={(e) => onPayloadChange({ delivery_type: e.target.value })}>
+              <option value="">-- tanlang --</option>
+              {DELIVERY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Narxi</label>
+            <input
+              type="number"
+              className="input"
+              value={payload.delivery_cost || ""}
+              onChange={(e) => onPayloadChange({ delivery_cost: Number(e.target.value) || 0 })}
+            />
+          </div>
         </div>
       </div>
 
