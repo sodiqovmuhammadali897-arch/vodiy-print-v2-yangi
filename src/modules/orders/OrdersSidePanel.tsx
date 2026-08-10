@@ -98,6 +98,7 @@ export default function OrdersSidePanel({
     order.total_amount > 0 ? Math.round((Number(order.paid_amount || 0) / order.total_amount) * 100) : 0;
   const stageIndex = orderStageIndex(order.status);
   const totalQty = products.reduce((s, p) => s + Number(p.quantity || 0), 0);
+  const productsSubtotal = products.reduce((s, p) => s + Number(p.total || 0), 0);
 
   const exportPdf = async () => {
     if (!containerRef.current) return;
@@ -290,6 +291,24 @@ export default function OrdersSidePanel({
                 </div>
               </div>
             ))}
+            {products.length > 0 && (
+              <div className="mt-2 space-y-1 border-t border-ink-100 pt-2 text-xs">
+                <div className="flex items-center justify-between text-ink-600">
+                  <span>Mahsulotlar jami</span>
+                  <span className="font-semibold">{formatMoney(productsSubtotal)}</span>
+                </div>
+                {order.discount_amount > 0 && (
+                  <div className="flex items-center justify-between text-rose-600">
+                    <span>Chegirma</span>
+                    <span className="font-semibold">− {formatMoney(order.discount_amount)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-sm font-bold text-ink-900">
+                  <span>Jami summa</span>
+                  <span>{formatMoney(order.total_amount)}</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
