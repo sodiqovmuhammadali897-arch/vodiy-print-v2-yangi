@@ -148,6 +148,14 @@ export default function Production() {
     }
   };
 
+  const setProductionCompany = async (productId: string, company: string) => {
+    try {
+      await updateOne("order_products", productId, { production_company: company });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -226,6 +234,7 @@ export default function Production() {
               printers={printers}
               onAssign={(email, name) => assign(product.id, email, name)}
               onStatusChange={(status) => setStatus(product.id, status)}
+              onProductionCompanyChange={(company) => setProductionCompany(product.id, company)}
             />
           ))}
         </div>

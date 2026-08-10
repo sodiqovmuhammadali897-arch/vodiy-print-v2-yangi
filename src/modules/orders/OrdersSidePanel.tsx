@@ -19,7 +19,7 @@ import {
 import type { Brand, Customer, Holiday, Order, OrderFile, OrderPayment, OrderProduct, OrderStatus } from "../../lib/types";
 import StatusBadge, { ORDER_STATUS_OPTIONS, orderStatusLabel } from "../../components/ui/StatusBadge";
 import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
-import ProductionBadge from "../../components/ui/ProductionBadge";
+import ProductionCompanyBadges from "../../components/ui/ProductionCompanyBadges";
 import { ORDER_STAGE_GROUPS, orderStageIndex } from "../../lib/orderConstants";
 import { formatDate, formatDateTime, formatMoney } from "../../lib/format";
 import { deadlineInfo } from "../../lib/workingDays";
@@ -265,9 +265,7 @@ export default function OrdersSidePanel({
                 <CustomerTypeBadge type={customer.customer_type} />
               </div>
             )}
-            {order.production_company && (
-              <ProductionBadge name={order.production_company} />
-            )}
+            <ProductionCompanyBadges companies={products.map((p) => p.production_company)} />
           </div>
         )}
 

@@ -141,6 +141,7 @@ export type OrderProduct = {
   // distribution. When non-empty, `quantity` is the sum of its entries.
   size_breakdown: SizeBreakdownEntry[];
   production_status: OrderStatus;
+  production_company: string;
   assigned_printer_email: string;
   assigned_printer_name: string;
   production_accepted_at: string | null;

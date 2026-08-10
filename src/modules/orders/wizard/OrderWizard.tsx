@@ -19,7 +19,6 @@ import type { OrderPayload, WizardFileLink, WizardPayment, WizardProduct } from 
 import { computeOrderTotals } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
 import { useAuth } from "../../../lib/AuthContext";
-import type { Staff } from "../../../lib/permissions";
 import CustomerStep from "./CustomerStep";
 import ProductionStep from "./ProductionStep";
 import FilesStep from "./FilesStep";
@@ -93,7 +92,6 @@ export default function OrderWizard() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [managerNames, setManagerNames] = useState<string[]>([]);
   const [textileCompanies, setTextileCompanies] = useState<TextileCompany[]>([]);
-  const [printers, setPrinters] = useState<Staff[]>([]);
   const [historyPrices, setHistoryPrices] = useState<Record<string, number>>({});
 
   const [payload, setPayload] = useState<OrderPayload>(emptyPayload());
@@ -103,21 +101,17 @@ export default function OrderWizard() {
 
   useEffect(() => {
     const load = async () => {
-      const [c, b, m, tx, op, st] = await Promise.all([
+      const [c, b, m, tx, op] = await Promise.all([
         listAll<Customer>("customers", { orderBy: ["first_name", "asc"] }),
         listAll<Brand>("brands", { orderBy: ["name", "asc"] }),
         listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }),
         listAll<TextileCompany>("textile_companies", { orderBy: ["name", "asc"] }),
         listAll<OrderProduct>("order_products"),
-        listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }),
       ]);
       setCustomers(c);
       setBrands(b);
       setManagerNames(m.map((x) => x.name));
       setTextileCompanies(tx);
-      setPrinters(
-        st.filter((s) => s.role === "admin" || s.permissions?.pechatnik?.edit),
-      );
 
       const prices: Record<string, number> = {};
       for (const p of op) {
@@ -204,6 +198,7 @@ export default function OrderWizard() {
                 note: p.note,
                 size_breakdown: Array.isArray(p.size_breakdown) ? p.size_breakdown : [],
                 production_status: p.production_status || "new",
+                production_company: p.production_company || "Vodiy Print",
                 assigned_printer_email: p.assigned_printer_email || "",
                 assigned_printer_name: p.assigned_printer_name || "",
                 production_accepted_at: p.production_accepted_at || null,
@@ -381,7 +376,6 @@ export default function OrderWizard() {
           setPayments={setPayments}
           textileCompanies={textileCompanies}
           managerNames={managerNames}
-          printers={printers}
           historyPrices={historyPrices}
         />
       )}

@@ -303,17 +303,22 @@ export default function Reports() {
       .sort((a, b) => b.revenue - a.revenue);
   }, [ordersInRange, managerPlanMap]);
 
-  // Production company breakdown, as a table (spend, order count, avg
-  // fulfillment days, share) rather than just a donut.
+  // Production company breakdown, as a table (spend, product count, avg
+  // fulfillment days, share) rather than just a donut. Aggregated per
+  // product line (not per order) — a single order's products can go to
+  // different outsource companies.
+  const ordersInRangeMap = useMemo(() => new Map(ordersInRange.map((o) => [o.id, o])), [ordersInRange]);
   const productionRows = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; count: number; days: number[] }>();
-    for (const o of ordersInRange) {
-      const name = o.production_company || "Boshqa";
+    for (const p of productsInRange) {
+      const name = p.production_company || "Boshqa";
       const cur = map.get(name) || { name, revenue: 0, count: 0, days: [] };
-      cur.revenue += Number(o.total_amount || 0);
+      cur.revenue += Number(p.total || 0);
       cur.count += 1;
-      if (o.completed_at && (o.order_date || o.created_at)) {
-        cur.days.push(daysBetween(o.order_date || o.created_at, o.completed_at));
+      const order = ordersInRangeMap.get(p.order_id);
+      const orderStart = order?.order_date || order?.created_at;
+      if (p.production_completed_at && orderStart) {
+        cur.days.push(daysBetween(orderStart, p.production_completed_at));
       }
       map.set(name, cur);
     }
@@ -327,7 +332,7 @@ export default function Reports() {
         share: total > 0 ? (r.revenue / total) * 100 : 0,
       }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [ordersInRange]);
+  }, [productsInRange, ordersInRangeMap]);
 
   // Brand revenue ranking.
   const brandRows = useMemo(() => {
@@ -652,7 +657,7 @@ export default function Reports() {
                 <tr className="border-b border-ink-100 text-xs uppercase text-ink-500">
                   <th className="table-th">Kompaniya</th>
                   <th className="table-th text-right">Jami xarid</th>
-                  <th className="table-th text-right">Buyurtma soni</th>
+                  <th className="table-th text-right">Mahsulot soni</th>
                   <th className="table-th text-right">O'rtacha kun</th>
                   <th className="table-th text-right">Ulush</th>
                 </tr>

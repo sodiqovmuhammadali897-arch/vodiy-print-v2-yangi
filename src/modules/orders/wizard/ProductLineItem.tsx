@@ -5,6 +5,7 @@ import type { SizeBreakdownEntry } from "../../../lib/types";
 import {
   CATEGORY_PRODUCTS,
   PRODUCT_CATEGORIES,
+  PRODUCTION_COMPANIES,
   TEXTILE_COLORS,
   TEXTILE_SIZES,
 } from "../../../lib/orderConstants";
@@ -209,6 +210,21 @@ export default function ProductLineItem({
             value={product.material}
             onChange={(e) => patchAndRecalc({ material: e.target.value })}
           />
+        </div>
+        <div className="col-span-6 md:col-span-3">
+          <label className="label">Ishlab chiqaruvchi</label>
+          <select
+            className="input"
+            value={product.production_company || ""}
+            onChange={(e) => onChange({ production_company: e.target.value })}
+          >
+            <option value="">-- tanlang --</option>
+            {PRODUCTION_COMPANIES.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.key}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="col-span-4 md:col-span-2">
           <label className="label">Soni</label>

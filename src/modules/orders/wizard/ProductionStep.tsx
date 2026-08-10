@@ -1,8 +1,7 @@
 import { Plus } from "lucide-react";
 import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
 import type { TextileCompany } from "../../../lib/types";
-import type { Staff } from "../../../lib/permissions";
-import { PRODUCTION_COMPANIES, DESIGNER_STATUSES, DELIVERY_TYPES, PAYMENT_TYPES } from "../../../lib/orderConstants";
+import { DESIGNER_STATUSES, DELIVERY_TYPES, PAYMENT_TYPES } from "../../../lib/orderConstants";
 import ProductLineItem from "./ProductLineItem";
 
 type Props = {
@@ -14,7 +13,6 @@ type Props = {
   setPayments: (updater: (prev: WizardPayment[]) => WizardPayment[]) => void;
   textileCompanies: TextileCompany[];
   managerNames: string[];
-  printers: Staff[];
   historyPrices: Record<string, number>;
 };
 
@@ -22,7 +20,8 @@ const emptyProduct: WizardProduct = {
   position: 0, category: "", product_name: "", variant: "", size: "", material: "",
   color: "", quantity: 0, unit_price: 0, discount: 0, total: 0, note: "",
   size_breakdown: [],
-  production_status: "new", assigned_printer_email: "", assigned_printer_name: "",
+  production_status: "new", production_company: "Vodiy Print",
+  assigned_printer_email: "", assigned_printer_name: "",
   production_accepted_at: null, production_completed_at: null,
 };
 
@@ -33,7 +32,7 @@ const emptyPayment: WizardPayment = {
 
 export default function ProductionStep({
   payload, onPayloadChange, products, setProducts, payments, setPayments,
-  textileCompanies, managerNames, printers, historyPrices,
+  textileCompanies, managerNames, historyPrices,
 }: Props) {
   const addProduct = () => setProducts((p) => [...p, { ...emptyProduct, position: p.length }]);
   const updateProduct = (i: number, patch: Partial<WizardProduct>) =>
@@ -64,14 +63,10 @@ export default function ProductionStep({
 
       <div className="card p-5">
         <h2 className="mb-3 font-display text-lg font-bold text-ink-900">Ishlab chiqarish</h2>
+        <div className="mb-3 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
+          Har bir mahsulot uchun ishlab chiqaruvchini "Mahsulotlar" bo'limida, mahsulot ichida belgilang — turli mahsulotlar turli kompaniyalarga (autros) biriktirilishi mumkin.
+        </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div>
-            <label className="label">Ishlab chiqaruvchi</label>
-            <select className="input" value={payload.production_company} onChange={(e) => onPayloadChange({ production_company: e.target.value })}>
-              <option value="">-- tanlang --</option>
-              {PRODUCTION_COMPANIES.map((c) => <option key={c.key} value={c.key}>{c.key}</option>)}
-            </select>
-          </div>
           <div>
             <label className="label">Tekstil kompaniyasi</label>
             <select className="input" value={payload.textile_company_id || ""} onChange={(e) => {
@@ -88,28 +83,6 @@ export default function ProductionStep({
             <select className="input" value={payload.production_manager} onChange={(e) => onPayloadChange({ production_manager: e.target.value })}>
               <option value="">-- tanlang --</option>
               {managerNames.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">Pechatnik (ijrochi)</label>
-            <select
-              className="input"
-              value={payload.assigned_printer_email}
-              onChange={(e) => {
-                const email = e.target.value;
-                const found = printers.find((p) => p.email === email);
-                onPayloadChange({
-                  assigned_printer_email: email,
-                  assigned_printer_name: found?.full_name || "",
-                });
-              }}
-            >
-              <option value="">-- biriktirilmagan --</option>
-              {printers.map((p) => (
-                <option key={p.email} value={p.email}>
-                  {p.full_name || p.email}
-                </option>
-              ))}
             </select>
           </div>
           <div>

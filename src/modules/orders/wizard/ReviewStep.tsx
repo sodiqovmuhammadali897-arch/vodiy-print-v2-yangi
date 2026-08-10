@@ -7,7 +7,7 @@ import type {
 } from "../../../lib/orderService";
 import type { OrderTotals } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
-import ProductionBadge from "../../../components/ui/ProductionBadge";
+import ProductionCompanyBadges from "../../../components/ui/ProductionCompanyBadges";
 import CustomerTypeBadge from "../../../components/ui/CustomerTypeBadge";
 import StatusBadge from "../../../components/ui/StatusBadge";
 import type { OrderStatus } from "../../../lib/types";
@@ -56,7 +56,7 @@ export default function ReviewStep({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={payload.status as OrderStatus} />
-            <ProductionBadge name={payload.production_company} />
+            <ProductionCompanyBadges companies={activeProducts.map((p) => p.production_company)} />
             {payload.is_draft && (
               <span className="chip bg-ink-100 text-ink-700">Qoralama</span>
             )}

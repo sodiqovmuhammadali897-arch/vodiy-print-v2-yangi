@@ -41,7 +41,7 @@ import type {
   TextileCompany,
 } from "../../lib/types";
 import StatusBadge from "../../components/ui/StatusBadge";
-import ProductionBadge from "../../components/ui/ProductionBadge";
+import ProductionCompanyBadges from "../../components/ui/ProductionCompanyBadges";
 import CustomerTypeBadge from "../../components/ui/CustomerTypeBadge";
 import TextileMatrixTable from "../../components/textile/TextileMatrixTable";
 import TextileMatrixExport from "../textile/TextileMatrixExport";
@@ -248,6 +248,7 @@ export default function OrderDetail() {
             // A duplicated order's production work hasn't started yet,
             // even if the original line was already finished.
             production_status: "new",
+            production_company: p.production_company || "Vodiy Print",
             assigned_printer_email: "",
             assigned_printer_name: "",
             production_accepted_at: null,
@@ -341,7 +342,7 @@ export default function OrderDetail() {
                 {order.title}
               </h1>
               <StatusBadge status={order.status} />
-              <ProductionBadge name={order.production_company} />
+              <ProductionCompanyBadges companies={products.map((p) => p.production_company)} />
               {order.is_draft && (
                 <span className="chip bg-ink-100 text-ink-700">Qoralama</span>
               )}
@@ -722,8 +723,7 @@ export default function OrderDetail() {
       {(order.production_manager ||
         order.logistics_manager ||
         order.qc_manager ||
-        order.designer_name ||
-        order.assigned_printer_name) && (
+        order.designer_name) && (
         <div className="card p-5">
           <div className="flex items-center gap-2">
             <Factory className="h-4 w-4 text-brand-700" />
@@ -743,7 +743,6 @@ export default function OrderDetail() {
             />
             <Field label="Logistika" value={order.logistics_manager || "-"} />
             <Field label="Sifat nazorati" value={order.qc_manager || "-"} />
-            <Field label="Pechatnik" value={order.assigned_printer_name || "-"} />
           </div>
         </div>
       )}

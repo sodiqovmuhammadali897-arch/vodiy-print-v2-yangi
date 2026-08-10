@@ -12,7 +12,8 @@ import {
 import type { Brand, Customer, Holiday, Order, OrderFile, OrderProduct, OrderStatus } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import StatusBadge, { orderStatusLabel } from "../../components/ui/StatusBadge";
-import { PRODUCTION_LINE_STATUSES } from "../../lib/orderConstants";
+import ProductionBadge from "../../components/ui/ProductionBadge";
+import { PRODUCTION_COMPANIES, PRODUCTION_LINE_STATUSES } from "../../lib/orderConstants";
 import { deadlineInfo } from "../../lib/workingDays";
 import { formatDate } from "../../lib/format";
 
@@ -25,6 +26,7 @@ type DispatchProps = {
   // the only way to move them past "Yangi" — the mas'ul hodim sets it
   // directly here instead of through a per-role accept/finish flow.
   onStatusChange: (status: OrderStatus) => void;
+  onProductionCompanyChange: (company: string) => void;
 };
 
 type PechatnikProps = {
@@ -96,6 +98,7 @@ export default function ProductionProductCard(props: Props) {
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="chip bg-ink-100 text-ink-700">{product.category || "-"}</span>
+          <ProductionBadge name={product.production_company} />
           <StatusBadge status={productionStatus} />
           {dl?.overdue && (
             <span className="chip gap-1 bg-rose-100 text-rose-700">
@@ -172,6 +175,24 @@ export default function ProductionProductCard(props: Props) {
               {f.filename || "Fayl"} <ExternalLink className="h-3 w-3" />
             </a>
           ))}
+        </div>
+      )}
+
+      {mode === "dispatch" && props.canAssign && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase text-ink-500">Ishlab chiqaruvchi</span>
+          <select
+            className="input w-auto py-1.5 text-sm"
+            value={product.production_company || ""}
+            onChange={(e) => props.onProductionCompanyChange(e.target.value)}
+          >
+            <option value="">-- tanlang --</option>
+            {PRODUCTION_COMPANIES.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.key}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 

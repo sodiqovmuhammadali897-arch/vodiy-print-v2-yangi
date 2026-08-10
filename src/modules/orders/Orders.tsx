@@ -400,6 +400,7 @@ export default function Orders() {
             note: p.note,
             size_breakdown: p.size_breakdown,
             production_status: "new",
+            production_company: p.production_company || "Vodiy Print",
             assigned_printer_email: "",
             assigned_printer_name: "",
             production_accepted_at: null,
