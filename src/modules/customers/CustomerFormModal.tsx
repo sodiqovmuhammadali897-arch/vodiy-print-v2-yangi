@@ -11,6 +11,9 @@ type Props = {
   onClose: () => void;
   customer?: Customer | null;
   onSaved: (customer: Customer) => void;
+  // Pre-fills the Brend field when opening the modal for a brand-new
+  // customer straight out of a "no match found" search (order wizard).
+  initialCompany?: string;
 };
 
 const emptyForm = {
@@ -35,8 +38,10 @@ export default function CustomerFormModal({
   onClose,
   customer,
   onSaved,
+  initialCompany,
 }: Props) {
   const [form, setForm] = useState(emptyForm);
+  const [fullName, setFullName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existing, setExisting] = useState<Customer[]>([]);
@@ -60,11 +65,19 @@ export default function CustomerFormModal({
         note: customer.note,
         manager_name: customer.manager_name || "",
       });
+      setFullName(`${customer.first_name} ${customer.last_name}`.trim());
     } else {
-      setForm(emptyForm);
+      setForm({ ...emptyForm, company: initialCompany || "" });
+      setFullName("");
     }
     setError(null);
-  }, [customer, open]);
+  }, [customer, open, initialCompany]);
+
+  const onFullNameChange = (value: string) => {
+    setFullName(value);
+    const [first, ...rest] = value.trim().split(/\s+/);
+    setForm((f) => ({ ...f, first_name: first || "", last_name: rest.join(" ") }));
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +88,7 @@ export default function CustomerFormModal({
   }, [open]);
 
   const submit = async () => {
-    if (!form.first_name.trim()) return setError("Ism kiritilishi shart");
+    if (!fullName.trim()) return setError("Ism familiya kiritilishi shart");
     if (!form.phone.trim()) return setError("Telefon raqami kiritilishi shart");
     const normalizedPhone = form.phone.replace(/\D/g, "");
     const duplicate = existing.find(
@@ -143,20 +156,12 @@ export default function CustomerFormModal({
         </div>
       )}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div>
-          <label className="label">Ism *</label>
+        <div className="md:col-span-2">
+          <label className="label">Ism familiya *</label>
           <input
             className="input"
-            value={form.first_name}
-            onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
-          />
-        </div>
-        <div>
-          <label className="label">Familiya</label>
-          <input
-            className="input"
-            value={form.last_name}
-            onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))}
+            value={fullName}
+            onChange={(e) => onFullNameChange(e.target.value)}
           />
         </div>
         <div>

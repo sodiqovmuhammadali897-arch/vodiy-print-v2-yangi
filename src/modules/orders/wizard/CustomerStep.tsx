@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, UserPlus } from "lucide-react";
 import type { Brand, Customer } from "../../../lib/types";
 import type { OrderPayload } from "../../../lib/orderService";
@@ -15,6 +15,16 @@ type Props = {
   managerNames: string[];
 };
 
+// One pickable row per brand, plus a fallback row for customers who don't
+// have a brand yet — so a bare-name search still finds them.
+type PickRow = {
+  key: string;
+  customerId: string;
+  brandId: string | null;
+  primary: string;
+  customer: Customer;
+};
+
 export default function CustomerStep({
   customers,
   brands,
@@ -23,19 +33,68 @@ export default function CustomerStep({
   onCustomerCreated,
   managerNames,
 }: Props) {
-  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [focused, setFocused] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const filteredCustomers = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter((c) =>
-      `${c.first_name} ${c.last_name} ${c.phone} ${c.company}`.toLowerCase().includes(q),
-    );
-  }, [customers, search]);
-
   const selectedCustomer = customers.find((c) => c.id === payload.customer_id) || null;
-  const customerBrands = brands.filter((b) => b.customer_id === payload.customer_id);
+
+  // Seed the display text once, when an existing order's customer loads in.
+  useEffect(() => {
+    if (!payload.customer_id || query) return;
+    const c = customers.find((c) => c.id === payload.customer_id) || null;
+    if (!c) return;
+    const brand = payload.brand_id
+      ? brands.find((b) => b.id === payload.brand_id)
+      : brands.find((b) => b.customer_id === c.id);
+    setQuery(brand?.name || `${c.first_name} ${c.last_name}`.trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payload.customer_id]);
+
+  const pickRows = useMemo<PickRow[]>(() => {
+    const customersWithBrand = new Set(brands.map((b) => b.customer_id));
+    const brandRows: PickRow[] = brands
+      .map((b): PickRow | null => {
+        const c = customers.find((c) => c.id === b.customer_id);
+        return c ? { key: `brand-${b.id}`, customerId: c.id, brandId: b.id, primary: b.name, customer: c } : null;
+      })
+      .filter((r): r is PickRow => r !== null);
+    const noBrandRows: PickRow[] = customers
+      .filter((c) => !customersWithBrand.has(c.id))
+      .map((c) => ({
+        key: `customer-${c.id}`,
+        customerId: c.id,
+        brandId: null,
+        primary: `${c.first_name} ${c.last_name}`.trim(),
+        customer: c,
+      }));
+    return [...brandRows, ...noBrandRows];
+  }, [brands, customers]);
+
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return pickRows
+      .filter((r) =>
+        `${r.primary} ${r.customer.first_name} ${r.customer.last_name} ${r.customer.phone}`
+          .toLowerCase()
+          .includes(q),
+      )
+      .slice(0, 20);
+  }, [pickRows, query]);
+
+  const selectRow = (row: PickRow) => {
+    onPayloadChange({ customer_id: row.customerId, brand_id: row.brandId });
+    setQuery(row.primary);
+    setFocused(false);
+  };
+
+  const onQueryChange = (value: string) => {
+    setQuery(value);
+    if (payload.customer_id) onPayloadChange({ customer_id: null, brand_id: null });
+  };
+
+  const showDropdown = focused && query.trim() !== "" && !selectedCustomer;
 
   return (
     <div className="space-y-5">
@@ -47,50 +106,57 @@ export default function CustomerStep({
           </button>
         </div>
 
-        <div className="mb-3 flex items-center gap-2 rounded-xl border border-ink-200 bg-surface px-3 py-2">
-          <Search className="h-4 w-4 text-ink-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Mijozni qidirish..."
-            className="w-full bg-transparent text-sm outline-none placeholder-ink-400"
-          />
-        </div>
+        <div className="relative">
+          <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-surface px-3 py-2">
+            <Search className="h-4 w-4 text-ink-400" />
+            <input
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setTimeout(() => setFocused(false), 150)}
+              placeholder="Brend nomini kiriting..."
+              className="w-full bg-transparent text-sm outline-none placeholder-ink-400"
+            />
+          </div>
 
-        <div className="max-h-64 overflow-y-auto rounded-xl border border-ink-100">
-          {filteredCustomers.length === 0 && (
-            <div className="p-4 text-center text-sm text-ink-400">Mijoz topilmadi</div>
-          )}
-          {filteredCustomers.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => onPayloadChange({ customer_id: c.id, brand_id: null })}
-              className={`flex w-full items-center justify-between border-b border-ink-50 px-4 py-3 text-left last:border-b-0 hover:bg-ink-50 ${
-                payload.customer_id === c.id ? "bg-brand-50" : ""
-              }`}
-            >
-              <div>
-                <div className="font-medium text-ink-900">{c.first_name} {c.last_name}</div>
-                <div className="text-xs text-ink-500">{c.phone} {c.company ? `· ${c.company}` : ""}</div>
-              </div>
-              <CustomerTypeBadge type={c.customer_type} />
-            </button>
-          ))}
-        </div>
-
-        {selectedCustomer && customerBrands.length > 0 && (
-          <div className="mt-4">
-            <label className="label">Brend</label>
-            <select
-              className="input"
-              value={payload.brand_id || ""}
-              onChange={(e) => onPayloadChange({ brand_id: e.target.value || null })}
-            >
-              <option value="">-- brendsiz --</option>
-              {customerBrands.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
+          {showDropdown && (
+            <div className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-ink-100 bg-surface shadow-lg">
+              {filteredRows.length === 0 && (
+                <div className="p-4 text-center text-sm text-ink-400">
+                  Mos brend/mijoz topilmadi — "Yangi mijoz" tugmasi orqali qo'shing
+                </div>
+              )}
+              {filteredRows.map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => selectRow(r)}
+                  className="flex w-full items-center justify-between border-b border-ink-50 px-4 py-3 text-left last:border-b-0 hover:bg-ink-50"
+                >
+                  <div>
+                    <div className="font-medium text-ink-900">{r.primary}</div>
+                    <div className="text-xs text-ink-500">
+                      {r.customer.first_name} {r.customer.last_name} · {r.customer.phone}
+                    </div>
+                  </div>
+                  <CustomerTypeBadge type={r.customer.customer_type} />
+                </button>
               ))}
-            </select>
+            </div>
+          )}
+        </div>
+
+        {selectedCustomer && (
+          <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <div>
+              <div className="font-medium text-ink-900">
+                {selectedCustomer.first_name} {selectedCustomer.last_name}
+              </div>
+              <div className="text-xs text-ink-500">
+                {selectedCustomer.phone}
+                {selectedCustomer.company ? ` · ${selectedCustomer.company}` : ""}
+              </div>
+            </div>
+            <CustomerTypeBadge type={selectedCustomer.customer_type} />
           </div>
         )}
       </div>
@@ -98,15 +164,6 @@ export default function CustomerStep({
       <div className="card p-5">
         <h2 className="mb-3 font-display text-lg font-bold text-ink-900">Buyurtma haqida</h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="label">Sarlavha</label>
-            <input
-              className="input"
-              value={payload.title}
-              onChange={(e) => onPayloadChange({ title: e.target.value })}
-              placeholder="Masalan: 100 dona futbolka"
-            />
-          </div>
           <div>
             <label className="label">Menejer</label>
             <select className="input" value={payload.manager_name} onChange={(e) => onPayloadChange({ manager_name: e.target.value })}>
@@ -140,9 +197,11 @@ export default function CustomerStep({
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         customer={null}
+        initialCompany={query}
         onSaved={(c) => {
           onCustomerCreated(c);
           onPayloadChange({ customer_id: c.id, brand_id: null });
+          setQuery(c.company || `${c.first_name} ${c.last_name}`.trim());
           setModalOpen(false);
         }}
       />
