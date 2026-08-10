@@ -56,7 +56,7 @@ export default function Dashboard() {
       if (cancelled) return;
 
       const monthOrders = allOrders.filter(
-        (o) => o.created_at >= start && o.created_at < end,
+        (o) => o.created_at >= start && o.created_at < end && o.status !== "cancelled",
       );
       const plan = planRow?.plan_amount ?? 0;
       const revenue = monthOrders.reduce(

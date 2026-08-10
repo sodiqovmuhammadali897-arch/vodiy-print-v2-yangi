@@ -23,13 +23,13 @@ export default function ManagerStatsPanel() {
       const { start, end } = monthRange(new Date());
       const [managers, allOrders] = await Promise.all([
         listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }),
-        listAll<{ manager_name: string; total_amount: number; created_at: string }>(
+        listAll<{ manager_name: string; total_amount: number; created_at: string; status: string }>(
           "orders",
         ),
       ]);
       if (cancelled) return;
       const orders = allOrders.filter(
-        (o) => o.created_at >= start && o.created_at < end,
+        (o) => o.created_at >= start && o.created_at < end && o.status !== "cancelled",
       );
       const totals = new Map<string, number>();
       for (const o of orders) {
