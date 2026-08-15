@@ -120,7 +120,14 @@ export default function CustomerStep({
           </div>
 
           {showDropdown && (
-            <div className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-ink-100 bg-surface shadow-lg">
+            <div
+              className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-ink-100 bg-surface shadow-lg"
+              // Keeps the input focused while tapping/clicking inside this
+              // list, so it never blurs mid-interaction — without this, a
+              // touch tap (which moves slightly, unlike a mouse click) can
+              // register as blur-then-scroll instead of a row selection.
+              onMouseDown={(e) => e.preventDefault()}
+            >
               {filteredRows.length === 0 && (
                 <div className="p-4 text-center text-sm text-ink-400">
                   Mos brend/mijoz topilmadi — "Yangi mijoz" tugmasi orqali qo'shing
