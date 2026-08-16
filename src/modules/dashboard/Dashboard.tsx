@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Target, TrendingUp, Wallet, PackageOpen, ClipboardList, CircleCheck as CheckCircle2 } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, Wallet, PackageOpen, ClipboardList, CircleCheck as CheckCircle2, Hourglass } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
 import { computeWorkdayStats, monthRange, startOfDay } from "../../lib/workdays";
-import type { Holiday, MonthlyPlan, Order } from "../../lib/types";
+import type { Expense, Holiday, MonthlyPlan, Order, OrderPayment } from "../../lib/types";
 import StatCard from "../../components/ui/StatCard";
 import DashboardHero from "./DashboardHero";
 import WorkdaysPanel from "./WorkdaysPanel";
@@ -17,6 +17,9 @@ type Stats = {
   activeCount: number;
   todayCount: number;
   doneCount: number;
+  todayIncome: number;
+  todayExpense: number;
+  unfinishedCount: number;
 };
 
 const emptyStats: Stats = {
@@ -26,6 +29,9 @@ const emptyStats: Stats = {
   activeCount: 0,
   todayCount: 0,
   doneCount: 0,
+  todayIncome: 0,
+  todayExpense: 0,
+  unfinishedCount: 0,
 };
 
 const planId = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
@@ -44,16 +50,29 @@ export default function Dashboard() {
       const { start, end } = monthRange(today);
       const dayStart = startOfDay(today).toISOString();
 
-      const [allOrders, planRow, holidaysData] = await Promise.all([
+      const [allOrders, planRow, holidaysData, payments, expenses] = await Promise.all([
         listAll<Order>("orders", { orderBy: ["created_at", "desc"] }),
         getOne<MonthlyPlan>(
           "monthly_plans",
           planId(today.getFullYear(), today.getMonth() + 1),
         ),
         listAll<Holiday>("holidays"),
+        listAll<OrderPayment>("order_payments"),
+        listAll<Expense>("expenses"),
       ]);
 
       if (cancelled) return;
+
+      const todayDateStr = dayStart.slice(0, 10);
+      const todayIncome = payments
+        .filter((p) => p.payment_date === todayDateStr)
+        .reduce((s, p) => s + Number(p.amount || 0), 0);
+      const todayExpense = expenses
+        .filter((e) => e.date === todayDateStr)
+        .reduce((s, e) => s + Number(e.amount || 0), 0);
+      const unfinishedCount = allOrders.filter(
+        (o) => o.status !== "delivered" && o.status !== "closed" && o.status !== "cancelled",
+      ).length;
 
       const monthOrders = allOrders.filter(
         (o) => o.created_at >= start && o.created_at < end && o.status !== "cancelled",
@@ -90,6 +109,9 @@ export default function Dashboard() {
         activeCount,
         todayCount,
         doneCount,
+        todayIncome,
+        todayExpense,
+        unfinishedCount,
       });
       setHolidays(holidaysData);
       setRecentOrders(allOrders.slice(0, 6));
@@ -154,6 +176,27 @@ export default function Dashboard() {
           hint="Bugun bajarilganlari"
           tone="emerald"
           icon={<CheckCircle2 className="h-5 w-5" />}
+        />
+        <StatCard
+          title="Bugungi kirim"
+          value={formatMoneyShort(stats.todayIncome)}
+          hint={<>To'langan: {formatMoney(stats.todayIncome)}</>}
+          tone="emerald"
+          icon={<TrendingUp className="h-5 w-5" />}
+        />
+        <StatCard
+          title="Bugungi chiqim"
+          value={formatMoneyShort(stats.todayExpense)}
+          hint={<>Xarajat: {formatMoney(stats.todayExpense)}</>}
+          tone="rose"
+          icon={<TrendingDown className="h-5 w-5" />}
+        />
+        <StatCard
+          title="Bitmagan buyurtmalar"
+          value={stats.unfinishedCount}
+          hint="Hozircha yakunlanmagan, jami"
+          tone="amber"
+          icon={<Hourglass className="h-5 w-5" />}
         />
       </div>
 
