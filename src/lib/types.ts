@@ -199,10 +199,29 @@ export type Product = {
   name: string;
   unit: string;
   base_price: number;
-  category: string;
+  category: string; // doubles as "mahsulot turi" (Poligrafiya/Tipografiya/Gift Box/...)
   price_tiers: PriceTier[];
   sizes: string[];
   colors: string[];
+  product_code: string;
+  image_url: string;
+  min_order_qty: number;
+  lead_time_days: number;
+  size_spec: string; // physical size, e.g. "A5 (148x210mm)" — distinct from Textil `sizes`
+  material: string;
+  print_type: string;
+  paper_weight: string;
+  lamination: string;
+  packaging: string;
+  spec_note: string;
+  description: string;
+  advantages: string[];
+  recommended_for: string[];
+  sales_notes: string;
+  manager_tip: string;
+  upsell_product_ids: string[];
+  is_active: boolean;
+  archived_at: string | null;
   created_at: string;
 };
 
@@ -213,6 +232,34 @@ export type Product = {
 export type ProductCost = {
   id: string;
   cost_tiers: CostTier[];
+  updated_at?: string;
+};
+
+// Master list of outsource/in-house production companies, reusable across
+// products (a company producing Flayers may also produce Vizitka).
+export type ProductionCompany = {
+  id: string;
+  name: string;
+  city: string;
+  phone: string;
+  telegram: string;
+  is_internal: boolean;
+  note: string;
+  created_at: string;
+};
+
+// Links a product to one of its producing companies. Holds no pricing —
+// cost stays exclusively in the admin-only ProductCost record — so this
+// collection is safe to show to any staff member with products.view.
+export type ProductVendor = {
+  id: string;
+  product_id: string;
+  company_id: string;
+  company_name: string;
+  is_primary: boolean;
+  lead_time_days: number;
+  note: string;
+  created_at: string;
 };
 
 export type ProposalItem = {

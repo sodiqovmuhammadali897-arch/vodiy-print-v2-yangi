@@ -141,6 +141,20 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Which company produces a product, and its lead time — operational
+    // info, not pricing (cost stays exclusively in product_costs above), so
+    // it's visible to the same audience as the product itself.
+    match /product_vendors/{id} {
+      allow read: if can('products', 'view') || can('textile', 'view') || can('proposals', 'view');
+      allow create, update, delete: if can('products', 'edit');
+    }
+
+    // Reusable master list of outsource/in-house production companies.
+    match /production_companies/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
     match /proposals/{id} {
       allow read: if can('proposals', 'view');
       allow create, update: if can('proposals', 'edit');

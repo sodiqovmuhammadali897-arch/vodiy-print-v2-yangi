@@ -12,7 +12,7 @@ const OrderDetail = lazy(() => import("./modules/orders/OrderDetail"));
 const OrderWizard = lazy(() => import("./modules/orders/wizard/OrderWizard"));
 const Customers = lazy(() => import("./modules/customers/Customers"));
 const CustomerDetail = lazy(() => import("./modules/customers/CustomerDetail"));
-const Products = lazy(() => import("./modules/products/Products"));
+const Products = lazy(() => import("./modules/products/ProductsPage"));
 const Proposals = lazy(() => import("./modules/proposals/Proposals"));
 const ProposalEditor = lazy(() => import("./modules/proposals/ProposalEditor"));
 const Textile = lazy(() => import("./modules/textile/Textile"));

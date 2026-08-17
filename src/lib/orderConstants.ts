@@ -3,6 +3,7 @@ import type { OrderStatus } from "./types";
 export const PRODUCT_CATEGORIES = [
   "Tipografiya",
   "Poligrafiya",
+  "Gift Box",
   "Textil",
   "Suvenir",
   "Tashqi reklama",
@@ -21,6 +22,7 @@ export const CATEGORY_PRODUCTS: Record<string, string[]> = {
     "Katalog",
     "Buklet",
   ],
+  "Gift Box": ["Sovg'a qutisi", "Set quti", "Brend quti", "Premium quti"],
   Textil: ["Futbolka", "Polo", "Kepka", "Xudi", "Svitshot", "Jilet", "Forma"],
   Suvenir: ["Bakal", "Termos", "Brelok", "Soat", "Stol bayrog'i"],
   "Tashqi reklama": [

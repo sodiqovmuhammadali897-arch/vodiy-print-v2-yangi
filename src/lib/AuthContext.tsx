@@ -22,7 +22,7 @@ import {
   type Staff,
 } from "./permissions";
 
-type AuthContextValue = {
+export type AuthContextValue = {
   user: User | null;
   initializing: boolean;
   staff: Staff | null;
