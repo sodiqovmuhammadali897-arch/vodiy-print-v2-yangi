@@ -1,0 +1,13 @@
+{
+  "name": "vodiyprint-hikvision-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hikvision yuz tanish terminalidan Vodiy Print davomat tizimiga avtomatik sinxronizatsiya",
+  "type": "module",
+  "scripts": {
+    "start": "node src/sync.js"
+  },
+  "dependencies": {
+    "firebase": "^12.16.0"
+  }
+}

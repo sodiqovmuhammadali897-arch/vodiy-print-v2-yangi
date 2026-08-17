@@ -1,0 +1,25 @@
+{
+  "firebase": {
+    "apiKey": "VITE_FIREBASE_API_KEY qiymati",
+    "authDomain": "VITE_FIREBASE_AUTH_DOMAIN qiymati",
+    "projectId": "VITE_FIREBASE_PROJECT_ID qiymati",
+    "storageBucket": "VITE_FIREBASE_STORAGE_BUCKET qiymati",
+    "messagingSenderId": "VITE_FIREBASE_MESSAGING_SENDER_ID qiymati",
+    "appId": "VITE_FIREBASE_APP_ID qiymati"
+  },
+  "adminEmail": "admin@vodiyprint.uz",
+  "adminPassword": "admin parol",
+  "deviceHost": "192.168.1.64",
+  "deviceUsername": "admin",
+  "devicePassword": "qurilma paroli",
+  "deviceName": "Hikvision DS-K1T",
+  "pollIntervalSeconds": 20,
+  "employeeMap": {
+    "1": "manager1@vodiyprint.uz",
+    "2": "manager2@vodiyprint.uz",
+    "3": "manager3@vodiyprint.uz"
+  },
+  "employeeMapByName": {
+    "Ism Familiya": "manager1@vodiyprint.uz"
+  }
+}

@@ -367,7 +367,7 @@ export type AttendanceRecord = {
   earlyLeaveMinutes: number;
   overtimeMinutes: number;
   status: string;
-  authenticationMethod: "webauthn";
+  authenticationMethod: "webauthn" | "hikvision";
   checkInLocation: GeoPoint | null;
   checkOutLocation: GeoPoint | null;
   deviceName: string | null;
