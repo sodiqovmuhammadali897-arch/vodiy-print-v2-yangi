@@ -16,6 +16,7 @@ import {
   TrendingUp,
   FileDown,
   Briefcase,
+  Archive,
 } from "lucide-react";
 import { getOne, listAll, listWhere } from "../../lib/firestoreDb";
 import type { Brand, Customer, Order, OrderProduct } from "../../lib/types";
@@ -27,6 +28,7 @@ import { formatDate, formatMoney, formatMoneyShort } from "../../lib/format";
 import { exportNodeToPdf } from "../../lib/exportPdf";
 import BrandFormModal from "../brands/BrandFormModal";
 import CustomerFormModal from "./CustomerFormModal";
+import HistoricalOrderModal from "./HistoricalOrderModal";
 import { useAuth } from "../../lib/AuthContext";
 
 export default function CustomerDetail() {
@@ -44,6 +46,7 @@ export default function CustomerDetail() {
   const [brandModal, setBrandModal] = useState(false);
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [customerModal, setCustomerModal] = useState(false);
+  const [historicalModal, setHistoricalModal] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -138,6 +141,9 @@ export default function CustomerDetail() {
             <>
               <button className="btn-secondary" onClick={() => setCustomerModal(true)}>
                 <Pencil className="h-4 w-4" /> Tahrirlash
+              </button>
+              <button className="btn-secondary" onClick={() => setHistoricalModal(true)}>
+                <Archive className="h-4 w-4" /> Eski buyurtma qo'shish
               </button>
               <button
                 className="btn-primary"
@@ -367,8 +373,11 @@ export default function CustomerDetail() {
                     <td className="table-td">
                       <Link
                         to={`/orders/${o.id}`}
-                        className="font-semibold text-ink-800 hover:text-brand-700"
+                        className="inline-flex items-center gap-1.5 font-semibold text-ink-800 hover:text-brand-700"
                       >
+                        {o.is_historical && (
+                          <Archive className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                        )}
                         {o.title}
                       </Link>
                     </td>
@@ -403,6 +412,16 @@ export default function CustomerDetail() {
         customer={customer}
         onSaved={() => {
           setCustomerModal(false);
+          void load();
+        }}
+      />
+
+      <HistoricalOrderModal
+        open={historicalModal}
+        onClose={() => setHistoricalModal(false)}
+        customer={customer}
+        onSaved={() => {
+          setHistoricalModal(false);
           void load();
         }}
       />

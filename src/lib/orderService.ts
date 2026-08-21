@@ -60,6 +60,8 @@ export type OrderPayload = {
   client_request_note: string;
   discount_amount: number;
   is_draft: boolean;
+  is_historical: boolean;
+  historical_ref: string;
 };
 
 const upsertChildren = async (

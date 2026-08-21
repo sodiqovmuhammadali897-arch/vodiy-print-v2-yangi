@@ -72,6 +72,8 @@ const emptyPayload = (): OrderPayload => ({
   client_request_note: "",
   discount_amount: 0,
   is_draft: false,
+  is_historical: false,
+  historical_ref: "",
 });
 
 export default function OrderWizard() {
@@ -172,6 +174,8 @@ export default function OrderWizard() {
             client_request_note: order.client_request_note || "",
             discount_amount: Number(order.discount_amount || 0),
             is_draft: !!order.is_draft,
+            is_historical: !!order.is_historical,
+            historical_ref: order.historical_ref || "",
           });
 
           const [pr, pay, fl] = await Promise.all([

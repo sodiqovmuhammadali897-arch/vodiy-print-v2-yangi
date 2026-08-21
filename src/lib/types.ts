@@ -108,6 +108,11 @@ export type Order = {
   // client signs off on the whole distribution at once.
   textile_sizes_confirmed_at: string | null;
   textile_sizes_confirmed_by: string;
+  // Backfilled from a customer's pre-ERP history (paper records, an old
+  // spreadsheet) rather than created through the normal order flow — never
+  // touches production/warehouse/logistics, only customer-level stats.
+  is_historical: boolean;
+  historical_ref: string;
 };
 
 // One cell of a Textil size/color quantity breakdown for a single order
