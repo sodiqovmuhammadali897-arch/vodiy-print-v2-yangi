@@ -1,6 +1,7 @@
 import type { OrderPayment, OrderProduct } from "./types";
 import { nextOrderNumber } from "./numbering";
 import { computeOrderTotals } from "./orderCalculations";
+import { formatMoney } from "./format";
 import {
   countWhere,
   deleteWhere,
@@ -118,6 +119,14 @@ export const saveOrder = async (
   statusChange?: { previousStatus: string; actorEmail: string; actorName: string },
 ): Promise<{ id: string; order_number: string } | { error: string }> => {
   const totals = computeOrderTotals(products, payload.discount_amount, payments);
+
+  // Historical backfills are exempt — an old order can legitimately be
+  // archived with real, still-owed debt from before the ERP existed.
+  if (payload.status === "closed" && !payload.is_historical && totals.remaining > 0) {
+    return {
+      error: `Bu buyurtmada ${formatMoney(totals.remaining)} qarzdorlik bor — avval to'lovni kiritmasdan yopib bo'lmaydi.`,
+    };
+  }
 
   let orderNumber = payload.order_number;
   if (!payload.id && !orderNumber) {
