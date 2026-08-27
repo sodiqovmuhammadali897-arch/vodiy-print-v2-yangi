@@ -10,7 +10,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   customer?: Customer | null;
-  onSaved: (customer: Customer) => void;
+  onSaved: (customer: Customer, brand: Brand | null) => void;
   // Pre-fills the Brend field when opening the modal for a brand-new
   // customer straight out of a "no match found" search (order wizard).
   initialCompany?: string;
@@ -117,16 +117,19 @@ export default function CustomerFormModal({
           customer_number,
         })) as Customer;
       }
-      onSaved(savedCustomer);
-      setSaving(false);
-      // Best-effort: keep the customer's implied Brand in sync with the
-      // "Brend" field they just typed. Never blocks the save itself.
+      // Resolved before onSaved fires so a caller that immediately links an
+      // order to this customer's brand (e.g. the order wizard's inline
+      // "+ yangi mijoz") gets a real brand_id instead of racing an
+      // in-flight brand creation and silently ending up with none.
+      let brand: Brand | null = null;
       try {
         const brands = await listWhere<Brand>("brands", "customer_id", savedCustomer.id);
-        await ensureBrandForCustomer(savedCustomer, brands);
+        brand = await ensureBrandForCustomer(savedCustomer, brands);
       } catch {
         /* non-critical, ignore */
       }
+      onSaved(savedCustomer, brand);
+      setSaving(false);
     } catch (e) {
       setSaving(false);
       setError(e instanceof Error ? e.message : "Xatolik");

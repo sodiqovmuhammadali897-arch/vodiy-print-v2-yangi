@@ -7,25 +7,33 @@ import type { Brand, Customer, Order } from "./types";
 // "Brendlar bo'yicha daromad" report — which reads real Brand links —
 // actually populate, instead of relying on someone separately managing
 // brands nobody remembers to add.
+// Returns the brand a fresh order for this customer should link to — the
+// one just created/renamed, the customer's sole existing brand, or null
+// when there's no company name or the customer already has 2+ brands
+// (ambiguous; staff is managing those manually, so we don't guess).
 export const ensureBrandForCustomer = async (
   customer: Pick<Customer, "id" | "company">,
   existingBrands: Brand[],
-): Promise<void> => {
+): Promise<Brand | null> => {
   const name = customer.company?.trim();
-  if (!name) return;
+  if (!name) return null;
   const mine = existingBrands.filter((b) => b.customer_id === customer.id);
   if (mine.length === 0) {
-    await insertOne<Omit<Brand, "id" | "created_at">>("brands", {
+    const created = await insertOne<Omit<Brand, "id" | "created_at">>("brands", {
       customer_id: customer.id,
       name,
       logo_url: "",
       note: "",
     });
-  } else if (mine.length === 1 && mine[0].name !== name) {
-    await updateOne("brands", mine[0].id, { name });
+    return created as Brand;
   }
-  // 2+ brands already on this customer: staff is managing multiple
-  // manually, leave them alone rather than guessing which one to rename.
+  if (mine.length === 1) {
+    if (mine[0].name !== name) {
+      await updateOne("brands", mine[0].id, { name });
+    }
+    return { ...mine[0], name };
+  }
+  return null;
 };
 
 // Links an order to its customer's brand when the order predates brand

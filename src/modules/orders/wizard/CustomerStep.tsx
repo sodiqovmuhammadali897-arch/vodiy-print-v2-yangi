@@ -11,7 +11,7 @@ type Props = {
   brands: Brand[];
   payload: OrderPayload;
   onPayloadChange: (patch: Partial<OrderPayload>) => void;
-  onCustomerCreated: (customer: Customer) => void;
+  onCustomerCreated: (customer: Customer, brand: Brand | null) => void;
   managerNames: string[];
 };
 
@@ -205,9 +205,9 @@ export default function CustomerStep({
         onClose={() => setModalOpen(false)}
         customer={null}
         initialCompany={query}
-        onSaved={(c) => {
-          onCustomerCreated(c);
-          onPayloadChange({ customer_id: c.id, brand_id: null });
+        onSaved={(c, brand) => {
+          onCustomerCreated(c, brand);
+          onPayloadChange({ customer_id: c.id, brand_id: brand?.id ?? null });
           setQuery(c.company || `${c.first_name} ${c.last_name}`.trim());
           setModalOpen(false);
         }}

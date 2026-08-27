@@ -240,7 +240,12 @@ export default function OrderWizard() {
   const onPayloadChange = (patch: Partial<OrderPayload>) =>
     setPayload((p) => ({ ...p, ...patch }));
 
-  const onCustomerCreated = (c: Customer) => setCustomers((cs) => [...cs, c]);
+  const onCustomerCreated = (c: Customer, brand: Brand | null) => {
+    setCustomers((cs) => [...cs, c]);
+    if (brand) {
+      setBrands((bs) => [...bs.filter((b) => b.id !== brand.id), brand]);
+    }
+  };
 
   const totals = useMemo(
     () => computeOrderTotals(products, payload.discount_amount, payments),
