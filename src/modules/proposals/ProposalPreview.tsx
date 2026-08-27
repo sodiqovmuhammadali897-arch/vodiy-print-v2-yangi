@@ -34,7 +34,7 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
             <div className="font-display text-4xl font-extrabold text-emerald-600">
               {companyName}
             </div>
-            <div className="mt-1 text-sm text-ink-500">
+            <div className="mt-2 text-sm text-ink-500">
               Tijorat taklifi · {isoDate(proposal.created_at)}
             </div>
           </div>
