@@ -98,7 +98,7 @@ export default function ProductCustomerView({ product, onClose }: Props) {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-ink-200 bg-ink-100/50 p-6">
-        <ProductCustomerPrice product={product} company={company} quantity={quantity} quote={quote} />
+        <ProductCustomerPrice ref={docRef} product={product} company={company} quantity={quantity} quote={quote} />
       </div>
     </div>
   );
