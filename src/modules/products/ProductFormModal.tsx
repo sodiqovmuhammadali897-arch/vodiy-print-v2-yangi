@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Lock, Plus, Trash2 } from "lucide-react";
+import { ImageOff, Lock, Plus, Trash2, Upload } from "lucide-react";
 import { getOne, insertOne, updateOne, upsertOne } from "../../lib/firestoreDb";
 import { PRODUCT_CATEGORIES, TEXTILE_COLORS, TEXTILE_SIZES } from "../../lib/orderConstants";
 import { sortTiers } from "../../lib/priceTiers";
+import { compressImageFile, MAX_IMAGE_MB } from "../../lib/imageCompression";
 import type { Product, ProductCost } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
 import Modal from "../../components/ui/Modal";
@@ -89,6 +90,8 @@ export default function ProductFormModal({
   const [tiers, setTiers] = useState<TierRow[]>(emptyTiers);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const isTextile = form.category === "Textil";
 
   useEffect(() => {
@@ -157,6 +160,20 @@ export default function ProductFormModal({
       ...f,
       upsellIds: f.upsellIds.includes(id) ? f.upsellIds.filter((x) => x !== id) : [...f.upsellIds, id],
     }));
+
+  const pickImage = async (file: File | undefined) => {
+    if (!file) return;
+    setImageError(null);
+    setImageBusy(true);
+    try {
+      const dataUrl = await compressImageFile(file);
+      setForm((f) => ({ ...f, imageUrl: dataUrl }));
+    } catch (e) {
+      setImageError(e instanceof Error ? e.message : "Rasmni yuklab bo'lmadi");
+    } finally {
+      setImageBusy(false);
+    }
+  };
 
   const updateTier = (i: number, patch: Partial<TierRow>) =>
     setTiers((t) => t.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
@@ -293,13 +310,43 @@ export default function ProductFormModal({
             />
           </div>
           <div>
-            <label className="label">Rasm URL</label>
-            <input
-              className="input"
-              placeholder="https://..."
-              value={form.imageUrl}
-              onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
-            />
+            <label className="label">Mahsulot rasmi</label>
+            <div className="flex items-center gap-3">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-ink-100 text-ink-400">
+                {form.imageUrl ? (
+                  <img src={form.imageUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <ImageOff className="h-5 w-5" />
+                )}
+              </div>
+              <label className="btn-secondary cursor-pointer">
+                <Upload className="h-4 w-4" />
+                {imageBusy ? "Yuklanmoqda..." : form.imageUrl ? "Rasmni almashtirish" : "Rasm tanlash"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={imageBusy}
+                  onChange={(e) => {
+                    void pickImage(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {form.imageUrl && !imageBusy && (
+                <button
+                  type="button"
+                  className="btn-ghost text-rose-600 hover:bg-rose-50"
+                  onClick={() => setForm((f) => ({ ...f, imageUrl: "" }))}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {imageError && <p className="mt-1.5 text-xs text-rose-600">{imageError}</p>}
+            <p className="mt-1.5 text-xs text-ink-400">
+              Galereyadan yoki fayldan tanlang — {MAX_IMAGE_MB}MB gacha, avtomatik siqiladi
+            </p>
           </div>
           <div>
             <label className="label">Minimal tiraj</label>
