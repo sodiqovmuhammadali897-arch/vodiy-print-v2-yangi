@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { insertOne, listAll, updateOne } from "../../lib/firestoreDb";
-import { CUSTOMER_SOURCES } from "../../lib/orderConstants";
-import type { Lead } from "../../lib/types";
+import { CUSTOMER_SOURCES, INDUSTRIES, UZBEKISTAN_REGIONS } from "../../lib/orderConstants";
+import type { Lead, Product } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { useAuth } from "../../lib/AuthContext";
 import Modal from "../../components/ui/Modal";
@@ -16,10 +16,14 @@ type Props = {
 export default function LeadFormModal({ open, onClose, lead, onSaved }: Props) {
   const { staff, user } = useAuth();
   const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [source, setSource] = useState("");
   const [assignedEmail, setAssignedEmail] = useState("");
+  const [region, setRegion] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [interestedProductId, setInterestedProductId] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,17 +31,24 @@ export default function LeadFormModal({ open, onClose, lead, onSaved }: Props) {
   useEffect(() => {
     if (!open) return;
     void listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }).then(setStaffList);
+    void listAll<Product>("products", { orderBy: ["name", "asc"] }).then(setProducts);
     if (lead) {
       setFullName(lead.full_name);
       setPhone(lead.phone);
       setSource(lead.source);
       setAssignedEmail(lead.assigned_to_email);
+      setRegion(lead.region);
+      setIndustry(lead.industry);
+      setInterestedProductId(lead.interested_product_id);
       setNote(lead.note);
     } else {
       setFullName("");
       setPhone("");
       setSource("");
       setAssignedEmail(user?.email?.toLowerCase() || "");
+      setRegion("");
+      setIndustry("");
+      setInterestedProductId("");
       setNote("");
     }
     setError(null);
@@ -50,12 +61,17 @@ export default function LeadFormModal({ open, onClose, lead, onSaved }: Props) {
     setError(null);
     try {
       const assignedStaff = staffList.find((s) => s.email === assignedEmail);
+      const interestedProduct = products.find((p) => p.id === interestedProductId);
       const payload = {
         full_name: fullName.trim(),
         phone: phone.trim(),
         source,
         assigned_to_email: assignedEmail,
         assigned_to_name: assignedStaff?.full_name || "",
+        region,
+        industry,
+        interested_product_id: interestedProductId,
+        interested_product_name: interestedProduct?.name || "",
         note: note.trim(),
         updated_at: new Date().toISOString(),
       };
@@ -67,6 +83,7 @@ export default function LeadFormModal({ open, onClose, lead, onSaved }: Props) {
           status: "new",
           lost_reason: "",
           converted_customer_id: null,
+          converted_order_id: null,
         });
       }
       setSaving(false);
@@ -117,6 +134,45 @@ export default function LeadFormModal({ open, onClose, lead, onSaved }: Props) {
             {CUSTOMER_SOURCES.map((s) => (
               <option key={s} value={s}>
                 {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Viloyat</label>
+            <select className="input" value={region} onChange={(e) => setRegion(e.target.value)}>
+              <option value="">-- tanlang --</option>
+              {UZBEKISTAN_REGIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Soha</label>
+            <select className="input" value={industry} onChange={(e) => setIndustry(e.target.value)}>
+              <option value="">-- tanlang --</option>
+              {INDUSTRIES.map((i) => (
+                <option key={i} value={i}>
+                  {i}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="label">Qaysi mahsulotga qiziqmoqda</label>
+          <select
+            className="input"
+            value={interestedProductId}
+            onChange={(e) => setInterestedProductId(e.target.value)}
+          >
+            <option value="">-- tanlang --</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
               </option>
             ))}
           </select>

@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Search, Target, X } from "lucide-react";
-import { listAll, listWhere, updateOne } from "../../lib/firestoreDb";
-import { LEAD_FORWARD_CHAIN, LEAD_STATUSES, leadStatusInfo } from "../../lib/orderConstants";
+import { Link } from "react-router-dom";
+import { Plus, Search, Target } from "lucide-react";
+import { getOne, listAll, listWhere, updateOne } from "../../lib/firestoreDb";
+import {
+  LEAD_STATUSES,
+  LEAD_STATUS_OPTIONS,
+  leadStatusInfo,
+  orderStatusToLeadBucket,
+  type LeadColumnKey,
+} from "../../lib/orderConstants";
 import { convertLeadToCustomer } from "../../lib/leadConversion";
-import type { Lead, LeadStatus } from "../../lib/types";
+import type { Lead, LeadStatus, Order } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { useAuth } from "../../lib/AuthContext";
 import { initialsOf } from "../../lib/format";
@@ -22,6 +29,7 @@ export default function SalesPipeline() {
   const canEdit = can("leads", "edit");
 
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [orders, setOrders] = useState<Record<string, Order>>({});
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -40,6 +48,14 @@ export default function SalesPipeline() {
     ]);
     setLeads(rows);
     setStaffList(staffRows);
+
+    const orderIds = Array.from(new Set(rows.map((l) => l.converted_order_id).filter((id): id is string => !!id)));
+    const orderRows = await Promise.all(orderIds.map((id) => getOne<Order>("orders", id)));
+    const orderMap: Record<string, Order> = {};
+    orderRows.forEach((o, i) => {
+      if (o) orderMap[orderIds[i]] = o;
+    });
+    setOrders(orderMap);
     setLoading(false);
   };
 
@@ -57,41 +73,40 @@ export default function SalesPipeline() {
     });
   }, [leads, search, managerFilter]);
 
-  const byStatus = useMemo(() => {
-    const map = new Map<LeadStatus, Lead[]>();
-    for (const s of LEAD_STATUSES) map.set(s.key, []);
-    for (const l of filtered) map.get(l.status)?.push(l);
-    return map;
-  }, [filtered]);
-
-  const advance = async (lead: Lead) => {
-    const idx = LEAD_FORWARD_CHAIN.indexOf(lead.status);
-    if (idx === -1 || idx === LEAD_FORWARD_CHAIN.length - 1) return;
-    const next = LEAD_FORWARD_CHAIN[idx + 1];
-    setBusyId(lead.id);
-    try {
-      if (next === "won") {
-        await convertLeadToCustomer(lead);
-      } else {
-        await updateOne("leads", lead.id, { status: next, updated_at: new Date().toISOString() });
-      }
-      await load();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
-    } finally {
-      setBusyId(null);
-    }
+  const columnFor = (lead: Lead): LeadColumnKey => {
+    if (lead.status !== "awaiting_advance") return lead.status;
+    const order = lead.converted_order_id ? orders[lead.converted_order_id] : undefined;
+    return order ? orderStatusToLeadBucket(order.status) : "awaiting_advance";
   };
 
-  const markLost = async (lead: Lead) => {
-    const reason = prompt("Rad etish sababi:") || "";
+  const byStatus = useMemo(() => {
+    const map = new Map<LeadColumnKey, Lead[]>();
+    for (const s of LEAD_STATUSES) map.set(s.key, []);
+    for (const l of filtered) map.get(columnFor(l))?.push(l);
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, orders]);
+
+  const changeStatus = async (lead: Lead, next: LeadStatus) => {
+    if (next === lead.status) return;
     setBusyId(lead.id);
     try {
-      await updateOne("leads", lead.id, {
-        status: "lost",
-        lost_reason: reason.trim(),
-        updated_at: new Date().toISOString(),
-      });
+      if (next === "awaiting_advance") {
+        await convertLeadToCustomer(lead);
+      } else if (next === "lost") {
+        const reason = prompt("Rad etish sababi:") || "";
+        await updateOne("leads", lead.id, {
+          status: "lost",
+          lost_reason: reason.trim(),
+          updated_at: new Date().toISOString(),
+        });
+      } else {
+        await updateOne("leads", lead.id, {
+          status: next,
+          lost_reason: "",
+          updated_at: new Date().toISOString(),
+        });
+      }
       await load();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
@@ -168,25 +183,31 @@ export default function SalesPipeline() {
                 </div>
                 <div className="flex flex-col gap-2.5 overflow-y-auto">
                   {rows.map((lead) => {
-                    const isTerminal = lead.status === "won" || lead.status === "lost";
+                    const converted = lead.status === "awaiting_advance";
+                    const order = lead.converted_order_id ? orders[lead.converted_order_id] : undefined;
                     return (
                       <div
                         key={lead.id}
                         className={`rounded-xl border bg-surface p-3 shadow-sm ${
-                          lead.status === "won" ? "border-emerald-300" : lead.status === "lost" ? "border-ink-200 opacity-60" : "border-ink-100"
+                          converted ? "border-emerald-300" : lead.status === "lost" ? "border-ink-200 opacity-60" : "border-ink-100"
                         }`}
                       >
                         <div className="text-sm font-bold text-ink-900">{lead.full_name}</div>
                         <div className="mt-0.5 text-xs tabular-nums text-ink-500">{lead.phone}</div>
+                        {(lead.region || lead.industry) && (
+                          <div className="mt-1 text-[11px] text-ink-400">
+                            {[lead.region, lead.industry].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                        {lead.interested_product_name && (
+                          <div className="mt-1.5">
+                            <span className="chip bg-brand-50 text-brand-700">{lead.interested_product_name}</span>
+                          </div>
+                        )}
                         {lead.status === "lost" && lead.lost_reason && (
                           <div className="mt-1.5 text-[11px] text-rose-600">Sabab: {lead.lost_reason}</div>
                         )}
-                        {lead.status === "won" && (
-                          <span className="mt-1.5 inline-flex chip bg-emerald-100 text-emerald-700">
-                            ✓ Mijozga aylandi
-                          </span>
-                        )}
-                        {lead.status !== "won" && lead.source && (
+                        {converted && !lead.interested_product_name && lead.source && (
                           <div className="mt-1.5">
                             <span className="chip bg-ink-100 text-ink-600">{lead.source}</span>
                           </div>
@@ -200,24 +221,36 @@ export default function SalesPipeline() {
                           </span>
                           <span className="text-[11px] text-ink-400">{daysAgo(lead.created_at)}</span>
                         </div>
-                        {canEdit && !isTerminal && (
-                          <div className="mt-2.5 flex gap-1.5">
-                            <button
-                              className="flex-1 rounded-lg bg-brand-50 px-2 py-1.5 text-[11px] font-bold text-brand-700 hover:bg-brand-100 disabled:opacity-50"
-                              disabled={busyId === lead.id}
-                              onClick={() => advance(lead)}
-                            >
-                              → {leadStatusInfo(LEAD_FORWARD_CHAIN[LEAD_FORWARD_CHAIN.indexOf(lead.status) + 1]).label}
-                            </button>
-                            <button
-                              className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-rose-600 hover:bg-rose-100 disabled:opacity-50"
-                              disabled={busyId === lead.id}
-                              onClick={() => markLost(lead)}
-                              title="Rad etish"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
+
+                        {converted ? (
+                          <div className="mt-2.5 space-y-1.5">
+                            <span className={`inline-flex chip ${leadStatusInfo(columnFor(lead)).cls}`}>
+                              {leadStatusInfo(columnFor(lead)).label}
+                            </span>
+                            {order && (
+                              <Link
+                                to={`/orders/${order.id}`}
+                                className="block rounded-lg bg-ink-50 px-2 py-1.5 text-center text-[11px] font-bold text-ink-600 hover:bg-ink-100"
+                              >
+                                Buyurtmani ochish →
+                              </Link>
+                            )}
                           </div>
+                        ) : (
+                          canEdit && (
+                            <select
+                              className="input mt-2.5 !py-1.5 text-xs"
+                              value={lead.status}
+                              disabled={busyId === lead.id}
+                              onChange={(e) => changeStatus(lead, e.target.value as LeadStatus)}
+                            >
+                              {LEAD_STATUS_OPTIONS.map((opt) => (
+                                <option key={opt.key} value={opt.key}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          )
                         )}
                       </div>
                     );

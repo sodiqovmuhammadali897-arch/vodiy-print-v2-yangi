@@ -558,11 +558,12 @@ export type WarehouseTransaction = {
 };
 
 // ── Sotuv bo'limi (Lead pipeline) ───────────────────────────────────
-// A lead lives here only until it's won (converted to a real Customer,
-// via converted_customer_id) or lost — this collection is the funnel,
-// not a system of record for people who are already customers.
-
-export type LeadStatus = "new" | "contacted" | "interested" | "proposal_sent" | "won" | "lost";
+// A lead only carries its own status through new/contacted/telegram —
+// once it reaches "awaiting_advance" it has already been converted into
+// a real Customer + a real (draft) Order, and every later stage
+// (design/production/ready/delivered) is read live off that Order's own
+// status rather than duplicated back onto the lead.
+export type LeadStatus = "new" | "contacted" | "telegram" | "awaiting_advance" | "lost";
 
 export type Lead = {
   id: string;
@@ -572,9 +573,14 @@ export type Lead = {
   status: LeadStatus;
   assigned_to_email: string;
   assigned_to_name: string;
+  region: string;
+  industry: string;
+  interested_product_id: string;
+  interested_product_name: string;
   note: string;
   lost_reason: string;
   converted_customer_id: string | null;
+  converted_order_id: string | null;
   created_at: string;
   updated_at: string;
 };

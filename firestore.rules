@@ -52,8 +52,13 @@ service cloud.firestore {
     // status for their own assigned work. The update branch limits them to
     // touching only status/completed_at, never the rest of the order.
     match /orders/{id} {
-      allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view');
-      allow create: if can('orders', 'edit');
+      // leads-only staff can read orders too — the Sotuv bo'limi board
+      // shows the live production stage of orders spawned from their own
+      // won leads.
+      allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view') || can('leads', 'edit');
+      // A won lead auto-creates its draft order — leads-only staff need
+      // create access for that single insert, nothing more.
+      allow create: if can('orders', 'edit') || can('leads', 'edit');
       allow update: if can('orders', 'edit') ||
         (can('production', 'edit') &&
          request.resource.data.diff(resource.data).affectedKeys()
@@ -104,7 +109,10 @@ service cloud.firestore {
 
     match /customers/{id} {
       allow read: if can('customers', 'view') || can('production', 'view') || can('pechatnik', 'view') || can('proposals', 'view');
-      allow create, update: if can('customers', 'edit');
+      // A won lead auto-creates its Customer record — leads-only staff
+      // need create access for that single insert, nothing more.
+      allow create: if can('customers', 'edit') || can('leads', 'edit');
+      allow update: if can('customers', 'edit');
       allow delete: if can('customers', 'delete');
     }
 
@@ -129,7 +137,7 @@ service cloud.firestore {
     // products, so staff who only have that permission (not Mahsulotlar)
     // can still see it.
     match /products/{id} {
-      allow read: if can('products', 'view') || can('textile', 'view') || can('proposals', 'view');
+      allow read: if can('products', 'view') || can('textile', 'view') || can('proposals', 'view') || can('leads', 'view');
       allow create, update: if can('products', 'edit');
       allow delete: if can('products', 'delete');
     }
