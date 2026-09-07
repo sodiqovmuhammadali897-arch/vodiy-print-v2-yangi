@@ -149,25 +149,32 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
           </div>
         </div>
 
-        <div className="mt-10 flex flex-wrap items-center gap-6 border-t border-ink-200 pt-4 text-xs text-ink-600">
+        {/* Margin-based spacing, not `gap` — html2canvas (used for the
+            PNG/PDF export below) has long-standing bugs with CSS `gap`
+            inside flex rows that can knock an icon onto its own line. */}
+        <div className="mt-10 border-t border-ink-200 pt-4 text-xs text-ink-600">
           {company?.phone && (
-            <span className="flex items-center gap-1.5">
-              <Phone className="h-3.5 w-3.5 text-rose-600" /> {company.phone}
+            <span className="mr-6 inline-flex items-center whitespace-nowrap">
+              <Phone className="mr-1.5 h-3.5 w-3.5 shrink-0 text-rose-600" />
+              {company.phone}
             </span>
           )}
           {company?.telegram && (
-            <span className="flex items-center gap-1.5">
-              <Send className="h-3.5 w-3.5 text-emerald-600" /> {company.telegram}
+            <span className="mr-6 inline-flex items-center whitespace-nowrap">
+              <Send className="mr-1.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+              {company.telegram}
             </span>
           )}
           {company?.email && (
-            <span className="flex items-center gap-1.5">
-              <Mail className="h-3.5 w-3.5 text-ink-500" /> {company.email}
+            <span className="mr-6 inline-flex items-center whitespace-nowrap">
+              <Mail className="mr-1.5 h-3.5 w-3.5 shrink-0 text-ink-500" />
+              {company.email}
             </span>
           )}
           {company?.address && (
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5 text-rose-600" /> {company.address}
+            <span className="inline-flex items-center whitespace-nowrap">
+              <MapPin className="mr-1.5 h-3.5 w-3.5 shrink-0 text-rose-600" />
+              {company.address}
             </span>
           )}
         </div>

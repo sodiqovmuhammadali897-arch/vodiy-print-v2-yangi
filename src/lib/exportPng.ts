@@ -1,8 +1,13 @@
 import html2canvas from "html2canvas";
 
 export const exportNodeToPng = async (node: HTMLElement, fileBase: string): Promise<void> => {
+  // Capturing before web fonts finish loading makes html2canvas fall back
+  // to a system font with different metrics — text sits at different
+  // widths than what's on screen, which can even push flex-wrapped content
+  // onto a different line than the live page shows.
+  await document.fonts.ready;
   const canvas = await html2canvas(node, {
-    scale: 2,
+    scale: 3,
     useCORS: true,
     backgroundColor: "#ffffff",
   });

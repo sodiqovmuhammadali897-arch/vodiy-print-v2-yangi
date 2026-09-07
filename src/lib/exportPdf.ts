@@ -13,8 +13,11 @@ export const exportNodeToPdf = async (node: HTMLElement, fileBase: string): Prom
 
   let canvas: HTMLCanvasElement;
   try {
+    // See exportPng.ts — capturing before web fonts finish loading can
+    // shift text metrics enough to change how content wraps.
+    await document.fonts.ready;
     canvas = await html2canvas(node, {
-      scale: 2,
+      scale: 3,
       useCORS: true,
       backgroundColor: "#ffffff",
     });
