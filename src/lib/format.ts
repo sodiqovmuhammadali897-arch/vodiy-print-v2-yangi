@@ -51,6 +51,14 @@ const UZ_MONTHS = [
 export const monthNameUz = (month: number): string =>
   UZ_MONTHS[Math.max(0, Math.min(11, month - 1))];
 
+export const formatDuration = (totalSeconds: number): string => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours === 0) return `${remainingMinutes} daqiqa`;
+  return `${hours} soat ${remainingMinutes} daqiqa`;
+};
+
 export const initialsOf = (name: string): string => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";

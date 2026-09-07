@@ -9,6 +9,7 @@ import DashboardHero from "./DashboardHero";
 import WorkdaysPanel from "./WorkdaysPanel";
 import ManagerStatsPanel from "./ManagerStatsPanel";
 import RecentOrdersPanel from "./RecentOrdersPanel";
+import SalesActivitySection from "./SalesActivitySection";
 
 type Stats = {
   plan: number;
@@ -208,6 +209,8 @@ export default function Dashboard() {
       </div>
 
       <RecentOrdersPanel orders={recentOrders} loading={loading} />
+
+      <SalesActivitySection />
     </div>
   );
 }

@@ -294,6 +294,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Ish stoli's "Bugungi tizimdan foydalanish" widget — one doc per
+    // staff member per day, written only by that staff member's own
+    // client-side heartbeat while the app is open. Any signed-in staff
+    // can read the whole day's rows to render the team leaderboard.
+    match /activity_daily/{id} {
+      allow read: if isStaff();
+      allow create, update: if isSignedIn() && request.resource.data.email == email();
+      allow delete: if isAdmin();
+    }
+
     // ── Ombor ─────────────────────────────────────────────────────
     match /warehouse_items/{id} {
       allow read: if can('warehouse', 'view');

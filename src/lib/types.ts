@@ -584,3 +584,17 @@ export type Lead = {
   created_at: string;
   updated_at: string;
 };
+
+// ── Kunlik faollik (Ish stoli "Bugungi tizimdan foydalanish") ──────────
+// One doc per staff member per day (id: "<date>_<email>"), accumulated by
+// a client-side heartbeat while the tab is open and visible — never
+// written to directly outside that heartbeat, so `seconds` always reads
+// as "roughly how long this person had the app open and in view today".
+export type DailyActivity = {
+  id: string;
+  email: string;
+  full_name: string;
+  date: string;
+  seconds: number;
+  updated_at: string;
+};

@@ -3,9 +3,13 @@ import { Suspense, useState } from "react";
 import { Loader } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import { useAuth } from "../../lib/AuthContext";
+import { useActivityHeartbeat } from "../../lib/activityTracking";
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, staff } = useAuth();
+  useActivityHeartbeat(user?.email?.toLowerCase() || null, staff?.full_name || "");
   return (
     <div className="flex h-screen w-full overflow-hidden bg-ink-50">
       <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
