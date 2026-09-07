@@ -1,0 +1,16 @@
+{
+  "name": "meta-webhook",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.1",
+    "firebase-admin": "^12.7.0"
+  }
+}

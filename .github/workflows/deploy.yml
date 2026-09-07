@@ -130,3 +130,79 @@ jobs:
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           npx firebase-tools@13 deploy --only functions,firestore:rules --project vodiy-print --non-interactive
+
+  # Deploys the standalone Meta (Facebook/Instagram) Lead Ads webhook
+  # receiver (meta-webhook/) to the same VPS as a systemd service,
+  # independent of Cloud Functions — no Blaze plan needed. Skips itself
+  # until FIREBASE_SERVICE_ACCOUNT, META_APP_SECRET,
+  # META_PAGE_ACCESS_TOKEN and META_VERIFY_TOKEN are all set as repo
+  # secrets (see meta-webhook/README.md).
+  deploy-meta-webhook:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check required secrets
+        id: check
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ] || [ -z "${{ secrets.META_APP_SECRET }}" ] || [ -z "${{ secrets.META_PAGE_ACCESS_TOKEN }}" ] || [ -z "${{ secrets.META_VERIFY_TOKEN }}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Meta webhook secrets not fully set yet — skipping deploy."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload webhook source
+        if: steps.check.outputs.ready == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: "meta-webhook/*"
+          target: "/tmp/meta-webhook-src"
+
+      - name: Upload systemd unit
+        if: steps.check.outputs.ready == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: "deploy/meta-webhook.service"
+          target: "/tmp"
+
+      - name: Install + configure + restart service
+        if: steps.check.outputs.ready == 'true'
+        uses: appleboy/ssh-action@v1
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          META_VERIFY_TOKEN: ${{ secrets.META_VERIFY_TOKEN }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: FIREBASE_SERVICE_ACCOUNT,META_APP_SECRET,META_PAGE_ACCESS_TOKEN,META_VERIFY_TOKEN
+          script: |
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S mkdir -p /opt/meta-webhook
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R "${{ secrets.SERVER_USER }}" /opt/meta-webhook
+            cp -r /tmp/meta-webhook-src/meta-webhook/. /opt/meta-webhook/
+            echo "$FIREBASE_SERVICE_ACCOUNT" > /opt/meta-webhook/service-account.json
+            cat > /opt/meta-webhook/.env <<EOF
+            PORT=8081
+            FIREBASE_SERVICE_ACCOUNT_PATH=/opt/meta-webhook/service-account.json
+            META_VERIFY_TOKEN=$META_VERIFY_TOKEN
+            META_APP_SECRET=$META_APP_SECRET
+            META_PAGE_ACCESS_TOKEN=$META_PAGE_ACCESS_TOKEN
+            EOF
+            cd /opt/meta-webhook && npm install --omit=dev --no-audit --no-fund
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S cp /tmp/deploy/meta-webhook.service /etc/systemd/system/meta-webhook.service
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R www-data:www-data /opt/meta-webhook
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl daemon-reload
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl enable meta-webhook
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl restart meta-webhook
+            sleep 2
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl is-active meta-webhook

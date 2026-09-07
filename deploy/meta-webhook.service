@@ -1,0 +1,15 @@
+[Unit]
+Description=Meta Lead Ads webhook receiver for printvodiy.uz
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/meta-webhook
+EnvironmentFile=/opt/meta-webhook/.env
+ExecStart=/usr/bin/node /opt/meta-webhook/server.js
+Restart=always
+RestartSec=5
+User=www-data
+
+[Install]
+WantedBy=multi-user.target
