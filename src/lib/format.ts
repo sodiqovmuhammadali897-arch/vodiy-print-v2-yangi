@@ -59,6 +59,10 @@ export const formatDuration = (totalSeconds: number): string => {
   return `${hours} soat ${remainingMinutes} daqiqa`;
 };
 
+// Strips everything but digits so "+998 90 123 45 67", "998901234567"
+// and "90 123 45 67" all compare equal for duplicate-phone lookups.
+export const normalizePhone = (phone: string): string => phone.replace(/\D/g, "").slice(-9);
+
 export const initialsOf = (name: string): string => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";

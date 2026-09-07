@@ -1,39 +1,55 @@
 import { insertOne, updateOne } from "./firestoreDb";
 import { nextCustomerNumber } from "./numbering";
 import { saveOrder } from "./orderService";
+import { logLeadActivity } from "./leadActivity";
+import { findCustomerByPhone } from "./duplicateCheck";
 import type { Lead } from "./types";
 
-// Creates the real Customer + a minimal draft Order a lead becomes the
-// moment it reaches "Avans kutilmoqda" — called from the status dropdown
-// on the Kanban card. From here on the lead's later stages (design,
-// production, ready, delivered) are read live off this Order's own
-// status rather than tracked separately on the lead.
-export const convertLeadToCustomer = async (lead: Lead): Promise<{ customerId: string; orderId: string }> => {
-  const customer_number = await nextCustomerNumber();
-  const [first_name, ...rest] = lead.full_name.trim().split(/\s+/);
-  const customer = await insertOne("customers", {
-    customer_number,
-    customer_type: "new",
-    source: lead.source,
-    industry: lead.industry,
-    first_name: first_name || lead.full_name,
-    last_name: rest.join(" "),
-    phone: lead.phone,
-    extra_phone: "",
-    telegram: "",
-    company: "",
-    position: "",
-    region: lead.region,
-    address: "",
-    note: lead.note,
-    manager_name: lead.assigned_to_name,
-  });
+// Creates (or reuses, by phone) the real Customer + a minimal Order a
+// lead becomes the moment it reaches "Avans" — called from the Kanban
+// drag or the status dropdown. From here on the lead's later stages
+// (design, production, ready, delivered) are read live off this
+// Order's own status rather than tracked separately on the lead.
+export const convertLeadToCustomer = async (
+  lead: Lead,
+  actorEmail: string,
+  actorName: string,
+): Promise<{ customerId: string; orderId: string; reusedExistingCustomer: boolean }> => {
+  const existing = lead.phone ? await findCustomerByPhone(lead.phone) : null;
+
+  let customerId: string;
+  let reusedExistingCustomer = false;
+  if (existing) {
+    customerId = existing.id;
+    reusedExistingCustomer = true;
+  } else {
+    const customer_number = await nextCustomerNumber();
+    const [first_name, ...rest] = lead.full_name.trim().split(/\s+/);
+    const created = await insertOne("customers", {
+      customer_number,
+      customer_type: "new",
+      source: lead.source,
+      industry: lead.industry,
+      first_name: first_name || lead.full_name,
+      last_name: rest.join(" "),
+      phone: lead.phone,
+      extra_phone: "",
+      telegram: lead.telegram,
+      company: lead.brand,
+      position: "",
+      region: lead.region,
+      address: "",
+      note: lead.note,
+      manager_name: lead.assigned_to_name,
+    });
+    customerId = created.id;
+  }
 
   const orderResult = await saveOrder(
     {
       order_number: null,
       brand_id: null,
-      customer_id: customer.id,
+      customer_id: customerId,
       manager_id: null,
       manager_name: lead.assigned_to_name,
       title: lead.interested_product_name || lead.full_name,
@@ -61,11 +77,11 @@ export const convertLeadToCustomer = async (lead: Lead): Promise<{ customerId: s
       delivery_time: "",
       delivery_cost: 0,
       payment_type: "",
-      telegram_link: "",
+      telegram_link: lead.telegram,
       customer_note: "",
       production_note: "",
       logistics_note: "",
-      private_note: `Sotuv bo'limidan avtomatik yaratildi (lid: ${lead.full_name})`,
+      private_note: `Lidlar bo'limidan avtomatik yaratildi (${lead.lead_number || lead.id}: ${lead.full_name})`,
       client_request_note: "",
       discount_amount: 0,
       is_draft: true,
@@ -82,11 +98,20 @@ export const convertLeadToCustomer = async (lead: Lead): Promise<{ customerId: s
   }
 
   await updateOne("leads", lead.id, {
-    status: "awaiting_advance",
-    converted_customer_id: customer.id,
+    status: "advance",
+    converted_customer_id: customerId,
     converted_order_id: orderResult.id,
     updated_at: new Date().toISOString(),
   });
 
-  return { customerId: customer.id, orderId: orderResult.id };
+  await logLeadActivity(
+    lead.id,
+    reusedExistingCustomer
+      ? "Buyurtmaga aylantirildi (mavjud mijoz profiliga bog'landi)"
+      : "Buyurtmaga aylantirildi (yangi mijoz yaratildi)",
+    actorEmail,
+    actorName,
+  );
+
+  return { customerId, orderId: orderResult.id, reusedExistingCustomer };
 };

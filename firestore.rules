@@ -294,6 +294,38 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // A lead's own follow-up/reminder queue (distinct from the general
+    // `tasks` collection) — same ownership shape as leads itself.
+    match /lead_tasks/{id} {
+      allow read: if isAdmin() || (can('leads', 'view') && resource.data.assigned_to_email == email());
+      allow create: if can('leads', 'edit');
+      allow update: if isAdmin() || (can('leads', 'edit') && resource.data.assigned_to_email == email());
+      allow delete: if isAdmin();
+    }
+
+    // Auto-written "Faoliyat" timeline entries — append-only, readable by
+    // anyone who can see leads at all (low-sensitivity: action text and
+    // names, not financial data).
+    match /lead_activities/{id} {
+      allow read: if isAdmin() || can('leads', 'view');
+      allow create: if can('leads', 'edit');
+      allow update, delete: if isAdmin();
+    }
+
+    // Lightweight lookup collections (source/campaign names), upserted
+    // automatically when a lead is saved — every staff member needs to
+    // read them for filter dropdowns.
+    match /lead_sources/{id} {
+      allow read: if isStaff();
+      allow create, update: if can('leads', 'edit');
+      allow delete: if isAdmin();
+    }
+    match /lead_campaigns/{id} {
+      allow read: if isStaff();
+      allow create, update: if can('leads', 'edit');
+      allow delete: if isAdmin();
+    }
+
     // Ish stoli's "Bugungi tizimdan foydalanish" widget — one doc per
     // staff member per day, written only by that staff member's own
     // client-side heartbeat while the app is open. Any signed-in staff

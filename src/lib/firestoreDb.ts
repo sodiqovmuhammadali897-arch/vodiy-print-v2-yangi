@@ -88,6 +88,15 @@ export const subscribeWhere = <T>(
   });
 };
 
+export const subscribeOne = <T>(
+  name: string,
+  id: string,
+  onData: (row: WithId<T> | null) => void,
+): Unsubscribe =>
+  onSnapshot(doc(db, name, id), (snap) => {
+    onData(snap.exists() ? ({ id: snap.id, ...(snap.data() as T) } as WithId<T>) : null);
+  });
+
 export const getOne = async <T>(
   name: string,
   id: string,

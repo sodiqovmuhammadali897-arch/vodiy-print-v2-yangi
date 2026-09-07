@@ -1,138 +1,215 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Search, Target } from "lucide-react";
-import { getOne, listAll, listWhere, updateOne } from "../../lib/firestoreDb";
-import {
-  LEAD_STATUSES,
-  LEAD_STATUS_OPTIONS,
-  leadStatusInfo,
-  orderStatusToLeadBucket,
-  type LeadColumnKey,
-} from "../../lib/orderConstants";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Search, SlidersHorizontal, LayoutGrid, List as ListIcon, BarChart3 } from "lucide-react";
+import { listAll, subscribeAll, subscribeWhere, subscribeOne, type Unsubscribe } from "../../lib/firestoreDb";
+import { LEAD_SOURCES } from "../../lib/orderConstants";
 import { convertLeadToCustomer } from "../../lib/leadConversion";
-import type { Lead, LeadStatus, Order } from "../../lib/types";
-import type { Staff } from "../../lib/permissions";
+import { moveLead } from "../../lib/leadStatusChange";
 import { useAuth } from "../../lib/AuthContext";
-import { initialsOf } from "../../lib/format";
-import AsyncState from "../../components/ui/AsyncState";
+import type { Lead, LeadStatus, LeadTask, Order, Product } from "../../lib/types";
+import type { Staff } from "../../lib/permissions";
 import LeadFormModal from "./LeadFormModal";
-import SalesActivitySection from "./SalesActivitySection";
+import LeadTaskModal from "./LeadTaskModal";
+import LostLeadModal from "./LostLeadModal";
+import LeadDetailPanel from "./LeadDetailPanel";
+import LeadKanbanView from "./LeadKanbanView";
+import LeadListView from "./LeadListView";
+import LeadAnalyticsView from "./LeadAnalyticsView";
+import TodayTasksPanel from "./TodayTasksPanel";
+import LeadTaskToasts from "./LeadTaskToasts";
 
-const daysAgo = (iso: string): string => {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
-  if (diff <= 0) return "Bugun";
-  if (diff === 1) return "1 kun";
-  return `${diff} kun`;
+export type LeadFilters = {
+  source: string;
+  campaign: string;
+  product: string;
+  dateFrom: string;
+  dateTo: string;
+  overdueTaskOnly: boolean;
+  contactTodayOnly: boolean;
+};
+
+const emptyFilters: LeadFilters = {
+  source: "",
+  campaign: "",
+  product: "",
+  dateFrom: "",
+  dateTo: "",
+  overdueTaskOnly: false,
+  contactTodayOnly: false,
 };
 
 export default function SalesPipeline() {
   const { isAdmin, can, user } = useAuth();
   const canEdit = can("leads", "edit");
+  const email = user?.email?.toLowerCase() || "";
 
+  const [view, setView] = useState<"kanban" | "list" | "analytics">("kanban");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [orders, setOrders] = useState<Record<string, Order>>({});
   const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [openTasks, setOpenTasks] = useState<LeadTask[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [search, setSearch] = useState("");
   const [managerFilter, setManagerFilter] = useState("all");
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<LeadFilters>(emptyFilters);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [taskModalLead, setTaskModalLead] = useState<Lead | null>(null);
+  const [lostModalLead, setLostModalLead] = useState<Lead | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    const email = user?.email?.toLowerCase() || "";
-    const [rows, staffRows] = await Promise.all([
-      isAdmin ? listAll<Lead>("leads", { orderBy: ["created_at", "desc"] }) : listWhere<Lead>("leads", "assigned_to_email", email, { orderBy: ["created_at", "desc"] }),
-      isAdmin ? listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }) : Promise.resolve<Staff[]>([]),
-    ]);
-    setLeads(rows);
-    setStaffList(staffRows);
-
-    const orderIds = Array.from(new Set(rows.map((l) => l.converted_order_id).filter((id): id is string => !!id)));
-    const orderRows = await Promise.all(orderIds.map((id) => getOne<Order>("orders", id)));
-    const orderMap: Record<string, Order> = {};
-    orderRows.forEach((o, i) => {
-      if (o) orderMap[orderIds[i]] = o;
-    });
-    setOrders(orderMap);
-    setLoading(false);
-  };
-
+  // ── real-time leads ──────────────────────────────────────────────
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+    setLoading(true);
+    let unsub: Unsubscribe;
+    if (isAdmin) {
+      unsub = subscribeAll<Lead>("leads", (rows) => {
+        setLeads(rows);
+        setLoading(false);
+      }, { orderBy: ["created_at", "desc"] });
+    } else if (email) {
+      unsub = subscribeWhere<Lead>("leads", "assigned_to_email", email, (rows) => {
+        setLeads(rows);
+        setLoading(false);
+      }, { orderBy: ["created_at", "desc"] });
+    } else {
+      setLoading(false);
+      unsub = () => {};
+    }
+    return () => unsub();
+  }, [isAdmin, email]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return leads.filter((l) => {
-      if (managerFilter !== "all" && l.assigned_to_email !== managerFilter) return false;
-      if (q && !`${l.full_name} ${l.phone}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [leads, search, managerFilter]);
-
-  const columnFor = (lead: Lead): LeadColumnKey => {
-    if (lead.status !== "awaiting_advance") return lead.status;
-    const order = lead.converted_order_id ? orders[lead.converted_order_id] : undefined;
-    return order ? orderStatusToLeadBucket(order.status) : "awaiting_advance";
-  };
-
-  const byStatus = useMemo(() => {
-    const map = new Map<LeadColumnKey, Lead[]>();
-    for (const s of LEAD_STATUSES) map.set(s.key, []);
-    for (const l of filtered) map.get(columnFor(l))?.push(l);
-    return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, orders]);
-
-  const changeStatus = async (lead: Lead, next: LeadStatus) => {
-    if (next === lead.status) return;
-    setBusyId(lead.id);
-    try {
-      if (next === "awaiting_advance") {
-        await convertLeadToCustomer(lead);
-      } else if (next === "lost") {
-        const reason = prompt("Rad etish sababi:") || "";
-        await updateOne("leads", lead.id, {
-          status: "lost",
-          lost_reason: reason.trim(),
-          updated_at: new Date().toISOString(),
-        });
-      } else {
-        await updateOne("leads", lead.id, {
-          status: next,
-          lost_reason: "",
-          updated_at: new Date().toISOString(),
+  // ── real-time linked orders (one listener per converted lead) ──────
+  const orderUnsubsRef = useRef<Record<string, Unsubscribe>>({});
+  useEffect(() => {
+    const needed = new Set(leads.map((l) => l.converted_order_id).filter((id): id is string => !!id));
+    const current = orderUnsubsRef.current;
+    for (const id of Object.keys(current)) {
+      if (!needed.has(id)) {
+        current[id]();
+        delete current[id];
+        setOrders((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
         });
       }
-      await load();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
-    } finally {
-      setBusyId(null);
     }
-  };
+    for (const id of needed) {
+      if (!current[id]) {
+        current[id] = subscribeOne<Order>("orders", id, (order) => {
+          setOrders((prev) => (order ? { ...prev, [id]: order } : prev));
+        });
+      }
+    }
+  }, [leads]);
+  useEffect(() => () => Object.values(orderUnsubsRef.current).forEach((u) => u()), []);
+
+  // ── staff / products / open tasks (for filters) ─────────────────
+  useEffect(() => {
+    void listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }).then(setStaffList);
+    void listAll<Product>("products", { orderBy: ["name", "asc"] }).then(setProducts);
+  }, []);
+  useEffect(() => {
+    if (!email) return;
+    const unsub = isAdmin
+      ? subscribeAll<LeadTask>("lead_tasks", setOpenTasks)
+      : subscribeWhere<LeadTask>("lead_tasks", "assigned_to_email", email, setOpenTasks);
+    return () => unsub();
+  }, [isAdmin, email]);
+
+  const overdueLeadIds = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return new Set(openTasks.filter((t) => t.status === "open" && t.due_date < todayStr).map((t) => t.lead_id));
+  }, [openTasks]);
+
+  // ── filtering ────────────────────────────────────────────────────
+  const filteredLeads = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return leads.filter((l) => {
+      if (managerFilter !== "all" && l.assigned_to_email !== managerFilter) return false;
+      if (q) {
+        const hay = `${l.full_name} ${l.brand} ${l.phone} ${l.telegram} ${l.lead_number || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (filters.source && l.source !== filters.source) return false;
+      if (filters.campaign && l.campaign_name !== filters.campaign) return false;
+      if (filters.product && l.interested_product_id !== filters.product) return false;
+      if (filters.dateFrom && l.created_at < filters.dateFrom) return false;
+      if (filters.dateTo && l.created_at > filters.dateTo + "T23:59:59") return false;
+      if (filters.overdueTaskOnly && !overdueLeadIds.has(l.id)) return false;
+      if (filters.contactTodayOnly && (!l.next_contact_at || l.next_contact_at.slice(0, 10) !== todayStr)) return false;
+      return true;
+    });
+  }, [leads, search, managerFilter, filters, overdueLeadIds]);
+
+  const campaignOptions = useMemo(
+    () => Array.from(new Set(leads.map((l) => l.campaign_name).filter(Boolean))),
+    [leads],
+  );
+
+  // ── actions ──────────────────────────────────────────────────────
+  const actor = { email, name: user?.email || email };
 
   const openNew = () => {
     setEditingLead(null);
-    setModalOpen(true);
+    setFormOpen(true);
   };
+  const openEdit = (lead: Lead) => {
+    setEditingLead(lead);
+    setFormOpen(true);
+    setSelectedLead(null);
+  };
+
+  const handleDrop = async (lead: Lead, columnKey: LeadStatus | "cancelled") => {
+    if (!canEdit) return;
+    if (columnKey === "cancelled") return;
+    if (columnKey === "lost") {
+      setLostModalLead(lead);
+      return;
+    }
+    try {
+      await moveLead(lead, columnKey, actor);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    }
+  };
+
+  const handleConvert = async (lead: Lead) => {
+    try {
+      await convertLeadToCustomer(lead, actor.email, actor.name);
+      setSelectedLead(null);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Xatolik yuz berdi");
+    }
+  };
+
+  const selectedOrder = selectedLead?.converted_order_id ? orders[selectedLead.converted_order_id] || null : null;
 
   return (
     <div className="flex h-full flex-col space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">Sotuv bo'limi</h1>
-          <p className="text-sm text-ink-500">Lid keladi → ishlov beriladi → mijozga aylanadi</p>
+          <h1 className="font-display text-2xl font-bold text-ink-900">Lidlar</h1>
+          <p className="text-sm text-ink-500">Target, Instagram, Facebook, Telegram — barcha manbalardan tushgan lidlar</p>
         </div>
-        {canEdit && (
-          <button className="btn-primary" onClick={openNew}>
-            <Plus className="h-4 w-4" /> Yangi lid
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <TodayTasksPanel />
+          <div className="flex gap-1 rounded-xl bg-ink-100 p-1">
+            <ViewTab active={view === "kanban"} onClick={() => setView("kanban")} icon={<LayoutGrid className="h-3.5 w-3.5" />} label="Kanban" />
+            <ViewTab active={view === "list"} onClick={() => setView("list")} icon={<ListIcon className="h-3.5 w-3.5" />} label="Ro'yxat" />
+            <ViewTab active={view === "analytics"} onClick={() => setView("analytics")} icon={<BarChart3 className="h-3.5 w-3.5" />} label="Analitika" />
+          </div>
+          {canEdit && (
+            <button className="btn-primary" onClick={openNew}>
+              <Plus className="h-4 w-4" /> Yangi lid
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -141,16 +218,12 @@ export default function SalesPipeline() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Qidirish..."
-            className="w-56 bg-transparent text-sm outline-none placeholder-ink-400"
+            placeholder="Ism, telefon, brend, Telegram yoki lid ID..."
+            className="w-64 bg-transparent text-sm outline-none placeholder-ink-400"
           />
         </div>
         {isAdmin && staffList.length > 0 && (
-          <select
-            className="input w-auto !py-2 text-sm"
-            value={managerFilter}
-            onChange={(e) => setManagerFilter(e.target.value)}
-          >
+          <select className="input w-auto !py-2 text-sm" value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)}>
             <option value="all">Barcha menejerlar</option>
             {staffList.map((s) => (
               <option key={s.email} value={s.email}>
@@ -159,121 +232,142 @@ export default function SalesPipeline() {
             ))}
           </select>
         )}
+        <button className="btn-ghost" onClick={() => setFilterPanelOpen((v) => !v)}>
+          <SlidersHorizontal className="h-4 w-4" /> Filtrlar
+        </button>
       </div>
 
-      <AsyncState
-        loading={loading}
-        empty={filtered.length === 0}
-        emptyLabel="Lidlar mavjud emas"
-        emptyDescription="Yuqoridagi tugma orqali birinchi lidingizni qo'shing"
-        emptyIcon={<Target className="h-5 w-5" />}
-      >
-        <div className="flex flex-1 gap-3.5 overflow-x-auto pb-2">
-          {LEAD_STATUSES.map((col) => {
-            const rows = byStatus.get(col.key) || [];
-            return (
-              <div key={col.key} className="flex w-64 shrink-0 flex-col rounded-2xl bg-ink-50/70 p-3">
-                <div className="mb-2.5 flex items-center justify-between px-1">
-                  <span className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-ink-700">
-                    <span className="h-2 w-2 rounded-full" style={{ background: col.dot }} />
-                    {col.label}
-                  </span>
-                  <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-bold text-ink-500">
-                    {rows.length}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2.5 overflow-y-auto">
-                  {rows.map((lead) => {
-                    const converted = lead.status === "awaiting_advance";
-                    const order = lead.converted_order_id ? orders[lead.converted_order_id] : undefined;
-                    return (
-                      <div
-                        key={lead.id}
-                        className={`rounded-xl border bg-surface p-3 shadow-sm ${
-                          converted ? "border-emerald-300" : lead.status === "lost" ? "border-ink-200 opacity-60" : "border-ink-100"
-                        }`}
-                      >
-                        <div className="text-sm font-bold text-ink-900">{lead.full_name}</div>
-                        <div className="mt-0.5 text-xs tabular-nums text-ink-500">{lead.phone}</div>
-                        {(lead.region || lead.industry) && (
-                          <div className="mt-1 text-[11px] text-ink-400">
-                            {[lead.region, lead.industry].filter(Boolean).join(" · ")}
-                          </div>
-                        )}
-                        {lead.interested_product_name && (
-                          <div className="mt-1.5">
-                            <span className="chip bg-brand-50 text-brand-700">{lead.interested_product_name}</span>
-                          </div>
-                        )}
-                        {lead.status === "lost" && lead.lost_reason && (
-                          <div className="mt-1.5 text-[11px] text-rose-600">Sabab: {lead.lost_reason}</div>
-                        )}
-                        {converted && !lead.interested_product_name && lead.source && (
-                          <div className="mt-1.5">
-                            <span className="chip bg-ink-100 text-ink-600">{lead.source}</span>
-                          </div>
-                        )}
-                        <div className="mt-2.5 flex items-center justify-between">
-                          <span
-                            className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-100 text-[9px] font-bold text-brand-700"
-                            title={lead.assigned_to_name}
-                          >
-                            {lead.assigned_to_name ? initialsOf(lead.assigned_to_name) : "-"}
-                          </span>
-                          <span className="text-[11px] text-ink-400">{daysAgo(lead.created_at)}</span>
-                        </div>
-
-                        {converted ? (
-                          <div className="mt-2.5 space-y-1.5">
-                            <span className={`inline-flex chip ${leadStatusInfo(columnFor(lead)).cls}`}>
-                              {leadStatusInfo(columnFor(lead)).label}
-                            </span>
-                            {order && (
-                              <Link
-                                to={`/orders/${order.id}`}
-                                className="block rounded-lg bg-ink-50 px-2 py-1.5 text-center text-[11px] font-bold text-ink-600 hover:bg-ink-100"
-                              >
-                                Buyurtmani ochish →
-                              </Link>
-                            )}
-                          </div>
-                        ) : (
-                          canEdit && (
-                            <select
-                              className="input mt-2.5 !py-1.5 text-xs"
-                              value={lead.status}
-                              disabled={busyId === lead.id}
-                              onChange={(e) => changeStatus(lead, e.target.value as LeadStatus)}
-                            >
-                              {LEAD_STATUS_OPTIONS.map((opt) => (
-                                <option key={opt.key} value={opt.key}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          )
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+      {filterPanelOpen && (
+        <div className="grid grid-cols-2 gap-3 rounded-xl border border-ink-200 bg-ink-50 p-3.5 sm:grid-cols-4">
+          <div>
+            <label className="label">Manba</label>
+            <select className="input !py-2 text-sm" value={filters.source} onChange={(e) => setFilters((f) => ({ ...f, source: e.target.value }))}>
+              <option value="">Barchasi</option>
+              {LEAD_SOURCES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Kampaniya</label>
+            <select className="input !py-2 text-sm" value={filters.campaign} onChange={(e) => setFilters((f) => ({ ...f, campaign: e.target.value }))}>
+              <option value="">Barchasi</option>
+              {campaignOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Mahsulot</label>
+            <select className="input !py-2 text-sm" value={filters.product} onChange={(e) => setFilters((f) => ({ ...f, product: e.target.value }))}>
+              <option value="">Barchasi</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="label">Sana — dan</label>
+              <input className="input !py-2 text-sm" type="date" value={filters.dateFrom} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Sana — gacha</label>
+              <input className="input !py-2 text-sm" type="date" value={filters.dateTo} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-ink-700">
+            <input type="checkbox" checked={filters.overdueTaskOnly} onChange={(e) => setFilters((f) => ({ ...f, overdueTaskOnly: e.target.checked }))} />
+            Vazifasi kechikkanlar
+          </label>
+          <label className="flex items-center gap-2 text-xs font-semibold text-ink-700">
+            <input type="checkbox" checked={filters.contactTodayOnly} onChange={(e) => setFilters((f) => ({ ...f, contactTodayOnly: e.target.checked }))} />
+            Keyingi aloqasi bugun
+          </label>
+          <button className="btn-ghost text-xs" onClick={() => setFilters(emptyFilters)}>
+            Filtrlarni tozalash
+          </button>
         </div>
-      </AsyncState>
+      )}
 
-      <SalesActivitySection managerEmail={isAdmin ? managerFilter : user?.email?.toLowerCase() || ""} />
+      {view === "kanban" && (
+        <LeadKanbanView
+          leads={filteredLeads}
+          orders={orders}
+          loading={loading}
+          canEdit={canEdit}
+          onOpen={setSelectedLead}
+          onEdit={openEdit}
+          onAddTask={setTaskModalLead}
+          onDrop={handleDrop}
+        />
+      )}
+      {view === "list" && (
+        <LeadListView leads={filteredLeads} orders={orders} loading={loading} onOpen={setSelectedLead} />
+      )}
+      {view === "analytics" && (
+        <LeadAnalyticsView leads={leads} orders={orders} staffList={staffList} managerEmail={isAdmin ? managerFilter : email} />
+      )}
 
-      <LeadFormModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        lead={editingLead}
-        onSaved={() => {
-          setModalOpen(false);
-          void load();
+      <LeadDetailPanel
+        lead={selectedLead}
+        order={selectedOrder}
+        onClose={() => setSelectedLead(null)}
+        onEdit={openEdit}
+        onAddTask={setTaskModalLead}
+        onLost={setLostModalLead}
+        onConvert={handleConvert}
+        onChanged={() => {
+          if (selectedLead) {
+            const fresh = leads.find((l) => l.id === selectedLead.id);
+            if (fresh) setSelectedLead(fresh);
+          }
         }}
       />
+
+      <LeadFormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        lead={editingLead}
+        onSaved={() => setFormOpen(false)}
+      />
+      <LeadTaskModal
+        open={!!taskModalLead}
+        onClose={() => setTaskModalLead(null)}
+        lead={taskModalLead}
+        onSaved={() => setTaskModalLead(null)}
+      />
+      <LostLeadModal
+        open={!!lostModalLead}
+        onClose={() => setLostModalLead(null)}
+        lead={lostModalLead}
+        onDone={() => {
+          setLostModalLead(null);
+          setSelectedLead(null);
+        }}
+      />
+
+      {email && <LeadTaskToasts email={email} />}
     </div>
+  );
+}
+
+function ViewTab({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold ${
+        active ? "bg-surface text-ink-900 shadow-sm" : "text-ink-500"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

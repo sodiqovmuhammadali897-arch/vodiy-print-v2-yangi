@@ -30,3 +30,8 @@ export const nextTextileCompanyNumber = async (): Promise<string> => {
   const rows = await listAll<{ company_number: string | null }>("textile_companies");
   return `TXT-${pad(nextSequence(rows.map((r) => r.company_number), "TXT"))}`;
 };
+
+export const nextLeadNumber = async (): Promise<string> => {
+  const rows = await listAll<{ lead_number: string | null }>("leads");
+  return `LID-${pad(nextSequence(rows.map((r) => r.lead_number), "LID"))}`;
+};

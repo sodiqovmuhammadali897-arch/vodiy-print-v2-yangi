@@ -1,4 +1,4 @@
-import type { LeadStatus, OrderStatus } from "./types";
+import type { Lead, LeadStatus, LeadTaskType, Order, OrderStatus } from "./types";
 
 export const PRODUCT_CATEGORIES = [
   "Tipografiya",
@@ -270,56 +270,112 @@ export const TEXTILE_COLORS = [
   "Boshqa",
 ] as const;
 
-// Every column the Kanban board can render. The first five are real,
-// stored Lead.status values a person picks from a dropdown. The middle
-// four (design/production/ready/delivered) are never stored on the lead
-// itself — once a lead is converted (status "awaiting_advance") it has a
-// real linked Order, and those columns are computed live from that
-// Order's own status via orderStatusToLeadBucket below. "cancelled"
+// Every column the Kanban board can render, in order. "design" through
+// "delivered" are never stored on the lead itself once it's converted
+// (status "advance") — the lead has a real linked Order at that point,
+// and those four columns are computed live from that Order's own status
+// via orderStatusToLeadStage below; dragging a card into one of them
+// writes the matching status straight onto the Order. "cancelled"
 // mirrors an Order that got cancelled after conversion.
-export type LeadColumnKey = LeadStatus | "design" | "production" | "ready" | "delivered" | "cancelled";
+export type LeadColumnKey = LeadStatus | "cancelled";
 
-export const LEAD_STATUSES: { key: LeadColumnKey; label: string; cls: string; dot: string }[] = [
-  { key: "new", label: "Yangi lid", cls: "bg-brand-100 text-brand-700", dot: "#0062db" },
-  { key: "contacted", label: "Bog'lanildi", cls: "bg-violet-100 text-violet-700", dot: "#7c3aed" },
-  { key: "telegram", label: "Telegramga o'tdi", cls: "bg-cyan-100 text-cyan-800", dot: "#0891b2" },
-  { key: "awaiting_advance", label: "Avans kutilmoqda", cls: "bg-amber-100 text-amber-800", dot: "#b45309" },
-  { key: "design", label: "Dizayn", cls: "bg-indigo-100 text-indigo-700", dot: "#4f46e5" },
-  { key: "production", label: "Ishlab chiqarilmoqda", cls: "bg-slate-200 text-slate-800", dot: "#475569" },
-  { key: "ready", label: "Tayyor", cls: "bg-emerald-100 text-emerald-700", dot: "#059669" },
-  { key: "delivered", label: "Yetkazildi", cls: "bg-emerald-100 text-emerald-800", dot: "#047857" },
-  { key: "cancelled", label: "Bekor qilindi", cls: "bg-ink-200 text-ink-700", dot: "#64748b" },
-  { key: "lost", label: "Rad etildi", cls: "bg-rose-100 text-rose-700", dot: "#e11d48" },
+export const LEAD_STATUSES: { key: LeadColumnKey; label: string; cls: string; dot: string; bg: string; text: string }[] = [
+  { key: "new", label: "Yangi lid", cls: "bg-sky-100 text-sky-700", dot: "#38bdf8", bg: "#e0f2fe", text: "#0369a1" },
+  { key: "info_given", label: "Ma'lumot berildi", cls: "bg-violet-100 text-violet-700", dot: "#a78bfa", bg: "#ede9fe", text: "#6d28d9" },
+  { key: "telegram", label: "Telegramga o'tdi", cls: "bg-blue-100 text-blue-700", dot: "#3b82f6", bg: "#dbeafe", text: "#1d4ed8" },
+  { key: "advance", label: "Avans", cls: "bg-amber-100 text-amber-800", dot: "#f59e0b", bg: "#fef3c7", text: "#92400e" },
+  { key: "design", label: "Dizayn", cls: "bg-pink-100 text-pink-700", dot: "#ec4899", bg: "#fce7f3", text: "#be185d" },
+  { key: "production", label: "Ishlab chiqarilmoqda", cls: "bg-green-100 text-green-700", dot: "#22c55e", bg: "#dcfce7", text: "#15803d" },
+  { key: "ready", label: "Tayyor", cls: "bg-emerald-100 text-emerald-700", dot: "#10b981", bg: "#d1fae5", text: "#047857" },
+  { key: "delivered", label: "Topshirildi", cls: "bg-emerald-200 text-emerald-900", dot: "#15803d", bg: "#bbf7d0", text: "#14532d" },
+  { key: "cancelled", label: "Bekor qilindi", cls: "bg-ink-200 text-ink-700", dot: "#64748b", bg: "#e2e8f0", text: "#334155" },
+  { key: "lost", label: "Yo'qotilgan", cls: "bg-rose-100 text-rose-700", dot: "#f43f5e", bg: "#ffe4e6", text: "#be123c" },
 ];
 
-// The stages a person can pick directly from a lead's status dropdown —
-// only what's still under manual control. Picking "awaiting_advance"
+// The stages a person can pick directly (status dropdown fallback for
+// mobile/non-drag flows, and for the List view). Picking "advance"
 // converts the lead (Customer + draft Order created); the four
-// production-line columns after it are read-only, driven by the Order.
+// production-line columns after it are set by dragging the card onto
+// them, which writes straight to the linked Order.
 export const LEAD_STATUS_OPTIONS: { key: LeadStatus; label: string }[] = [
   { key: "new", label: "Yangi lid" },
-  { key: "contacted", label: "Bog'lanildi" },
+  { key: "info_given", label: "Ma'lumot berildi" },
   { key: "telegram", label: "Telegramga o'tdi" },
-  { key: "awaiting_advance", label: "Avans kutilmoqda" },
-  { key: "lost", label: "Rad etildi" },
+  { key: "advance", label: "Avans" },
+  { key: "lost", label: "Yo'qotilgan" },
 ];
 
 export const leadStatusInfo = (s: LeadColumnKey) =>
   LEAD_STATUSES.find((x) => x.key === s) || LEAD_STATUSES[0];
 
-// Maps a converted lead's linked Order status onto one of the four
+// Maps a converted lead's linked Order status onto one of the five
 // post-conversion Kanban columns, so the lead card's position always
-// reflects the Order's real, current state.
-export const orderStatusToLeadBucket = (
+// reflects the Order's real, current state — including finer-grained
+// statuses the Production/Pechatnik modules use that the Lead board
+// itself never sets directly (approving, quality_control, etc.).
+export const orderStatusToLeadStage = (
   s: OrderStatus,
-): "awaiting_advance" | "design" | "production" | "ready" | "delivered" | "cancelled" => {
+): "advance" | "design" | "production" | "ready" | "delivered" | "cancelled" => {
   if (s === "cancelled") return "cancelled";
   if (s === "design" || s === "approving") return "design";
   if (s === "sent_to_production" || s === "production" || s === "quality_control") return "production";
   if (s === "ready" || s === "ready_to_deliver") return "ready";
   if (s === "delivered" || s === "closed") return "delivered";
-  return "awaiting_advance"; // new / accepted / calculating / awaiting_advance
+  return "advance"; // new / accepted / calculating / awaiting_advance
 };
+
+// The Order status written when a converted lead's card is dropped onto
+// one of the four production columns — a coarse, sales-side nudge;
+// finer-grained transitions (approving, quality_control, ...) stay the
+// Production/Pechatnik modules' job.
+export const LEAD_STAGE_TO_ORDER_STATUS: Record<"design" | "production" | "ready" | "delivered", OrderStatus> = {
+  design: "design",
+  production: "production",
+  ready: "ready",
+  delivered: "delivered",
+};
+
+export const LEAD_SOURCES = [
+  "Instagram Target",
+  "Facebook Lead Ads",
+  "Telegram",
+  "Sayt",
+  "Referral",
+  "Qo'lda kiritish",
+] as const;
+
+export const LEAD_TASK_TYPES: { key: LeadTaskType; label: string }[] = [
+  { key: "call", label: "Qo'ng'iroq qilish" },
+  { key: "telegram", label: "Telegramdan yozish" },
+  { key: "send_price", label: "Narxni yuborish" },
+  { key: "advance_reminder", label: "Avansni eslatish" },
+  { key: "design_approval", label: "Dizaynni tasdiqlatish" },
+  { key: "follow_up", label: "Qayta aloqa" },
+  { key: "ready_notice", label: "Tayyor buyurtma haqida xabar berish" },
+  { key: "other", label: "Boshqa vazifa" },
+];
+
+export const leadTaskTypeLabel = (t: LeadTaskType): string =>
+  LEAD_TASK_TYPES.find((x) => x.key === t)?.label ?? t;
+
+// Where a lead's card actually sits on the Kanban right now — pre-
+// conversion stages read straight off the lead, post-conversion stages
+// are computed from its linked Order's live status.
+export const columnForLead = (lead: Lead, orders: Record<string, Order>): LeadColumnKey => {
+  if (lead.status !== "advance") return lead.status;
+  const order = lead.converted_order_id ? orders[lead.converted_order_id] : undefined;
+  return order ? orderStatusToLeadStage(order.status) : "advance";
+};
+
+export const LOST_LEAD_REASONS = [
+  "Qimmat",
+  "Hozir kerak emas",
+  "Tiraj kam",
+  "Javob bermadi",
+  "Raqobatchini tanladi",
+  "Noto'g'ri lid",
+  "Boshqa",
+] as const;
 
 export const WAREHOUSE_CATEGORIES = [
   "Xomashyo",

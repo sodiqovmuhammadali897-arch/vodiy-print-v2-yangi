@@ -557,32 +557,124 @@ export type WarehouseTransaction = {
   created_at: string;
 };
 
-// ── Sotuv bo'limi (Lead pipeline) ───────────────────────────────────
-// A lead only carries its own status through new/contacted/telegram —
-// once it reaches "awaiting_advance" it has already been converted into
-// a real Customer + a real (draft) Order, and every later stage
-// (design/production/ready/delivered) is read live off that Order's own
-// status rather than duplicated back onto the lead.
-export type LeadStatus = "new" | "contacted" | "telegram" | "awaiting_advance" | "lost";
+// ── Lidlar / Sotuv voronkasi ─────────────────────────────────────────
+// A lead only carries its own status through new/info_given/telegram —
+// once it reaches "advance" it has already been converted into a real
+// Customer + a real Order, and every later stage (design/production/
+// ready/delivered) is read live off that Order's own status (see
+// orderStatusToLeadStage in orderConstants.ts) rather than duplicated
+// back onto the lead; dragging a converted lead's card in the Kanban
+// writes straight to the linked Order instead.
+export type LeadStatus =
+  | "new"
+  | "info_given"
+  | "telegram"
+  | "advance"
+  | "design"
+  | "production"
+  | "ready"
+  | "delivered"
+  | "lost";
 
 export type Lead = {
   id: string;
+  lead_number: string | null;
   full_name: string;
+  brand: string;
   phone: string;
-  source: string;
-  status: LeadStatus;
-  assigned_to_email: string;
-  assigned_to_name: string;
-  region: string;
-  industry: string;
+  telegram: string;
   interested_product_id: string;
   interested_product_name: string;
+  source: string;
+  // Meta/Instagram Lead Ads architecture — populated by hand today,
+  // ready for a future webhook to fill automatically. Blank when the
+  // lead didn't come through paid ads.
+  campaign_name: string;
+  campaign_id: string;
+  ad_set_name: string;
+  ad_set_id: string;
+  ad_name: string;
+  ad_id: string;
+  form_name: string;
+  form_id: string;
+  assigned_to_email: string;
+  assigned_to_name: string;
+  status: LeadStatus;
+  region: string;
+  industry: string;
+  estimated_amount: number;
+  next_contact_at: string | null;
+  // Set once, the first time a manager moves the lead out of "new" —
+  // never overwritten again, so it stays a true "how long until this
+  // lead got its first response" measurement (last_contact_at keeps
+  // updating on every later touch instead).
+  first_contact_at: string | null;
+  last_contact_at: string | null;
   note: string;
   lost_reason: string;
+  lost_comment: string;
   converted_customer_id: string | null;
   converted_order_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type LeadTaskType =
+  | "call"
+  | "telegram"
+  | "send_price"
+  | "advance_reminder"
+  | "design_approval"
+  | "follow_up"
+  | "ready_notice"
+  | "other";
+
+export type LeadTaskStatus = "open" | "done";
+
+// A lead's own follow-up/reminder queue — distinct from the general
+// `tasks` collection (Vazifalar module), since these are always tied to
+// one lead and drive the "Bugungi vazifalarim" widget + in-app
+// due-time notifications.
+export type LeadTask = {
+  id: string;
+  lead_id: string;
+  lead_name: string;
+  type: LeadTaskType;
+  due_date: string;
+  due_time: string;
+  assigned_to_email: string;
+  assigned_to_name: string;
+  note: string;
+  status: LeadTaskStatus;
+  completed_at: string | null;
+  created_at: string;
+};
+
+// Auto-written, never edited by hand — the lead's "Faoliyat" timeline.
+export type LeadActivity = {
+  id: string;
+  lead_id: string;
+  text: string;
+  actor_email: string;
+  actor_name: string;
+  created_at: string;
+};
+
+// Lightweight lookup collections, upserted automatically whenever a
+// lead is saved with a source/campaign not seen before — no dedicated
+// management screen yet, but real Firestore documents a future Meta
+// Lead Ads webhook can write into directly.
+export type LeadSource = {
+  id: string;
+  name: string;
+  created_at: string;
+};
+
+export type LeadCampaign = {
+  id: string;
+  name: string;
+  campaign_id: string;
+  created_at: string;
 };
 
 // ── Kunlik faollik (Ish stoli "Bugungi tizimdan foydalanish") ──────────
