@@ -3,28 +3,20 @@ import { Users, UserRound } from "lucide-react";
 import { listAll } from "../../lib/firestoreDb";
 import { monthRange } from "../../lib/workdays";
 import { initialsOf } from "../../lib/format";
-import { useAuth } from "../../lib/AuthContext";
 import type { Lead } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 
 type Row = { email: string; name: string; total: number; won: number };
 
 export default function ManagerLeadsPanel() {
-  const { isAdmin, can } = useAuth();
-  const canSeeAll = isAdmin || can("leads", "view");
-
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!canSeeAll) {
-      setLoading(false);
-      return;
-    }
     let cancelled = false;
     (async () => {
       const { start, end } = monthRange(new Date());
-      const [leads] = await Promise.all([listAll<Lead>("leads")]);
+      const leads = await listAll<Lead>("leads");
       if (cancelled) return;
       const monthLeads = leads.filter((l) => l.created_at >= start && l.created_at < end);
       const byEmail = new Map<string, Row>();
@@ -47,11 +39,9 @@ export default function ManagerLeadsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [canSeeAll]);
+  }, []);
 
   const maxTotal = Math.max(1, ...rows.map((r) => r.total));
-
-  if (!canSeeAll) return null;
 
   return (
     <div className="card h-full p-5">

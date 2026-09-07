@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Filter } from "lucide-react";
 import { listAll, listWhere } from "../../lib/firestoreDb";
-import { useAuth } from "../../lib/AuthContext";
 import { monthRange } from "../../lib/workdays";
 import { LEAD_STATUS_OPTIONS } from "../../lib/orderConstants";
 import type { Lead } from "../../lib/types";
@@ -11,22 +10,20 @@ import type { Lead } from "../../lib/types";
 // leadConversion.ts), so it has left the lead funnel, not stalled in it.
 const FUNNEL_STAGES = LEAD_STATUS_OPTIONS.filter((s) => s.key !== "awaiting_advance" && s.key !== "lost");
 
-export default function LeadFunnelPanel() {
-  const { user, isAdmin, can } = useAuth();
-  const email = (user?.email || "").toLowerCase();
-  const canSeeAll = isAdmin || can("leads", "view");
+type Props = { managerEmail: string };
 
+export default function LeadFunnelPanel({ managerEmail }: Props) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     (async () => {
-      const rows = canSeeAll
-        ? await listAll<Lead>("leads")
-        : email
-          ? await listWhere<Lead>("leads", "assigned_to_email", email)
-          : [];
+      const rows =
+        managerEmail === "all"
+          ? await listAll<Lead>("leads")
+          : await listWhere<Lead>("leads", "assigned_to_email", managerEmail);
       if (!cancelled) {
         setLeads(rows);
         setLoading(false);
@@ -35,7 +32,7 @@ export default function LeadFunnelPanel() {
     return () => {
       cancelled = true;
     };
-  }, [canSeeAll, email]);
+  }, [managerEmail]);
 
   const { start, end } = monthRange(new Date());
   const lostThisMonth = leads.filter(

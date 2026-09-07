@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Radar } from "lucide-react";
 import { listAll, listWhere } from "../../lib/firestoreDb";
-import { useAuth } from "../../lib/AuthContext";
 import { monthRange } from "../../lib/workdays";
 import type { Lead } from "../../lib/types";
 import SimpleDonutChart, { type DonutSlice } from "../../components/ui/SimpleDonutChart";
@@ -9,22 +8,20 @@ import AsyncState from "../../components/ui/AsyncState";
 
 const PALETTE = ["#0062db", "#0ea5e9", "#f59e0b", "#8b5cf6", "#059669", "#94a3b8"];
 
-export default function LeadSourceDonut() {
-  const { user, isAdmin, can } = useAuth();
-  const email = (user?.email || "").toLowerCase();
-  const canSeeAll = isAdmin || can("leads", "view");
+type Props = { managerEmail: string };
 
+export default function LeadSourceDonut({ managerEmail }: Props) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     (async () => {
-      const rows = canSeeAll
-        ? await listAll<Lead>("leads")
-        : email
-          ? await listWhere<Lead>("leads", "assigned_to_email", email)
-          : [];
+      const rows =
+        managerEmail === "all"
+          ? await listAll<Lead>("leads")
+          : await listWhere<Lead>("leads", "assigned_to_email", managerEmail);
       if (!cancelled) {
         setLeads(rows);
         setLoading(false);
@@ -33,7 +30,7 @@ export default function LeadSourceDonut() {
     return () => {
       cancelled = true;
     };
-  }, [canSeeAll, email]);
+  }, [managerEmail]);
 
   const { start, end } = monthRange(new Date());
   const monthLeads = leads.filter((l) => l.created_at >= start && l.created_at < end);

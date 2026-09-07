@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { CircleX, ThumbsUp } from "lucide-react";
 import { listAll, listWhere } from "../../lib/firestoreDb";
-import { useAuth } from "../../lib/AuthContext";
 import type { Lead } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 
@@ -12,22 +11,20 @@ const daysAgo = (iso: string): string => {
   return `${diff} kun`;
 };
 
-export default function RecentLostLeadsPanel() {
-  const { user, isAdmin, can } = useAuth();
-  const email = (user?.email || "").toLowerCase();
-  const canSeeAll = isAdmin || can("leads", "view");
+type Props = { managerEmail: string };
 
+export default function RecentLostLeadsPanel({ managerEmail }: Props) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     (async () => {
-      const rows = canSeeAll
-        ? await listAll<Lead>("leads")
-        : email
-          ? await listWhere<Lead>("leads", "assigned_to_email", email)
-          : [];
+      const rows =
+        managerEmail === "all"
+          ? await listAll<Lead>("leads")
+          : await listWhere<Lead>("leads", "assigned_to_email", managerEmail);
       if (!cancelled) {
         setLeads(rows);
         setLoading(false);
@@ -36,7 +33,7 @@ export default function RecentLostLeadsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [canSeeAll, email]);
+  }, [managerEmail]);
 
   const lost = leads
     .filter((l) => l.status === "lost")

@@ -7,23 +7,27 @@ import AsyncState from "../../components/ui/AsyncState";
 
 const todayStr = (): string => new Date().toISOString().slice(0, 10);
 
-export default function TodayUsagePanel() {
+type Props = { managerEmail: string };
+
+export default function TodayUsagePanel({ managerEmail }: Props) {
   const [rows, setRows] = useState<DailyActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     (async () => {
       const data = await listWhere<DailyActivity>("activity_daily", "date", todayStr());
       if (!cancelled) {
-        setRows(data.sort((a, b) => b.seconds - a.seconds));
+        const scoped = managerEmail === "all" ? data : data.filter((r) => r.email === managerEmail);
+        setRows(scoped.sort((a, b) => b.seconds - a.seconds));
         setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [managerEmail]);
 
   const maxSeconds = Math.max(1, ...rows.map((r) => r.seconds));
 

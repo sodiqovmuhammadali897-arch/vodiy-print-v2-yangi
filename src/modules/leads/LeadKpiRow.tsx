@@ -1,17 +1,13 @@
 import { useEffect, useState } from "react";
 import { PlusCircle, MessageCircleWarning, UserX, Clock, ClipboardCheck, CircleCheck as CheckCircle2 } from "lucide-react";
 import { listAll, listWhere } from "../../lib/firestoreDb";
-import { useAuth } from "../../lib/AuthContext";
 import { startOfDay } from "../../lib/workdays";
 import type { Lead, Task } from "../../lib/types";
 import StatCard from "../../components/ui/StatCard";
 
-export default function LeadKpiRow() {
-  const { user, isAdmin, can } = useAuth();
-  const email = (user?.email || "").toLowerCase();
-  const canSeeAllLeads = isAdmin || can("leads", "view");
-  const canSeeAllTasks = isAdmin || can("tasks", "view");
+type Props = { managerEmail: string };
 
+export default function LeadKpiRow({ managerEmail }: Props) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
@@ -19,16 +15,12 @@ export default function LeadKpiRow() {
     let cancelled = false;
     (async () => {
       const [leadRows, taskRows] = await Promise.all([
-        canSeeAllLeads
+        managerEmail === "all"
           ? listAll<Lead>("leads")
-          : email
-            ? listWhere<Lead>("leads", "assigned_to_email", email)
-            : Promise.resolve([]),
-        canSeeAllTasks
+          : listWhere<Lead>("leads", "assigned_to_email", managerEmail),
+        managerEmail === "all"
           ? listAll<Task>("tasks")
-          : email
-            ? listWhere<Task>("tasks", "assigned_to_email", email)
-            : Promise.resolve([]),
+          : listWhere<Task>("tasks", "assigned_to_email", managerEmail),
       ]);
       if (!cancelled) {
         setLeads(leadRows);
@@ -38,7 +30,7 @@ export default function LeadKpiRow() {
     return () => {
       cancelled = true;
     };
-  }, [canSeeAllLeads, canSeeAllTasks, email]);
+  }, [managerEmail]);
 
   const dayStart = startOfDay(new Date()).toISOString();
   const todayDateStr = dayStart.slice(0, 10);

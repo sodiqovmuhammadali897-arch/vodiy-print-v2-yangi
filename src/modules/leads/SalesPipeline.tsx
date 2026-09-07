@@ -16,6 +16,7 @@ import { useAuth } from "../../lib/AuthContext";
 import { initialsOf } from "../../lib/format";
 import AsyncState from "../../components/ui/AsyncState";
 import LeadFormModal from "./LeadFormModal";
+import SalesActivitySection from "./SalesActivitySection";
 
 const daysAgo = (iso: string): string => {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24));
@@ -261,6 +262,8 @@ export default function SalesPipeline() {
           })}
         </div>
       </AsyncState>
+
+      <SalesActivitySection managerEmail={isAdmin ? managerFilter : user?.email?.toLowerCase() || ""} />
 
       <LeadFormModal
         open={modalOpen}
