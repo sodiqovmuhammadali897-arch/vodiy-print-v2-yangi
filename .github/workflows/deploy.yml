@@ -187,6 +187,14 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           envs: FIREBASE_SERVICE_ACCOUNT,META_APP_SECRET,META_PAGE_ACCESS_TOKEN,META_VERIFY_TOKEN
           script: |
+            if ! command -v node >/dev/null 2>&1; then
+              echo "Node.js not found on server — installing Node 20 via NodeSource"
+              curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/nodesource_setup.sh
+              echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S bash /tmp/nodesource_setup.sh
+              echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S apt-get install -y nodejs
+            fi
+            node -v
+            npm -v
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S mkdir -p /opt/meta-webhook
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R "${{ secrets.SERVER_USER }}" /opt/meta-webhook
             cp -r /tmp/meta-webhook-src/meta-webhook/. /opt/meta-webhook/
