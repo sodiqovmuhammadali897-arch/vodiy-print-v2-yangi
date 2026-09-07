@@ -273,8 +273,24 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Anything not covered above (future modules, e.g. warehouse/finance
-    // once they get real data): admins get full access, everyone else is
+    // ── Ombor ─────────────────────────────────────────────────────
+    match /warehouse_items/{id} {
+      allow read: if can('warehouse', 'view');
+      allow create, update: if can('warehouse', 'edit');
+      allow delete: if can('warehouse', 'delete');
+    }
+
+    // Kirim/chiqim log — append-only in normal use (quantity is derived
+    // from these, never edited directly), so only an admin may correct or
+    // remove an already-logged entry.
+    match /warehouse_transactions/{id} {
+      allow read: if can('warehouse', 'view');
+      allow create: if can('warehouse', 'edit');
+      allow update, delete: if isAdmin();
+    }
+
+    // Anything not covered above (future modules, e.g. finance once it
+    // gets real data): admins get full access, everyone else is
     // blocked until an explicit rule is added.
     match /{document=**} {
       allow read, write: if isAdmin();

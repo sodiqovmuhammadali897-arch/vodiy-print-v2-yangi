@@ -270,6 +270,15 @@ export const TEXTILE_COLORS = [
   "Boshqa",
 ] as const;
 
+export const WAREHOUSE_CATEGORIES = [
+  "Xomashyo",
+  "Suvenir",
+  "Gift Box",
+  "Aksessuar",
+  "Textil",
+  "Boshqa",
+] as const;
+
 export const UZBEKISTAN_REGIONS = [
   "Toshkent shahri",
   "Toshkent viloyati",

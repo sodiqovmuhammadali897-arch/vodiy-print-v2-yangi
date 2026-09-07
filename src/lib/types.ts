@@ -523,3 +523,36 @@ export type Task = {
   completed_at: string | null;
   created_at: string;
 };
+
+// ── Ombor ────────────────────────────────────────────────────────────
+// A flat, freely-named stock list — deliberately separate from the
+// Mahsulotlar catalog, since a warehouse item (e.g. "Laminat plyonka",
+// "Beydjik lentasi") isn't always a priced, sellable product. Quantity is
+// only ever changed through logged WarehouseTransaction entries (kirim/
+// chiqim), never edited directly, so the transaction log always explains
+// how the current number was reached.
+
+export type WarehouseItem = {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  min_threshold: number;
+  note: string;
+  created_at: string;
+};
+
+export type WarehouseTransactionType = "in" | "out";
+
+export type WarehouseTransaction = {
+  id: string;
+  item_id: string;
+  item_name: string;
+  type: WarehouseTransactionType;
+  quantity: number;
+  reason: string;
+  performed_by: string;
+  date: string;
+  created_at: string;
+};
