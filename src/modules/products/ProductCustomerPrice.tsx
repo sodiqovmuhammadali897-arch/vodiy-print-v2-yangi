@@ -40,12 +40,12 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
             {company?.logo_url ? (
               <img src={company.logo_url} alt="" className="h-14 w-14 rounded object-contain" />
             ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand-700 font-display text-lg font-bold text-white">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-600 font-display text-lg font-bold text-white">
                 {(company?.name || "VP").slice(0, 2).toUpperCase()}
               </div>
             )}
             <div>
-              <div className="font-display text-2xl font-extrabold text-brand-700">
+              <div className="font-display text-2xl font-extrabold text-emerald-600">
                 {company?.name || "Vodiy Print"}
               </div>
               <div className="text-sm text-ink-500">Narx taklifi</div>
@@ -53,7 +53,7 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
           </div>
           <div className="text-right text-sm text-ink-600">{formatDate(new Date().toISOString())}</div>
         </header>
-        <div className="mt-4 h-[3px] w-full bg-brand-700" />
+        <div className="mt-4 h-[3px] w-full bg-emerald-600" />
 
         <div className="mt-6 flex items-start gap-5">
           <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-ink-100 text-ink-400">
@@ -86,11 +86,13 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
         </div>
 
         {specRows.length > 0 && (
-          <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 rounded-xl bg-ink-50 p-4 text-sm sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-4 rounded-xl bg-emerald-50 p-4 sm:grid-cols-3">
             {specRows.map(([label, value]) => (
               <div key={label}>
-                <span className="text-ink-500">{label}: </span>
-                <span className="font-semibold text-ink-800">{value}</span>
+                <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-700/80">
+                  {label}
+                </div>
+                <div className="mt-0.5 text-sm font-semibold leading-snug text-ink-900">{value}</div>
               </div>
             ))}
           </div>
@@ -98,7 +100,7 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
 
         <table className="mt-6 w-full border-collapse text-sm">
           <thead>
-            <tr className="bg-brand-700 text-white">
+            <tr className="bg-emerald-600 text-white">
               <th className="rounded-l-lg px-3 py-3 text-left text-xs font-bold uppercase tracking-wide">
                 Tiraj
               </th>
@@ -112,7 +114,7 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
           </thead>
           <tbody>
             {tiers.map((t) => (
-              <tr key={t.min_qty} className="bg-brand-50/70">
+              <tr key={t.min_qty} className="bg-emerald-50/70">
                 <td className="px-3 py-3 align-top font-medium">
                   {t.min_qty}+ {product.unit || "dona"}
                 </td>
@@ -126,7 +128,7 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
         </table>
 
         {quantity > 0 && quote && (
-          <div className="mt-4 flex items-center justify-between rounded-xl bg-brand-600 p-5 text-white">
+          <div className="mt-4 flex items-center justify-between rounded-xl bg-emerald-600 p-5 text-white">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide opacity-90">
                 {quantity} {product.unit || "dona"} uchun
@@ -155,7 +157,7 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
           )}
           {company?.telegram && (
             <span className="flex items-center gap-1.5">
-              <Send className="h-3.5 w-3.5 text-brand-600" /> {company.telegram}
+              <Send className="h-3.5 w-3.5 text-emerald-600" /> {company.telegram}
             </span>
           )}
           {company?.email && (
