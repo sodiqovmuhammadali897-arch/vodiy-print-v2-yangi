@@ -1,10 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles } from "lucide-react";
+import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import type { ModuleKey } from "../../lib/permissions";
 
 const navItems = [
   { to: "/dashboard", label: "Bosh sahifa", icon: LayoutDashboard, module: "dashboard" as ModuleKey },
+  { to: "/leads", label: "Sotuv bo'limi", icon: Target, module: "leads" as ModuleKey },
   { to: "/orders", label: "Buyurtmalar", icon: Package, module: "orders" as ModuleKey },
   { to: "/customers", label: "Mijozlar", icon: Users, module: "customers" as ModuleKey },
   { to: "/products", label: "Mahsulotlar", icon: Boxes, module: "products" as ModuleKey },

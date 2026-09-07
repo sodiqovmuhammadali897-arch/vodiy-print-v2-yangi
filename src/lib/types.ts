@@ -556,3 +556,25 @@ export type WarehouseTransaction = {
   date: string;
   created_at: string;
 };
+
+// ── Sotuv bo'limi (Lead pipeline) ───────────────────────────────────
+// A lead lives here only until it's won (converted to a real Customer,
+// via converted_customer_id) or lost — this collection is the funnel,
+// not a system of record for people who are already customers.
+
+export type LeadStatus = "new" | "contacted" | "interested" | "proposal_sent" | "won" | "lost";
+
+export type Lead = {
+  id: string;
+  full_name: string;
+  phone: string;
+  source: string;
+  status: LeadStatus;
+  assigned_to_email: string;
+  assigned_to_name: string;
+  note: string;
+  lost_reason: string;
+  converted_customer_id: string | null;
+  created_at: string;
+  updated_at: string;
+};

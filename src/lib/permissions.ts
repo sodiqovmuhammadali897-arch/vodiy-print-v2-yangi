@@ -1,5 +1,6 @@
 export type ModuleKey =
   | "dashboard"
+  | "leads"
   | "orders"
   | "customers"
   | "products"
@@ -35,6 +36,7 @@ export type Staff = {
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "dashboard", label: "Bosh sahifa" },
+  { key: "leads", label: "Sotuv bo'limi" },
   { key: "orders", label: "Buyurtmalar" },
   { key: "customers", label: "Mijozlar" },
   { key: "products", label: "Mahsulotlar" },

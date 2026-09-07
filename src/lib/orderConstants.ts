@@ -1,4 +1,4 @@
-import type { OrderStatus } from "./types";
+import type { LeadStatus, OrderStatus } from "./types";
 
 export const PRODUCT_CATEGORIES = [
   "Tipografiya",
@@ -269,6 +269,29 @@ export const TEXTILE_COLORS = [
   "To'q sariq",
   "Boshqa",
 ] as const;
+
+export const LEAD_STATUSES: { key: LeadStatus; label: string; cls: string; dot: string }[] = [
+  { key: "new", label: "Yangi", cls: "bg-brand-100 text-brand-700", dot: "#0062db" },
+  { key: "contacted", label: "Bog'lanildi", cls: "bg-violet-100 text-violet-700", dot: "#7c3aed" },
+  { key: "interested", label: "Qiziqdi", cls: "bg-amber-100 text-amber-800", dot: "#b45309" },
+  { key: "proposal_sent", label: "Taklif yuborildi", cls: "bg-cyan-100 text-cyan-800", dot: "#0891b2" },
+  { key: "won", label: "Mijozga aylandi", cls: "bg-emerald-100 text-emerald-700", dot: "#059669" },
+  { key: "lost", label: "Rad etildi", cls: "bg-rose-100 text-rose-700", dot: "#e11d48" },
+];
+
+// The order a lead normally advances through — used to find "the next
+// stage" for the card's quick-advance button. won/lost are terminal, not
+// part of the forward chain.
+export const LEAD_FORWARD_CHAIN: LeadStatus[] = [
+  "new",
+  "contacted",
+  "interested",
+  "proposal_sent",
+  "won",
+];
+
+export const leadStatusInfo = (s: LeadStatus) =>
+  LEAD_STATUSES.find((x) => x.key === s) || LEAD_STATUSES[0];
 
 export const WAREHOUSE_CATEGORIES = [
   "Xomashyo",

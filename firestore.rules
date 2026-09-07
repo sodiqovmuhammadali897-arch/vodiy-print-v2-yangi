@@ -273,6 +273,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Sotuv bo'limi (lead pipeline) ────────────────────────────────
+    // Deliberately stricter than can('leads','view') alone would give:
+    // even a staff member with view/edit rights only sees leads assigned
+    // to them, never a colleague's — only admins see everything. A won
+    // lead becomes a real customers/{id} doc via the client, which is
+    // already covered by the customers rules below.
+    match /leads/{id} {
+      allow read: if isAdmin() || (can('leads', 'view') && resource.data.assigned_to_email == email());
+      allow create: if can('leads', 'edit');
+      allow update: if isAdmin() || (can('leads', 'edit') && resource.data.assigned_to_email == email());
+      allow delete: if isAdmin();
+    }
+
     // ── Ombor ─────────────────────────────────────────────────────
     match /warehouse_items/{id} {
       allow read: if can('warehouse', 'view');

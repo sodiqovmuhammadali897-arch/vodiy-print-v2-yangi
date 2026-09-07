@@ -7,6 +7,7 @@ import AdminRoute from "./components/auth/AdminRoute";
 import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
 
+const SalesPipeline = lazy(() => import("./modules/leads/SalesPipeline"));
 const Orders = lazy(() => import("./modules/orders/Orders"));
 const OrderDetail = lazy(() => import("./modules/orders/OrderDetail"));
 const OrderWizard = lazy(() => import("./modules/orders/wizard/OrderWizard"));
@@ -35,6 +36,10 @@ export default function App() {
 
           <Route element={<PermissionRoute module="dashboard" />}>
             <Route path="/dashboard" element={<Dashboard />} />
+          </Route>
+
+          <Route element={<PermissionRoute module="leads" />}>
+            <Route path="/leads" element={<SalesPipeline />} />
           </Route>
 
           <Route element={<PermissionRoute module="orders" />}>
