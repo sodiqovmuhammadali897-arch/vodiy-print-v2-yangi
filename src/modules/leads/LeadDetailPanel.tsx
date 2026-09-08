@@ -163,10 +163,10 @@ export default function LeadDetailPanel({ lead, order, onClose, onEdit, onAddTas
                   )}
                   {lead.note && <div className="mt-3.5 rounded-xl bg-ink-50 p-3 text-xs leading-relaxed text-ink-600">"{lead.note}"</div>}
 
-                  {isPreConversion && (
+                  {lead.status !== "lost" && (
                     <div className="mt-4">
                       <label className="label">Statusni o'zgartirish</label>
-                      <select className="input" value={lead.status} onChange={(e) => changeStatus(e.target.value as LeadStatus)}>
+                      <select className="input" value={column || lead.status} onChange={(e) => changeStatus(e.target.value as LeadStatus)}>
                         {LEAD_STATUS_OPTIONS.filter((o) => o.key !== "lost").map((o) => (
                           <option key={o.key} value={o.key}>
                             {o.label}

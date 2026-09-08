@@ -292,16 +292,21 @@ export const LEAD_STATUSES: { key: LeadColumnKey; label: string; cls: string; do
   { key: "lost", label: "Yo'qotilgan", cls: "bg-rose-100 text-rose-700", dot: "#f43f5e", bg: "#ffe4e6", text: "#be123c" },
 ];
 
-// The stages a person can pick directly (status dropdown fallback for
-// mobile/non-drag flows, and for the List view). Picking "advance"
-// converts the lead (Customer + draft Order created); the four
-// production-line columns after it are set by dragging the card onto
-// them, which writes straight to the linked Order.
+// The full pipeline, selectable directly from the lead's own status
+// dropdown (an alternative to dragging the Kanban card). Picking
+// "advance" converts the lead (Customer + draft Order created) if it
+// hasn't been already; picking one of the four production stages
+// before that happens is rejected by moveLead with a clear "convert it
+// first" error, since there's no Order yet to represent that state.
 export const LEAD_STATUS_OPTIONS: { key: LeadStatus; label: string }[] = [
   { key: "new", label: "Yangi lid" },
   { key: "info_given", label: "Ma'lumot berildi" },
   { key: "telegram", label: "Telegramga o'tdi" },
   { key: "advance", label: "Avans" },
+  { key: "design", label: "Dizayn" },
+  { key: "production", label: "Ishlab chiqarilmoqda" },
+  { key: "ready", label: "Tayyor" },
+  { key: "delivered", label: "Topshirildi" },
   { key: "lost", label: "Yo'qotilgan" },
 ];
 
