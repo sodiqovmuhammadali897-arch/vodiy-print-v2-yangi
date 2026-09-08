@@ -1,4 +1,4 @@
-import { updateOne } from "./firestoreDb";
+import { updateOne, deleteOne, deleteWhere } from "./firestoreDb";
 import { changeOrderStatus } from "./orderStatus";
 import { logLeadActivity } from "./leadActivity";
 import { convertLeadToCustomer } from "./leadConversion";
@@ -55,6 +55,18 @@ export const moveLead = async (lead: Lead, next: LeadStatus, actor: LeadActor): 
     actor.email,
     actor.name,
   );
+};
+
+// Admin-only, permanent — used to clean up test/duplicate leads, not a
+// day-to-day sales action (a real lost lead goes through markLeadLost
+// above instead, so its history stays visible). Cascades its own
+// tasks/activities; the "calls" log is never deleted from the client
+// (Firestore rules block client writes to it entirely), so a deleted
+// lead's call history stays as a permanent, unlinked record.
+export const deleteLead = async (id: string): Promise<void> => {
+  await deleteWhere("lead_tasks", "lead_id", id);
+  await deleteWhere("lead_activities", "lead_id", id);
+  await deleteOne("leads", id);
 };
 
 export const markLeadLost = async (

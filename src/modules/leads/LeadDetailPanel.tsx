@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Phone, Send, Pencil, ClipboardPlus, X, CircleCheck } from "lucide-react";
+import { Phone, Send, Pencil, ClipboardPlus, X, CircleCheck, Trash2 } from "lucide-react";
 import { subscribeWhere } from "../../lib/firestoreDb";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { leadStatusInfo, leadTaskTypeLabel, LEAD_STATUS_OPTIONS, columnForLead } from "../../lib/orderConstants";
 import { completeLeadTaskWithFollowUp } from "../../lib/leadTasks";
-import { moveLead } from "../../lib/leadStatusChange";
+import { moveLead, deleteLead } from "../../lib/leadStatusChange";
 import { useAuth } from "../../lib/AuthContext";
 import type { Lead, LeadActivity, LeadTask, LeadStatus, Order } from "../../lib/types";
 
@@ -21,7 +21,7 @@ type Props = {
 };
 
 export default function LeadDetailPanel({ lead, order, onClose, onEdit, onAddTask, onLost, onConvert, onChanged }: Props) {
-  const { user, staff } = useAuth();
+  const { user, staff, isAdmin } = useAuth();
   const [tab, setTab] = useState<"info" | "tasks" | "activity">("info");
   const [tasks, setTasks] = useState<LeadTask[]>([]);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
@@ -48,6 +48,14 @@ export default function LeadDetailPanel({ lead, order, onClose, onEdit, onAddTas
     const actorName = staff?.full_name || actorEmail;
     await completeLeadTaskWithFollowUp(task, actorEmail, actorName);
     setBusyId(null);
+    onChanged();
+  };
+
+  const remove = async () => {
+    if (!lead) return;
+    if (!confirm(`"${lead.full_name}" (${lead.lead_number}) butunlay o'chirilsinmi? Bu amalni ortga qaytarib bo'lmaydi.`)) return;
+    await deleteLead(lead.id);
+    onClose();
     onChanged();
   };
 
@@ -89,9 +97,20 @@ export default function LeadDetailPanel({ lead, order, onClose, onEdit, onAddTas
                   <div className="font-display text-lg font-bold text-ink-900">{lead.full_name}</div>
                   {lead.brand && <div className="text-xs text-ink-500">{lead.brand}</div>}
                 </div>
-                <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200">
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex shrink-0 gap-1.5">
+                  {isAdmin && (
+                    <button
+                      onClick={remove}
+                      title="Lidni o'chirish"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-ink-100 text-rose-600 hover:bg-rose-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
               {info && (
                 <span
