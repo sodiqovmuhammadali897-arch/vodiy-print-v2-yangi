@@ -223,5 +223,7 @@ jobs:
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl daemon-reload
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl enable meta-webhook
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl restart meta-webhook
-            sleep 2
+            sleep 3
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl is-active meta-webhook
+            echo "=== recent meta-webhook log ==="
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S journalctl -u meta-webhook --no-pager -n 60
