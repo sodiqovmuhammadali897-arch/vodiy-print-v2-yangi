@@ -227,3 +227,19 @@ jobs:
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl is-active meta-webhook
             echo "=== recent meta-webhook log ==="
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S journalctl -u meta-webhook --no-pager -n 60
+            echo "=== LID-001 lookup (diagnostic, temporary) ==="
+            cd /opt/meta-webhook && node -e "
+              const { initializeApp, cert } = require('firebase-admin/app');
+              const { getFirestore } = require('firebase-admin/firestore');
+              initializeApp({ credential: cert(require('./service-account.json')) });
+              const db = getFirestore();
+              db.collection('leads').where('lead_number', '==', 'LID-001').get().then((snap) => {
+                snap.forEach((doc) => console.log('lead:', JSON.stringify(doc.data())));
+                if (snap.empty) console.log('lead: none found');
+                return db.collection('calls').get();
+              }).then((snap) => {
+                console.log('calls count:', snap.size);
+                snap.forEach((doc) => console.log('call:', JSON.stringify(doc.data())));
+                process.exit(0);
+              }).catch((err) => { console.error(err); process.exit(1); });
+            "
