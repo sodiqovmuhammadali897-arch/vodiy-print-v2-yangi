@@ -131,12 +131,15 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           npx firebase-tools@13 deploy --only functions,firestore:rules --project vodiy-print --non-interactive
 
-  # Deploys the standalone Meta (Facebook/Instagram) Lead Ads webhook
-  # receiver (meta-webhook/) to the same VPS as a systemd service,
-  # independent of Cloud Functions — no Blaze plan needed. Skips itself
-  # until FIREBASE_SERVICE_ACCOUNT, META_APP_SECRET,
-  # META_PAGE_ACCESS_TOKEN and META_VERIFY_TOKEN are all set as repo
-  # secrets (see meta-webhook/README.md).
+  # Deploys the standalone webhook receiver (meta-webhook/) to the same
+  # VPS as a systemd service, independent of Cloud Functions — no Blaze
+  # plan needed. It hosts two integrations: Meta (Facebook/Instagram)
+  # Lead Ads and Mois Zvonki call recording. The job still only gates
+  # itself on the Meta secrets being set (FIREBASE_SERVICE_ACCOUNT,
+  # META_APP_SECRET, META_PAGE_ACCESS_TOKEN, META_VERIFY_TOKEN); the
+  # MOIZVONKI_* secrets are optional — the server just skips subscribing
+  # that webhook until all four of those are also set (see
+  # meta-webhook/README.md).
   deploy-meta-webhook:
     runs-on: ubuntu-latest
     steps:
@@ -181,11 +184,15 @@ jobs:
           META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           META_VERIFY_TOKEN: ${{ secrets.META_VERIFY_TOKEN }}
+          MOIZVONKI_DOMAIN: ${{ secrets.MOIZVONKI_DOMAIN }}
+          MOIZVONKI_USER_EMAIL: ${{ secrets.MOIZVONKI_USER_EMAIL }}
+          MOIZVONKI_API_KEY: ${{ secrets.MOIZVONKI_API_KEY }}
+          MOIZVONKI_WEBHOOK_TOKEN: ${{ secrets.MOIZVONKI_WEBHOOK_TOKEN }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          envs: FIREBASE_SERVICE_ACCOUNT,META_APP_SECRET,META_PAGE_ACCESS_TOKEN,META_VERIFY_TOKEN
+          envs: FIREBASE_SERVICE_ACCOUNT,META_APP_SECRET,META_PAGE_ACCESS_TOKEN,META_VERIFY_TOKEN,MOIZVONKI_DOMAIN,MOIZVONKI_USER_EMAIL,MOIZVONKI_API_KEY,MOIZVONKI_WEBHOOK_TOKEN
           script: |
             if ! command -v node >/dev/null 2>&1; then
               echo "Node.js not found on server — installing Node 20 via NodeSource"
@@ -205,6 +212,10 @@ jobs:
             META_VERIFY_TOKEN=$META_VERIFY_TOKEN
             META_APP_SECRET=$META_APP_SECRET
             META_PAGE_ACCESS_TOKEN=$META_PAGE_ACCESS_TOKEN
+            MOIZVONKI_DOMAIN=$MOIZVONKI_DOMAIN
+            MOIZVONKI_USER_EMAIL=$MOIZVONKI_USER_EMAIL
+            MOIZVONKI_API_KEY=$MOIZVONKI_API_KEY
+            MOIZVONKI_WEBHOOK_TOKEN=$MOIZVONKI_WEBHOOK_TOKEN
             EOF
             cd /opt/meta-webhook && npm install --omit=dev --no-audit --no-fund
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S cp /tmp/deploy/meta-webhook.service /etc/systemd/system/meta-webhook.service

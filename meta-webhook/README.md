@@ -1,8 +1,15 @@
-# Meta Lead Ads webhook
+# Meta Lead Ads + Mois Zvonki webhooks
 
-A tiny, standalone Node process that receives Instagram/Facebook Lead
-Ads submissions from Meta and writes them straight into the app's
-`leads` Firestore collection — the same shape the Lidlar module reads.
+A tiny, standalone Node process that hosts two integrations and writes
+straight into the app's Firestore collections — the same shapes the
+Lidlar module reads:
+
+- **Meta Lead Ads** — receives Instagram/Facebook Lead Ads submissions.
+- **Mois Zvonki** — receives phone call events (incl. recordings) from
+  the [Mois Zvonki](https://www.moizvonki.ru/) call-tracking app and
+  logs them onto the matching lead's "Faoliyat" timeline (or, for an
+  unmatched incoming call, auto-creates a new lead — a call should
+  never go untracked, same rule as any other lead source).
 
 It is deployed and kept running independently of the main frontend
 (see `deploy/meta-webhook.service` and the `deploy-meta-webhook` job in
@@ -22,6 +29,21 @@ Cloud Function.
 Until all four are set, the `deploy-meta-webhook` job skips itself
 (same pattern as `deploy-functions`) — nothing breaks, the webhook
 just isn't live yet.
+
+Separately, for the Mois Zvonki call integration (optional — the Meta
+side works without these):
+
+| Secret | Where to get it |
+|---|---|
+| `MOIZVONKI_DOMAIN` | Mois Zvonki dashboard → Настройки → Интеграция → "Ваш адрес API" (e.g. `vodiyprint.moizvonki.ru`, without `https://`) |
+| `MOIZVONKI_USER_EMAIL` | The login email of a Mois Zvonki **Administrator** account (subscribing to webhooks requires admin rights) |
+| `MOIZVONKI_API_KEY` | Same page → "Ваш ключ API" |
+| `MOIZVONKI_WEBHOOK_TOKEN` | Any string you make up yourself — appended as `?token=...` on the callback URL, since Mois Zvonki (unlike Meta) doesn't sign its webhook requests |
+
+Once all four `MOIZVONKI_*` secrets are set, the server self-subscribes
+to Mois Zvonki's `call.finish` webhook on every boot/restart (safe to
+repeat — re-subscribing just replaces the handler URL) — no manual step
+needed on the Mois Zvonki side beyond having those credentials.
 
 ## Setting it up on Meta's side, once the secrets are in place
 

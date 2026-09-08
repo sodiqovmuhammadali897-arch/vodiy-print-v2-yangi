@@ -233,11 +233,14 @@ export default function LeadDetailPanel({ lead, order, onClose, onEdit, onAddTas
                   {activities.map((a) => (
                     <div key={a.id} className="flex gap-2.5 pb-3">
                       <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <div className="text-xs font-semibold text-ink-800">{a.text}</div>
                         <div className="text-[10.5px] text-ink-400">
                           {a.actor_name} · {formatDateTime(a.created_at)}
                         </div>
+                        {a.kind === "call" && a.call_recording_url && (
+                          <audio className="mt-1.5 h-8 w-full max-w-xs" controls preload="none" src={a.call_recording_url} />
+                        )}
                       </div>
                     </div>
                   ))}

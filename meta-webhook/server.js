@@ -28,6 +28,21 @@ if (!VERIFY_TOKEN || !APP_SECRET || !PAGE_ACCESS_TOKEN) {
   );
 }
 
+// Mois Zvonki (telephony/call-recording) integration — see the
+// "Mois Zvonki" section further down. Independent of the Meta config
+// above; simply skips itself until all four are set.
+const MOIZVONKI_DOMAIN = process.env.MOIZVONKI_DOMAIN || "";
+const MOIZVONKI_USER_EMAIL = process.env.MOIZVONKI_USER_EMAIL || "";
+const MOIZVONKI_API_KEY = process.env.MOIZVONKI_API_KEY || "";
+const MOIZVONKI_WEBHOOK_TOKEN = process.env.MOIZVONKI_WEBHOOK_TOKEN || "";
+const MOIZVONKI_CALLBACK_BASE = process.env.MOIZVONKI_CALLBACK_BASE || "https://printvodiy.uz";
+const MOIZVONKI_CONFIGURED = Boolean(
+  MOIZVONKI_DOMAIN && MOIZVONKI_USER_EMAIL && MOIZVONKI_API_KEY && MOIZVONKI_WEBHOOK_TOKEN,
+);
+if (!MOIZVONKI_CONFIGURED) {
+  console.log("MOIZVONKI_* env not fully set — call webhook not subscribed yet.");
+}
+
 initializeApp({ credential: cert(require(SERVICE_ACCOUNT_PATH)) });
 const db = getFirestore();
 
@@ -179,4 +194,190 @@ app.post("/webhooks/meta-leads", async (req, res) => {
 
 app.get("/webhooks/meta-leads/health", (_req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => console.log(`Meta leads webhook listening on :${PORT}`));
+// ── Mois Zvonki (call recording / telephony) ─────────────────────────
+// Opposite shape from the Meta integration above: Mois Zvonki exposes its
+// own REST API (https://www.moizvonki.ru/guide/api/) that we call both to
+// register a webhook subscription (once, on boot) and — unlike Meta — it
+// then pushes every call.start/answer/finish event to us as plain POST
+// JSON with no signature, so the subscribed URL carries a shared-secret
+// query token instead.
+
+// Strips everything but digits so "+998 90 123 45 67", "998901234567"
+// and "90 123 45 67" all compare equal — mirrors src/lib/format.ts's
+// normalizePhone (this service can't import frontend TS directly).
+const normalizePhone = (phone) => (phone || "").replace(/\D/g, "").slice(-9);
+
+const moizvonkiCall = async (action, params = {}) => {
+  const res = await fetch(`https://${MOIZVONKI_DOMAIN}/api/v1`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_name: MOIZVONKI_USER_EMAIL, api_key: MOIZVONKI_API_KEY, action, ...params }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Mois Zvonki API xatosi (${action}): ${JSON.stringify(data)}`);
+  return data;
+};
+
+const findByPhone = async (collection, phone) => {
+  const target = normalizePhone(phone);
+  if (!target) return null;
+  const snap = await db.collection(collection).get();
+  let found = null;
+  snap.forEach((doc) => {
+    if (found) return;
+    if (normalizePhone(doc.data().phone) === target) found = { id: doc.id, ...doc.data() };
+  });
+  return found;
+};
+
+const formatCallDuration = (seconds) => {
+  const s = Math.max(0, Number(seconds) || 0);
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m > 0 ? `${m} daq ${r} son` : `${r} soniya`;
+};
+
+const handleCallFinish = async (event) => {
+  const {
+    direction,
+    client_number: clientNumber,
+    client_name: clientName,
+    start_time: startTime,
+    answer_time: answerTime,
+    end_time: endTime,
+    duration,
+    answered,
+    recording,
+  } = event || {};
+
+  const now = new Date().toISOString();
+  const isIncoming = direction !== 1;
+  const directionLabel = isIncoming ? "Kiruvchi" : "Chiquvchi";
+  const answeredLabel = answered ? "javob berildi" : "javob berilmadi";
+  const durationLabel = formatCallDuration(duration);
+
+  let lead = await findByPhone("leads", clientNumber);
+  const customer = lead ? null : await findByPhone("customers", clientNumber);
+
+  // No existing lead/customer on an incoming call — this is a fresh
+  // enquiry over the phone, so it becomes a lead like any other channel
+  // (a call should never go untracked, same rule as the Meta leads).
+  if (!lead && !customer && isIncoming) {
+    const lead_number = await nextLeadNumber();
+    const ref = await db.collection("leads").add({
+      lead_number,
+      full_name: clientName || "Noma'lum (qo'ng'iroq)",
+      brand: "",
+      phone: clientNumber || "",
+      telegram: "",
+      interested_product_id: "",
+      interested_product_name: "",
+      source: "Telefon qo'ng'irog'i",
+      campaign_name: "",
+      campaign_id: "",
+      ad_set_name: "",
+      ad_set_id: "",
+      ad_name: "",
+      ad_id: "",
+      form_name: "",
+      form_id: "",
+      assigned_to_email: "",
+      assigned_to_name: "",
+      status: "new",
+      region: "",
+      industry: "",
+      estimated_amount: 0,
+      next_contact_at: null,
+      first_contact_at: null,
+      last_contact_at: null,
+      note: "",
+      lost_reason: "",
+      lost_comment: "",
+      converted_customer_id: null,
+      converted_order_id: null,
+      created_at: now,
+      updated_at: now,
+    });
+    lead = { id: ref.id, lead_number };
+    await db.collection("lead_sources").doc("telefon-qongirogi").set({ name: "Telefon qo'ng'irog'i" }, { merge: true });
+    console.log(`Call created new lead: ${lead_number} (${clientNumber})`);
+  }
+
+  await db.collection("calls").add({
+    lead_id: lead ? lead.id : null,
+    customer_id: customer ? customer.id : null,
+    phone: clientNumber || "",
+    client_name: clientName || "",
+    direction: isIncoming ? "in" : "out",
+    answered: Boolean(answered),
+    duration_seconds: Number(duration) || 0,
+    recording_url: recording || "",
+    start_time: startTime ? new Date(startTime * 1000).toISOString() : null,
+    answer_time: answerTime ? new Date(answerTime * 1000).toISOString() : null,
+    end_time: endTime ? new Date(endTime * 1000).toISOString() : null,
+    created_at: now,
+  });
+
+  if (lead) {
+    await db.collection("lead_activities").add({
+      lead_id: lead.id,
+      text: `📞 ${directionLabel} qo'ng'iroq — ${durationLabel}, ${answeredLabel}`,
+      actor_email: "system",
+      actor_name: "Mois Zvonki",
+      created_at: now,
+      kind: "call",
+      call_direction: isIncoming ? "in" : "out",
+      call_answered: Boolean(answered),
+      call_duration_seconds: Number(duration) || 0,
+      call_recording_url: recording || "",
+    });
+    await db.collection("leads").doc(lead.id).update({ last_contact_at: now, updated_at: now });
+  }
+
+  console.log(
+    `Call logged: ${clientNumber} (${directionLabel}, ${durationLabel})` +
+      (lead ? ` -> lead ${lead.lead_number || lead.id}` : customer ? ` -> customer ${customer.id}` : " (no match)"),
+  );
+};
+
+app.post("/webhooks/moizvonki-calls", async (req, res) => {
+  if (!MOIZVONKI_WEBHOOK_TOKEN || req.query.token !== MOIZVONKI_WEBHOOK_TOKEN) {
+    return res.sendStatus(401);
+  }
+
+  // Ack immediately, same as the Meta handler — process after responding.
+  res.sendStatus(200);
+
+  try {
+    const action = req.body && req.body.webhook && req.body.webhook.action;
+    const event = req.body && req.body.event;
+    if (action === "call.finish" && event) {
+      await handleCallFinish(event);
+    }
+  } catch (err) {
+    console.error("Failed to process Mois Zvonki webhook", err);
+  }
+});
+
+app.get("/webhooks/moizvonki-calls/health", (_req, res) => res.json({ ok: true }));
+
+// One-time (safe to repeat on every restart — re-subscribing just
+// replaces the handler URL for the same events) registration of the
+// call-finish webhook with Mois Zvonki, from the account Administrator.
+const subscribeMoizvonkiWebhook = async () => {
+  if (!MOIZVONKI_CONFIGURED) return;
+  const url = `${MOIZVONKI_CALLBACK_BASE}/webhooks/moizvonki-calls?token=${MOIZVONKI_WEBHOOK_TOKEN}`;
+  try {
+    await moizvonkiCall("webhook.subscribe", {
+      hooks: { "call.finish": url },
+    });
+    console.log("Mois Zvonki call.finish webhook subscribed:", url);
+  } catch (err) {
+    console.error("Mois Zvonki webhook subscribe failed", err);
+  }
+};
+
+app.listen(PORT, () => {
+  console.log(`Meta leads webhook listening on :${PORT}`);
+  void subscribeMoizvonkiWebhook();
+});

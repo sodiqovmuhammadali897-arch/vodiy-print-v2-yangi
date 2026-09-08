@@ -326,6 +326,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Full call log from the Mois Zvonki telephony webhook (VPS service,
+    // Admin SDK only — no client ever writes here). Matched calls also get
+    // a mirrored lead_activities entry; this collection is the permanent
+    // record regardless of match status, so admins can audit any call.
+    match /calls/{id} {
+      allow read: if isAdmin() || can('leads', 'view') || can('customers', 'view');
+      allow write: if false;
+    }
+
     // Ish stoli's "Bugungi tizimdan foydalanish" widget — one doc per
     // staff member per day, written only by that staff member's own
     // client-side heartbeat while the app is open. Any signed-in staff

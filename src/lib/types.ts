@@ -658,6 +658,33 @@ export type LeadActivity = {
   actor_email: string;
   actor_name: string;
   created_at: string;
+  // Present only on entries auto-logged by the Mois Zvonki call webhook —
+  // lets the timeline render an inline audio player instead of plain text.
+  kind?: "note" | "call";
+  call_direction?: "in" | "out";
+  call_answered?: boolean;
+  call_duration_seconds?: number;
+  call_recording_url?: string;
+};
+
+// Full telephony log written by the Mois Zvonki webhook (VPS service,
+// Admin SDK only) for every finished call — regardless of whether it
+// matched a lead/customer, so nothing is ever silently dropped. Matched
+// calls also get a mirrored, human-readable LeadActivity entry.
+export type CallLog = {
+  id: string;
+  lead_id: string | null;
+  customer_id: string | null;
+  phone: string;
+  client_name: string;
+  direction: "in" | "out";
+  answered: boolean;
+  duration_seconds: number;
+  recording_url: string;
+  start_time: string | null;
+  answer_time: string | null;
+  end_time: string | null;
+  created_at: string;
 };
 
 // Lightweight lookup collections, upserted automatically whenever a
