@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Phone, Send, Pencil, ClipboardPlus, X, CircleCheck } from "lucide-react";
-import { listWhere } from "../../lib/firestoreDb";
+import { subscribeWhere } from "../../lib/firestoreDb";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { leadStatusInfo, leadTaskTypeLabel, LEAD_STATUS_OPTIONS, columnForLead } from "../../lib/orderConstants";
 import { completeLeadTaskWithFollowUp } from "../../lib/leadTasks";
@@ -32,16 +32,21 @@ export default function LeadDetailPanel({ lead, order, onClose, onEdit, onAddTas
   useEffect(() => {
     if (!lead) return;
     setTab("info");
-    void listWhere<LeadTask>("lead_tasks", "lead_id", lead.id, { orderBy: ["created_at", "desc"] }).then(setTasks);
-    void listWhere<LeadActivity>("lead_activities", "lead_id", lead.id, { orderBy: ["created_at", "desc"] }).then(setActivities);
-  }, [lead]);
+    const unsubTasks = subscribeWhere<LeadTask>("lead_tasks", "lead_id", lead.id, setTasks, { orderBy: ["created_at", "desc"] });
+    const unsubActivities = subscribeWhere<LeadActivity>("lead_activities", "lead_id", lead.id, setActivities, {
+      orderBy: ["created_at", "desc"],
+    });
+    return () => {
+      unsubTasks();
+      unsubActivities();
+    };
+  }, [lead?.id]);
 
   const complete = async (task: LeadTask) => {
     setBusyId(task.id);
     const actorEmail = user?.email?.toLowerCase() || "";
     const actorName = staff?.full_name || actorEmail;
     await completeLeadTaskWithFollowUp(task, actorEmail, actorName);
-    if (lead) void listWhere<LeadTask>("lead_tasks", "lead_id", lead.id, { orderBy: ["created_at", "desc"] }).then(setTasks);
     setBusyId(null);
     onChanged();
   };

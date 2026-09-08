@@ -36,24 +36,33 @@ export default function LeadTaskModal({ open, onClose, lead, onSaved }: Props) {
 
   const submit = async () => {
     if (!lead) return;
+    if (!dueDate) {
+      alert("Sanani tanlang.");
+      return;
+    }
     setSaving(true);
     const assignedStaff = staffList.find((s) => s.email === assignedEmail);
     const actorEmail = user?.email?.toLowerCase() || "";
     const actorName = staff?.full_name || actorEmail;
-    await createLeadTask(
-      lead.id,
-      lead.full_name,
-      type,
-      dueDate,
-      dueTime,
-      assignedEmail,
-      assignedStaff?.full_name || "",
-      note.trim(),
-      actorEmail,
-      actorName,
-    );
-    setSaving(false);
-    onSaved();
+    try {
+      await createLeadTask(
+        lead.id,
+        lead.full_name,
+        type,
+        dueDate,
+        dueTime,
+        assignedEmail,
+        assignedStaff?.full_name || "",
+        note.trim(),
+        actorEmail,
+        actorName,
+      );
+      onSaved();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Vazifani saqlashda xatolik yuz berdi");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
