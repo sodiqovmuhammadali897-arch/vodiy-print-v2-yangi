@@ -86,40 +86,38 @@ export default function OrderDetail() {
       const ord = await getOne<Order>("orders", id);
       setOrder(ord);
       if (ord) {
-        const [b, c, pr, pay, f, h, tx, sh, cs] = await Promise.all([
-          ord.brand_id
-            ? getOne<Brand>("brands", ord.brand_id)
-            : Promise.resolve(null),
-          ord.customer_id
-            ? getOne<Customer>("customers", ord.customer_id)
-            : Promise.resolve(null),
-          listWhere<OrderProduct>("order_products", "order_id", ord.id, {
-            orderBy: ["position", "asc"],
-          }),
-          listWhere<OrderPayment>("order_payments", "order_id", ord.id, {
-            orderBy: ["payment_date", "asc"],
-          }),
-          listWhere<OrderFile>("order_files", "order_id", ord.id, {
-            orderBy: ["created_at", "desc"],
-          }),
-          listAll<Holiday>("holidays"),
-          ord.textile_company_id
-            ? getOne<TextileCompany>("textile_companies", ord.textile_company_id)
-            : Promise.resolve(null),
-          listWhere<StatusHistoryEntry>("order_status_history", "order_id", ord.id, {
-            orderBy: ["changed_at", "asc"],
-          }),
-          getOne<CompanySettings>("company_settings", "main"),
-        ]);
-        setBrand(b);
-        setCustomer(c);
-        setProducts(pr);
-        setPayments(pay);
-        setFiles(f);
-        setTextile(tx);
-        setHolidays(h);
-        setStatusHistory(sh);
-        setCompany(cs);
+        // allSettled, not all — a single denied/failed read (e.g. one
+        // linked doc the current user can't see) must not blank out the
+        // rest of an otherwise-successful load. Each slot logs its own
+        // collection name on failure so a real permission gap is easy
+        // to spot instead of the whole page silently looking empty.
+        const labeled: [string, Promise<unknown>][] = [
+          ["brands", ord.brand_id ? getOne<Brand>("brands", ord.brand_id) : Promise.resolve(null)],
+          ["customers", ord.customer_id ? getOne<Customer>("customers", ord.customer_id) : Promise.resolve(null)],
+          ["order_products", listWhere<OrderProduct>("order_products", "order_id", ord.id, { orderBy: ["position", "asc"] })],
+          ["order_payments", listWhere<OrderPayment>("order_payments", "order_id", ord.id, { orderBy: ["payment_date", "asc"] })],
+          ["order_files", listWhere<OrderFile>("order_files", "order_id", ord.id, { orderBy: ["created_at", "desc"] })],
+          ["holidays", listAll<Holiday>("holidays")],
+          ["textile_companies", ord.textile_company_id ? getOne<TextileCompany>("textile_companies", ord.textile_company_id) : Promise.resolve(null)],
+          ["order_status_history", listWhere<StatusHistoryEntry>("order_status_history", "order_id", ord.id, { orderBy: ["changed_at", "asc"] })],
+          ["company_settings", getOne<CompanySettings>("company_settings", "main")],
+        ];
+        const settled = await Promise.allSettled(labeled.map(([, p]) => p));
+        const value = <T,>(i: number, fallback: T): T => {
+          const r = settled[i];
+          if (r.status === "fulfilled") return r.value as T;
+          console.error(`Buyurtma sahifasi: "${labeled[i][0]}" o'qishda xatolik`, r.reason);
+          return fallback;
+        };
+        setBrand(value(0, null));
+        setCustomer(value(1, null));
+        setProducts(value(2, []));
+        setPayments(value(3, []));
+        setFiles(value(4, []));
+        setHolidays(value(5, []));
+        setTextile(value(6, null));
+        setStatusHistory(value(7, []));
+        setCompany(value(8, null));
       }
     } catch (e) {
       console.error("Buyurtmani yuklashda xatolik", e);
