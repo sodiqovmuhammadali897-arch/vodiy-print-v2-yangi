@@ -82,45 +82,50 @@ export default function OrderDetail() {
   const load = async () => {
     if (!id) return;
     setLoading(true);
-    const ord = await getOne<Order>("orders", id);
-    setOrder(ord);
-    if (ord) {
-      const [b, c, pr, pay, f, h, tx, sh, cs] = await Promise.all([
-        ord.brand_id
-          ? getOne<Brand>("brands", ord.brand_id)
-          : Promise.resolve(null),
-        ord.customer_id
-          ? getOne<Customer>("customers", ord.customer_id)
-          : Promise.resolve(null),
-        listWhere<OrderProduct>("order_products", "order_id", ord.id, {
-          orderBy: ["position", "asc"],
-        }),
-        listWhere<OrderPayment>("order_payments", "order_id", ord.id, {
-          orderBy: ["payment_date", "asc"],
-        }),
-        listWhere<OrderFile>("order_files", "order_id", ord.id, {
-          orderBy: ["created_at", "desc"],
-        }),
-        listAll<Holiday>("holidays"),
-        ord.textile_company_id
-          ? getOne<TextileCompany>("textile_companies", ord.textile_company_id)
-          : Promise.resolve(null),
-        listWhere<StatusHistoryEntry>("order_status_history", "order_id", ord.id, {
-          orderBy: ["changed_at", "asc"],
-        }),
-        getOne<CompanySettings>("company_settings", "main"),
-      ]);
-      setBrand(b);
-      setCustomer(c);
-      setProducts(pr);
-      setPayments(pay);
-      setFiles(f);
-      setTextile(tx);
-      setHolidays(h);
-      setStatusHistory(sh);
-      setCompany(cs);
+    try {
+      const ord = await getOne<Order>("orders", id);
+      setOrder(ord);
+      if (ord) {
+        const [b, c, pr, pay, f, h, tx, sh, cs] = await Promise.all([
+          ord.brand_id
+            ? getOne<Brand>("brands", ord.brand_id)
+            : Promise.resolve(null),
+          ord.customer_id
+            ? getOne<Customer>("customers", ord.customer_id)
+            : Promise.resolve(null),
+          listWhere<OrderProduct>("order_products", "order_id", ord.id, {
+            orderBy: ["position", "asc"],
+          }),
+          listWhere<OrderPayment>("order_payments", "order_id", ord.id, {
+            orderBy: ["payment_date", "asc"],
+          }),
+          listWhere<OrderFile>("order_files", "order_id", ord.id, {
+            orderBy: ["created_at", "desc"],
+          }),
+          listAll<Holiday>("holidays"),
+          ord.textile_company_id
+            ? getOne<TextileCompany>("textile_companies", ord.textile_company_id)
+            : Promise.resolve(null),
+          listWhere<StatusHistoryEntry>("order_status_history", "order_id", ord.id, {
+            orderBy: ["changed_at", "asc"],
+          }),
+          getOne<CompanySettings>("company_settings", "main"),
+        ]);
+        setBrand(b);
+        setCustomer(c);
+        setProducts(pr);
+        setPayments(pay);
+        setFiles(f);
+        setTextile(tx);
+        setHolidays(h);
+        setStatusHistory(sh);
+        setCompany(cs);
+      }
+    } catch (e) {
+      console.error("Buyurtmani yuklashda xatolik", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
