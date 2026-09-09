@@ -129,6 +129,8 @@ jobs:
           fi
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          echo "=== service account identity (diagnostic, no secret exposed) ==="
+          node -e "const sa = require('$RUNNER_TEMP/firebase-sa.json'); console.log('client_email:', sa.client_email); console.log('project_id:', sa.project_id);"
           npx firebase-tools@13 deploy --only functions,firestore:rules --project vodiy-print --non-interactive
 
   # Deploys the standalone webhook receiver (meta-webhook/) to the same
