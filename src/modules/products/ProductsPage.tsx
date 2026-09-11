@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Eye, Boxes } from "lucide-react";
-import { listAll, updateOne } from "../../lib/firestoreDb";
+import { listAll, updateOne, deleteOne, deleteWhere } from "../../lib/firestoreDb";
 import type { Product } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
 import { canExportCustomerPrice } from "../../lib/rolePermissions";
@@ -68,6 +68,15 @@ export default function ProductsPage() {
     });
     await load();
   };
+  const deleteProduct = async () => {
+    if (!selected) return;
+    if (!confirm(`"${selected.name}" mahsuloti butunlay o'chirilsinmi? Bu amalni ortga qaytarib bo'lmaydi.`)) return;
+    await deleteWhere("product_vendors", "product_id", selected.id);
+    await deleteOne("product_costs", selected.id);
+    await deleteOne("products", selected.id);
+    setSelectedId(null);
+    await load(false);
+  };
 
   return (
     <div className="space-y-4">
@@ -117,10 +126,12 @@ export default function ProductsPage() {
                   product={selected}
                   allProducts={products}
                   canEdit={canEdit}
+                  isAdmin={auth.isAdmin}
                   onEdit={openEdit}
                   onDuplicate={openDuplicate}
                   onToggleActive={toggleActive}
                   onToggleArchive={toggleArchive}
+                  onDelete={deleteProduct}
                   onSelectUpsell={(p) => {
                     setSelectedId(p.id);
                     setCustomerView(false);

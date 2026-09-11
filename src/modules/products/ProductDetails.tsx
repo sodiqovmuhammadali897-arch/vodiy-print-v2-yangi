@@ -12,10 +12,12 @@ type Props = {
   product: Product;
   allProducts: Product[];
   canEdit: boolean;
+  isAdmin: boolean;
   onEdit: () => void;
   onDuplicate: () => void;
   onToggleActive: () => void;
   onToggleArchive: () => void;
+  onDelete: () => void;
   onSelectUpsell: (p: Product) => void;
 };
 
@@ -23,10 +25,12 @@ export default function ProductDetails({
   product,
   allProducts,
   canEdit,
+  isAdmin,
   onEdit,
   onDuplicate,
   onToggleActive,
   onToggleArchive,
+  onDelete,
   onSelectUpsell,
 }: Props) {
   const [primaryVendor, setPrimaryVendor] = useState<ProductVendor | null>(null);
@@ -37,10 +41,12 @@ export default function ProductDetails({
         product={product}
         primaryVendor={primaryVendor}
         canEdit={canEdit}
+        isAdmin={isAdmin}
         onEdit={onEdit}
         onDuplicate={onDuplicate}
         onToggleActive={onToggleActive}
         onToggleArchive={onToggleArchive}
+        onDelete={onDelete}
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

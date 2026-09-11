@@ -1,24 +1,28 @@
-import { Archive, Copy, ImageOff, Pencil, Power, RotateCcw } from "lucide-react";
+import { Archive, Copy, ImageOff, Pencil, Power, RotateCcw, Trash2 } from "lucide-react";
 import type { Product, ProductVendor } from "../../lib/types";
 
 type Props = {
   product: Product;
   primaryVendor: ProductVendor | null;
   canEdit: boolean;
+  isAdmin: boolean;
   onEdit: () => void;
   onDuplicate: () => void;
   onToggleActive: () => void;
   onToggleArchive: () => void;
+  onDelete: () => void;
 };
 
 export default function ProductHeader({
   product,
   primaryVendor,
   canEdit,
+  isAdmin,
   onEdit,
   onDuplicate,
   onToggleActive,
   onToggleArchive,
+  onDelete,
 }: Props) {
   const archived = !!product.archived_at;
   const active = product.is_active !== false && !archived;
@@ -75,6 +79,11 @@ export default function ProductHeader({
                 onClick={onToggleActive}
               >
                 <Power className="h-4 w-4" /> {active ? "Nofaollashtirish" : "Faollashtirish"}
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn-ghost text-rose-600 hover:bg-rose-50" onClick={onDelete}>
+                <Trash2 className="h-4 w-4" /> O'chirish
               </button>
             )}
           </div>
