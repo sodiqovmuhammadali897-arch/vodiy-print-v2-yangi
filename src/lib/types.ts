@@ -347,6 +347,11 @@ export type Expense = {
   amount: number;
   date: string;
   note: string;
+  // Only set when category is "Ta'minotchiga to'lov" — points at an
+  // existing ProductionCompany rather than free-typing the same
+  // supplier name every time.
+  vendor_id: string | null;
+  vendor_name: string;
   created_by: string;
   created_at: string;
 };

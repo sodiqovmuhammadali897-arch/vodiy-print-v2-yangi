@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Receipt } from "lucide-react";
-import { insertOne, updateOne, deleteOne } from "../../lib/firestoreDb";
-import { EXPENSE_CATEGORIES } from "../../lib/orderConstants";
-import type { Expense } from "../../lib/types";
+import { insertOne, updateOne, deleteOne, listAll } from "../../lib/firestoreDb";
+import { EXPENSE_CATEGORIES, VENDOR_EXPENSE_CATEGORY } from "../../lib/orderConstants";
+import type { Expense, ProductionCompany } from "../../lib/types";
 import { formatDate, formatMoney } from "../../lib/format";
 import { useAuth } from "../../lib/AuthContext";
 import Modal from "../../components/ui/Modal";
@@ -34,6 +34,12 @@ export default function ExpensesPanel({ expenses, loading, onChanged }: Props) {
   const canDelete = can("finance", "delete");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  const [vendors, setVendors] = useState<ProductionCompany[]>([]);
+  const [vendorFilter, setVendorFilter] = useState<string>("");
+
+  useEffect(() => {
+    void listAll<ProductionCompany>("production_companies", { orderBy: ["name", "asc"] }).then(setVendors);
+  }, []);
 
   const remove = async (id: string) => {
     if (!confirm("Ushbu xarajatni o'chirishni tasdiqlaysizmi?")) return;
@@ -41,8 +47,10 @@ export default function ExpensesPanel({ expenses, loading, onChanged }: Props) {
     onChanged();
   };
 
+  const visible = vendorFilter ? expenses.filter((e) => e.vendor_id === vendorFilter) : expenses;
+
   const byCategory = new Map<string, number>();
-  for (const e of expenses) {
+  for (const e of visible) {
     byCategory.set(e.category, (byCategory.get(e.category) || 0) + Number(e.amount || 0));
   }
   const donutData: DonutSlice[] = Array.from(byCategory.entries()).map(
@@ -52,7 +60,7 @@ export default function ExpensesPanel({ expenses, loading, onChanged }: Props) {
       color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
     }),
   );
-  const total = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const total = visible.reduce((s, e) => s + Number(e.amount || 0), 0);
 
   return (
     <div className="card p-5">
@@ -65,20 +73,36 @@ export default function ExpensesPanel({ expenses, loading, onChanged }: Props) {
             Tanlangan davr uchun jami: {formatMoney(total)}
           </p>
         </div>
-        {canEdit && (
-          <button
-            className="btn-primary"
-            onClick={() => {
-              setEditing(null);
-              setModalOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4" /> Xarajat qo'shish
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {vendors.length > 0 && (
+            <select
+              className="input !w-auto"
+              value={vendorFilter}
+              onChange={(e) => setVendorFilter(e.target.value)}
+            >
+              <option value="">Barcha ta'minotchilar</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {canEdit && (
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setEditing(null);
+                setModalOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" /> Xarajat qo'shish
+            </button>
+          )}
+        </div>
       </div>
 
-      {expenses.length > 0 && (
+      {visible.length > 0 && (
         <div className="mb-4">
           <SimpleDonutChart data={donutData} size={140} />
         </div>
@@ -86,7 +110,7 @@ export default function ExpensesPanel({ expenses, loading, onChanged }: Props) {
 
       <AsyncState
         loading={loading}
-        empty={expenses.length === 0}
+        empty={visible.length === 0}
         emptyLabel="Xarajatlar qo'shilmagan"
         emptyIcon={<Receipt className="h-5 w-5" />}
       >
@@ -96,6 +120,7 @@ export default function ExpensesPanel({ expenses, loading, onChanged }: Props) {
               <tr>
                 <th className="table-th">Sana</th>
                 <th className="table-th">Turi</th>
+                <th className="table-th">Ta'minotchi</th>
                 <th className="table-th">Izoh</th>
                 <th className="table-th text-right">Summa</th>
                 {(canEdit || canDelete) && (
@@ -104,10 +129,11 @@ export default function ExpensesPanel({ expenses, loading, onChanged }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
-              {expenses.map((e) => (
+              {visible.map((e) => (
                 <tr key={e.id} className="hover:bg-ink-50/50">
                   <td className="table-td whitespace-nowrap">{formatDate(e.date)}</td>
                   <td className="table-td">{e.category}</td>
+                  <td className="table-td text-ink-600">{e.vendor_name || "-"}</td>
                   <td className="table-td text-ink-600">{e.note || "-"}</td>
                   <td className="table-td whitespace-nowrap text-right font-semibold">
                     {formatMoney(e.amount)}
@@ -148,6 +174,8 @@ export default function ExpensesPanel({ expenses, loading, onChanged }: Props) {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         expense={editing}
+        vendors={vendors}
+        onVendorCreated={(v) => setVendors((prev) => [...prev, v].sort((a, b) => a.name.localeCompare(b.name)))}
         onSaved={() => {
           setModalOpen(false);
           onChanged();
@@ -161,17 +189,24 @@ type FormProps = {
   open: boolean;
   onClose: () => void;
   expense: Expense | null;
+  vendors: ProductionCompany[];
+  onVendorCreated: (v: ProductionCompany) => void;
   onSaved: () => void;
 };
 
-function ExpenseFormModal({ open, onClose, expense, onSaved }: FormProps) {
-  const { user } = useAuth();
+function ExpenseFormModal({ open, onClose, expense, vendors, onVendorCreated, onSaved }: FormProps) {
+  const { user, isAdmin } = useAuth();
   const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
   const [amount, setAmount] = useState(0);
   const [date, setDate] = useState(todayISO());
   const [note, setNote] = useState("");
+  const [vendorId, setVendorId] = useState("");
+  const [creatingVendor, setCreatingVendor] = useState(false);
+  const [newVendorName, setNewVendorName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isVendorCategory = category === VENDOR_EXPENSE_CATEGORY;
 
   useEffect(() => {
     if (expense) {
@@ -179,12 +214,16 @@ function ExpenseFormModal({ open, onClose, expense, onSaved }: FormProps) {
       setAmount(expense.amount);
       setDate(expense.date);
       setNote(expense.note);
+      setVendorId(expense.vendor_id || "");
     } else {
       setCategory(EXPENSE_CATEGORIES[0]);
       setAmount(0);
       setDate(todayISO());
       setNote("");
+      setVendorId("");
     }
+    setCreatingVendor(false);
+    setNewVendorName("");
     setError(null);
   }, [expense, open]);
 
@@ -193,7 +232,32 @@ function ExpenseFormModal({ open, onClose, expense, onSaved }: FormProps) {
     setSaving(true);
     setError(null);
     try {
-      const payload = { category, amount, date, note, created_by: user?.email || "" };
+      let finalVendorId = isVendorCategory ? vendorId : "";
+      let vendorName = vendors.find((v) => v.id === finalVendorId)?.name || "";
+
+      if (isVendorCategory && creatingVendor) {
+        if (!newVendorName.trim()) {
+          setSaving(false);
+          return setError("Ta'minotchi nomini kiriting");
+        }
+        const created = await insertOne<Omit<ProductionCompany, "id" | "created_at">>(
+          "production_companies",
+          { name: newVendorName.trim(), city: "", phone: "", telegram: "", is_internal: false, note: "" },
+        );
+        finalVendorId = created.id;
+        vendorName = created.name;
+        onVendorCreated({ ...created, created_at: new Date().toISOString() });
+      }
+
+      const payload = {
+        category,
+        amount,
+        date,
+        note,
+        vendor_id: finalVendorId || null,
+        vendor_name: vendorName,
+        created_by: user?.email || "",
+      };
       if (expense) {
         await updateOne("expenses", expense.id, payload);
       } else {
@@ -243,6 +307,46 @@ function ExpenseFormModal({ open, onClose, expense, onSaved }: FormProps) {
             ))}
           </select>
         </div>
+
+        {isVendorCategory && (
+          <div>
+            <label className="label">Ta'minotchi</label>
+            {!creatingVendor ? (
+              <div className="flex gap-2">
+                <select
+                  className="input"
+                  value={vendorId}
+                  onChange={(e) => setVendorId(e.target.value)}
+                >
+                  <option value="">-- tanlanmagan --</option>
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+                {isAdmin && (
+                  <button className="btn-secondary shrink-0" onClick={() => setCreatingVendor(true)}>
+                    <Plus className="h-4 w-4" /> Yangi
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  className="input"
+                  placeholder="Ta'minotchi nomi (masalan: Kans Print)"
+                  value={newVendorName}
+                  onChange={(e) => setNewVendorName(e.target.value)}
+                />
+                <button className="btn-ghost shrink-0" onClick={() => setCreatingVendor(false)}>
+                  Bekor qilish
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div>
           <label className="label">Summa *</label>
           <input

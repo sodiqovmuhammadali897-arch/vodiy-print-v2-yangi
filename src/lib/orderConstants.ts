@@ -235,12 +235,17 @@ export const EXPENSE_CATEGORIES = [
   "Ijara",
   "Maosh",
   "Xomashyo",
+  "Ta'minotchiga to'lov",
   "Transport",
   "Kommunal",
   "Soliq",
   "Reklama",
   "Boshqa",
 ] as const;
+
+// The one category whose entries link to a ProductionCompany (Kans
+// Print, UV Avtors, ...) instead of free-typing the payee each time.
+export const VENDOR_EXPENSE_CATEGORY = "Ta'minotchiga to'lov";
 
 export const TEXTILE_SIZES = [
   "S",
