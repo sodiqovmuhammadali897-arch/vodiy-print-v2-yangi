@@ -14,22 +14,30 @@ export default function KpiPanel() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [weights, setWeights] = useState(DEFAULT_KPI_WEIGHTS);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!email) return;
     (async () => {
-      const monthPrefix = dateCodeOf(new Date()).slice(0, 7);
-      const [sched, rows, settings, myTasks] = await Promise.all([
-        getWorkSchedule(),
-        listMonthAttendance(email, monthPrefix),
-        getOne<KpiSettings>("kpi_settings", "default"),
-        listWhere<Task>("tasks", "assigned_to_email", email),
-      ]);
-      setSchedule(sched);
-      setRecords(rows);
-      setTasks(myTasks.filter((t) => t.created_at.slice(0, 7) === monthPrefix));
-      if (settings?.weights) setWeights(settings.weights);
-      setLoading(false);
+      setLoading(true);
+      setError(null);
+      try {
+        const monthPrefix = dateCodeOf(new Date()).slice(0, 7);
+        const [sched, rows, settings, myTasks] = await Promise.all([
+          getWorkSchedule(),
+          listMonthAttendance(email, monthPrefix),
+          getOne<KpiSettings>("kpi_settings", "default"),
+          listWhere<Task>("tasks", "assigned_to_email", email),
+        ]);
+        setSchedule(sched);
+        setRecords(rows);
+        setTasks(myTasks.filter((t) => t.created_at.slice(0, 7) === monthPrefix));
+        if (settings?.weights) setWeights(settings.weights);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "KPI ma'lumotlarini yuklab bo'lmadi");
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [email]);
 
@@ -76,6 +84,10 @@ export default function KpiPanel() {
       availableScore: Math.round(availableScore * 10) / 10,
     };
   }, [schedule, records, tasks, weights]);
+
+  if (error) {
+    return <div className="card p-5 text-center text-sm text-rose-600">{error}</div>;
+  }
 
   if (loading || !result) {
     return <div className="card p-5 text-center text-sm text-ink-500">Yuklanmoqda...</div>;

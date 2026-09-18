@@ -129,7 +129,7 @@ jobs:
           fi
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
-          npx firebase-tools@13 deploy --only functions,firestore:rules --project vodiyprint-erp --non-interactive
+          npx firebase-tools@13 deploy --only functions,firestore:rules,firestore:indexes --project vodiyprint-erp --non-interactive
 
   # Deploys the standalone webhook receiver (meta-webhook/) to the same
   # VPS as a systemd service, independent of Cloud Functions — no Blaze

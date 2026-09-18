@@ -19,18 +19,26 @@ export default function EmployeeAttendanceCard() {
   const [today, setToday] = useState<AttendanceRecord | null>(null);
   const [monthRecords, setMonthRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
     if (!email) return;
-    const sched = await getWorkSchedule();
-    setSchedule(sched);
-    const [t, m] = await Promise.all([
-      getTodayAttendance(email),
-      listMonthAttendance(email, dateCodeOf(new Date()).slice(0, 7)),
-    ]);
-    setToday(t);
-    setMonthRecords(m);
-    setLoading(false);
+    setLoading(true);
+    setError(null);
+    try {
+      const sched = await getWorkSchedule();
+      setSchedule(sched);
+      const [t, m] = await Promise.all([
+        getTodayAttendance(email),
+        listMonthAttendance(email, dateCodeOf(new Date()).slice(0, 7)),
+      ]);
+      setToday(t);
+      setMonthRecords(m);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -71,6 +79,10 @@ export default function EmployeeAttendanceCard() {
       percent: attendancePercent(present, workingDays),
     };
   }, [monthRecords, schedule, now]);
+
+  if (error) {
+    return <div className="card p-5 text-center text-sm text-rose-600">{error}</div>;
+  }
 
   if (loading || !schedule) {
     return <div className="card p-5 text-center text-sm text-ink-500">Yuklanmoqda...</div>;

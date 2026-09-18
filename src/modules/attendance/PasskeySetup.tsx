@@ -32,9 +32,14 @@ export default function PasskeySetup() {
   const load = async () => {
     if (!email) return;
     setLoading(true);
-    const rows = await listMyCredentials(email);
-    setCredentials(rows);
-    setLoading(false);
+    try {
+      const rows = await listMyCredentials(email);
+      setCredentials(rows);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Qurilmalarni yuklab bo'lmadi");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
