@@ -6,7 +6,7 @@
       "ignore": [
         "node_modules",
         ".git",
-        "lib",
+        "src",
         "*.local"
       ],
       "predeploy": [
