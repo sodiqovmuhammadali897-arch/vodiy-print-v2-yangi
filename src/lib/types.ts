@@ -427,6 +427,8 @@ export type AttendanceRecord = {
   authenticationMethod: "webauthn" | "hikvision";
   checkInLocation: GeoPoint | null;
   checkOutLocation: GeoPoint | null;
+  checkInPhotoUrl: string | null;
+  checkOutPhotoUrl: string | null;
   deviceName: string | null;
   createdAt: string;
   updatedAt: string;

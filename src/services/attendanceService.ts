@@ -61,24 +61,28 @@ const withLocation = async (
   }
 };
 
-export const checkIn = async (schedule: WorkSchedule, deviceName?: string): Promise<CheckResult> => {
+export const checkIn = async (
+  schedule: WorkSchedule,
+  photoDataUrl: string,
+  deviceName?: string,
+): Promise<CheckResult> => {
   const location = await withLocation(schedule);
   const response = await getAuthenticationResponse();
   const fn = httpsCallable<
-    { response: unknown; latitude?: number; longitude?: number; deviceName?: string },
+    { response: unknown; latitude?: number; longitude?: number; deviceName?: string; photoDataUrl: string },
     CheckResult
   >(functions, "attendanceCheckIn");
-  const { data } = await fn({ response, ...location, deviceName });
+  const { data } = await fn({ response, ...location, deviceName, photoDataUrl });
   return data;
 };
 
-export const checkOut = async (schedule: WorkSchedule): Promise<CheckResult> => {
+export const checkOut = async (schedule: WorkSchedule, photoDataUrl: string): Promise<CheckResult> => {
   const location = await withLocation(schedule);
   const response = await getAuthenticationResponse();
   const fn = httpsCallable<
-    { response: unknown; latitude?: number; longitude?: number },
+    { response: unknown; latitude?: number; longitude?: number; photoDataUrl: string },
     CheckResult
   >(functions, "attendanceCheckOut");
-  const { data } = await fn({ response, ...location });
+  const { data } = await fn({ response, ...location, photoDataUrl });
   return data;
 };

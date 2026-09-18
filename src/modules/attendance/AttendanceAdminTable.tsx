@@ -92,6 +92,7 @@ export default function AttendanceAdminTable() {
               <thead className="bg-ink-50/60">
                 <tr>
                   <th className="table-th">Xodim</th>
+                  <th className="table-th">Selfie</th>
                   <th className="table-th">Kelgan vaqt</th>
                   <th className="table-th">Ketgan vaqt</th>
                   <th className="table-th">Ishlagan soat</th>
@@ -106,6 +107,19 @@ export default function AttendanceAdminTable() {
                 {rows.map(({ staff: s, record, status }) => (
                   <tr key={s.email} className="hover:bg-ink-50/50">
                     <td className="table-td font-medium text-ink-800">{s.full_name || s.email}</td>
+                    <td className="table-td">
+                      {record?.checkInPhotoUrl ? (
+                        <a href={record.checkInPhotoUrl} target="_blank" rel="noreferrer">
+                          <img
+                            src={record.checkInPhotoUrl}
+                            alt="Selfie"
+                            className="h-9 w-9 rounded-lg object-cover ring-1 ring-ink-200"
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-ink-400">-</span>
+                      )}
+                    </td>
                     <td className="table-td">{record?.checkInTime || "-"}</td>
                     <td className="table-td">{record?.checkOutTime || "-"}</td>
                     <td className="table-td">

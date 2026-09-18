@@ -117,6 +117,31 @@ export default function EmployeeAttendanceCard() {
           </div>
         ) : null}
 
+        {(today?.checkInPhotoUrl || today?.checkOutPhotoUrl) && (
+          <div className="mt-3 flex justify-center gap-3">
+            {today.checkInPhotoUrl && (
+              <div className="text-center">
+                <img
+                  src={today.checkInPhotoUrl}
+                  alt="Kelish selfie"
+                  className="h-16 w-16 rounded-xl object-cover ring-1 ring-ink-200"
+                />
+                <div className="mt-1 text-[10px] uppercase text-ink-400">Kelish</div>
+              </div>
+            )}
+            {today.checkOutPhotoUrl && (
+              <div className="text-center">
+                <img
+                  src={today.checkOutPhotoUrl}
+                  alt="Ketish selfie"
+                  className="h-16 w-16 rounded-xl object-cover ring-1 ring-ink-200"
+                />
+                <div className="mt-1 text-[10px] uppercase text-ink-400">Ketish</div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mt-4">
           {!today?.checkInTime ? (
             <CheckInButton schedule={schedule} onDone={load} />

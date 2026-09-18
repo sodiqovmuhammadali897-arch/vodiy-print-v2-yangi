@@ -5,6 +5,7 @@ import { requireStaffEmail, staffFullName } from "./authGuard";
 import { verifyAssertion } from "./webauthnAuthenticate";
 import { getWorkSchedule } from "./workSchedule";
 import { distanceMeters } from "./lib/geo";
+import { uploadAttendancePhoto } from "./lib/attendancePhoto";
 import {
   computeCheckInStatus,
   computeCheckOutStats,
@@ -18,6 +19,7 @@ type CheckPayload = {
   latitude?: number;
   longitude?: number;
   deviceName?: string;
+  photoDataUrl: string;
 };
 
 const assertWithinOffice = async (latitude?: number, longitude?: number): Promise<void> => {
@@ -41,7 +43,10 @@ const assertWithinOffice = async (latitude?: number, longitude?: number): Promis
 
 export const attendanceCheckIn = onCall(async (request) => {
   const email = await requireStaffEmail(request);
-  const { response, latitude, longitude, deviceName } = (request.data || {}) as CheckPayload;
+  const { response, latitude, longitude, deviceName, photoDataUrl } = (request.data || {}) as CheckPayload;
+  if (!photoDataUrl) {
+    throw new HttpsError("invalid-argument", "Selfie rasm talab qilinadi.");
+  }
 
   await assertWithinOffice(latitude, longitude);
   await verifyAssertion(email, response);
@@ -54,6 +59,7 @@ export const attendanceCheckIn = onCall(async (request) => {
     throw new HttpsError("already-exists", "Siz bugun allaqachon ishni boshlagansiz.");
   }
 
+  const photoUrl = await uploadAttendancePhoto(email, dateCode, "checkin", photoDataUrl);
   const schedule = await getWorkSchedule();
   const { status, lateMinutes } = computeCheckInStatus(now, schedule);
   const fullName = await staffFullName(email);
@@ -77,6 +83,8 @@ export const attendanceCheckIn = onCall(async (request) => {
     checkInLocation:
       typeof latitude === "number" && typeof longitude === "number" ? { latitude, longitude } : null,
     checkOutLocation: null,
+    checkInPhotoUrl: photoUrl,
+    checkOutPhotoUrl: null,
     deviceName: deviceName?.trim() || null,
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -88,7 +96,10 @@ export const attendanceCheckIn = onCall(async (request) => {
 
 export const attendanceCheckOut = onCall(async (request) => {
   const email = await requireStaffEmail(request);
-  const { response, latitude, longitude } = (request.data || {}) as CheckPayload;
+  const { response, latitude, longitude, photoDataUrl } = (request.data || {}) as CheckPayload;
+  if (!photoDataUrl) {
+    throw new HttpsError("invalid-argument", "Selfie rasm talab qilinadi.");
+  }
 
   await assertWithinOffice(latitude, longitude);
   await verifyAssertion(email, response);
@@ -105,6 +116,7 @@ export const attendanceCheckOut = onCall(async (request) => {
     throw new HttpsError("already-exists", "Siz bugun allaqachon ishni tugatgansiz.");
   }
 
+  const photoUrl = await uploadAttendancePhoto(email, dateCode, "checkout", photoDataUrl);
   const schedule = await getWorkSchedule();
   const checkIn = new Date(data.checkInTimestamp as string);
   const { workedMinutes, earlyLeaveMinutes, overtimeMinutes, status } = computeCheckOutStats(
@@ -123,6 +135,7 @@ export const attendanceCheckOut = onCall(async (request) => {
     status,
     checkOutLocation:
       typeof latitude === "number" && typeof longitude === "number" ? { latitude, longitude } : null,
+    checkOutPhotoUrl: photoUrl,
     updatedAt: nowIso,
   });
 

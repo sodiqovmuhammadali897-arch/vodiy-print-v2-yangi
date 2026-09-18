@@ -2,6 +2,7 @@ import { useState } from "react";
 import { LogIn } from "lucide-react";
 import type { WorkSchedule } from "../../lib/types";
 import { checkIn } from "../../services/attendanceService";
+import { captureSelfie, SelfieCancelledError } from "../../utils/selfieCapture";
 
 type Props = {
   schedule: WorkSchedule;
@@ -10,20 +11,29 @@ type Props = {
 
 export default function CheckInButton({ schedule, onDone }: Props) {
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState<"selfie" | "verify" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const run = async () => {
     setBusy(true);
     setError(null);
     try {
-      await checkIn(schedule);
+      setStep("selfie");
+      const photoDataUrl = await captureSelfie();
+      setStep("verify");
+      await checkIn(schedule, photoDataUrl);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Xatolik yuz berdi");
+      if (!(err instanceof SelfieCancelledError)) {
+        setError(err instanceof Error ? err.message : "Xatolik yuz berdi");
+      }
     } finally {
       setBusy(false);
+      setStep(null);
     }
   };
+
+  const label = step === "selfie" ? "Selfie olinmoqda..." : step === "verify" ? "Tasdiqlanmoqda..." : "Ishni boshlash";
 
   return (
     <div>
@@ -33,7 +43,7 @@ export default function CheckInButton({ schedule, onDone }: Props) {
         disabled={busy}
       >
         <LogIn className="h-5 w-5" />
-        {busy ? "Tasdiqlanmoqda..." : "Ishni boshlash"}
+        {label}
       </button>
       {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
     </div>
