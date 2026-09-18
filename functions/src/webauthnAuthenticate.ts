@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/v2";
 import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
@@ -16,30 +17,38 @@ import type { StoredCredential } from "./types";
 
 export const webauthnAuthOptions = onCall(async (request) => {
   const email = await requireStaffEmail(request);
+  try {
+    const creds = await db
+      .collection("webauthn_credentials")
+      .where("employeeEmail", "==", email)
+      .get();
+    if (creds.empty) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Sizda ulangan Face ID/Passkey qurilma yo'q. Avval profilingizda ulang.",
+      );
+    }
 
-  const creds = await db
-    .collection("webauthn_credentials")
-    .where("employeeEmail", "==", email)
-    .get();
-  if (creds.empty) {
+    const options = await generateAuthenticationOptions({
+      rpID: RP_ID,
+      allowCredentials: creds.docs.map((d) => ({
+        id: base64urlToUint8Array(d.data().credentialId as string),
+        type: "public-key" as const,
+        transports: d.data().transports as AuthenticatorTransportFuture[] | undefined,
+      })),
+      userVerification: "required",
+    });
+
+    await saveChallenge(email, options.challenge, "authenticate");
+    return options;
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    logger.error("webauthnAuthOptions failed", { email, error: err });
     throw new HttpsError(
-      "failed-precondition",
-      "Sizda ulangan Face ID/Passkey qurilma yo'q. Avval profilingizda ulang.",
+      "internal",
+      `Kutilmagan xatolik: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
-
-  const options = await generateAuthenticationOptions({
-    rpID: RP_ID,
-    allowCredentials: creds.docs.map((d) => ({
-      id: base64urlToUint8Array(d.data().credentialId as string),
-      type: "public-key" as const,
-      transports: d.data().transports as AuthenticatorTransportFuture[] | undefined,
-    })),
-    userVerification: "required",
-  });
-
-  await saveChallenge(email, options.challenge, "authenticate");
-  return options;
 });
 
 // Shared by attendanceCheckIn/attendanceCheckOut — verifies the biometric

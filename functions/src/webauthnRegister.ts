@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/v2";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -22,80 +23,98 @@ const userIdFor = (email: string): string =>
 
 export const webauthnRegisterOptions = onCall(async (request) => {
   const email = await requireStaffEmail(request);
-  const fullName = await staffFullName(email);
+  try {
+    const fullName = await staffFullName(email);
 
-  const existing = await db
-    .collection("webauthn_credentials")
-    .where("employeeEmail", "==", email)
-    .get();
+    const existing = await db
+      .collection("webauthn_credentials")
+      .where("employeeEmail", "==", email)
+      .get();
 
-  const options = await generateRegistrationOptions({
-    rpName: RP_NAME,
-    rpID: RP_ID,
-    userID: userIdFor(email),
-    userName: email,
-    userDisplayName: fullName,
-    attestationType: "none",
-    excludeCredentials: existing.docs.map((d) => ({
-      id: base64urlToUint8Array(d.data().credentialId as string),
-      type: "public-key" as const,
-      transports: d.data().transports as AuthenticatorTransportFuture[] | undefined,
-    })),
-    authenticatorSelection: {
-      residentKey: "preferred",
-      userVerification: "required",
-      authenticatorAttachment: "platform",
-    },
-  });
+    const options = await generateRegistrationOptions({
+      rpName: RP_NAME,
+      rpID: RP_ID,
+      userID: userIdFor(email),
+      userName: email,
+      userDisplayName: fullName,
+      attestationType: "none",
+      excludeCredentials: existing.docs.map((d) => ({
+        id: base64urlToUint8Array(d.data().credentialId as string),
+        type: "public-key" as const,
+        transports: d.data().transports as AuthenticatorTransportFuture[] | undefined,
+      })),
+      authenticatorSelection: {
+        residentKey: "preferred",
+        userVerification: "required",
+        authenticatorAttachment: "platform",
+      },
+    });
 
-  await saveChallenge(email, options.challenge, "register");
-  return options;
+    await saveChallenge(email, options.challenge, "register");
+    return options;
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    logger.error("webauthnRegisterOptions failed", { email, error: err });
+    throw new HttpsError(
+      "internal",
+      `Kutilmagan xatolik: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 });
 
 export const webauthnRegisterVerify = onCall(async (request) => {
   const email = await requireStaffEmail(request);
-  const { response, deviceName } = (request.data || {}) as {
-    response: RegistrationResponseJSON;
-    deviceName?: string;
-  };
-  if (!response) {
-    throw new HttpsError("invalid-argument", "Tasdiqlash ma'lumoti yetishmayapti");
+  try {
+    const { response, deviceName } = (request.data || {}) as {
+      response: RegistrationResponseJSON;
+      deviceName?: string;
+    };
+    if (!response) {
+      throw new HttpsError("invalid-argument", "Tasdiqlash ma'lumoti yetishmayapti");
+    }
+
+    const expectedChallenge = await consumeChallenge(email, "register");
+
+    const verification = await verifyRegistrationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: ORIGIN,
+      expectedRPID: RP_ID,
+      requireUserVerification: true,
+    });
+
+    if (!verification.verified || !verification.registrationInfo) {
+      throw new HttpsError("permission-denied", "Tasdiqlash muvaffaqiyatsiz bo'ldi");
+    }
+
+    const { credentialPublicKey, counter, credentialDeviceType, credentialBackedUp } =
+      verification.registrationInfo;
+    const fullName = await staffFullName(email);
+    const now = new Date().toISOString();
+
+    const record: StoredCredential = {
+      employeeEmail: email,
+      employeeName: fullName,
+      credentialId: response.id,
+      publicKey: Buffer.from(credentialPublicKey).toString("base64"),
+      counter,
+      deviceName: deviceName?.trim() || null,
+      transports: response.response.transports || [],
+      deviceType: credentialDeviceType,
+      backedUp: credentialBackedUp,
+      createdAt: now,
+      lastUsedAt: null,
+    };
+
+    await db.collection("webauthn_credentials").doc(response.id).set(record);
+
+    return { ok: true, credentialId: response.id };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    logger.error("webauthnRegisterVerify failed", { email, error: err });
+    throw new HttpsError(
+      "internal",
+      `Kutilmagan xatolik: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
-
-  const expectedChallenge = await consumeChallenge(email, "register");
-
-  const verification = await verifyRegistrationResponse({
-    response,
-    expectedChallenge,
-    expectedOrigin: ORIGIN,
-    expectedRPID: RP_ID,
-    requireUserVerification: true,
-  });
-
-  if (!verification.verified || !verification.registrationInfo) {
-    throw new HttpsError("permission-denied", "Tasdiqlash muvaffaqiyatsiz bo'ldi");
-  }
-
-  const { credentialPublicKey, counter, credentialDeviceType, credentialBackedUp } =
-    verification.registrationInfo;
-  const fullName = await staffFullName(email);
-  const now = new Date().toISOString();
-
-  const record: StoredCredential = {
-    employeeEmail: email,
-    employeeName: fullName,
-    credentialId: response.id,
-    publicKey: Buffer.from(credentialPublicKey).toString("base64"),
-    counter,
-    deviceName: deviceName?.trim() || null,
-    transports: response.response.transports || [],
-    deviceType: credentialDeviceType,
-    backedUp: credentialBackedUp,
-    createdAt: now,
-    lastUsedAt: null,
-  };
-
-  await db.collection("webauthn_credentials").doc(response.id).set(record);
-
-  return { ok: true, credentialId: response.id };
 });
