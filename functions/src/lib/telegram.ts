@@ -39,6 +39,14 @@ export const sendTelegramAttendancePhoto = async (
     if (!res.ok) {
       const text = await res.text();
       logger.error("Telegram sendPhoto failed", { status: res.status, text });
+    } else {
+      // Success was previously silent, making it impossible to tell from
+      // logs alone whether a report of "photo never arrived" is a real
+      // delivery failure or the message landing somewhere the reporter
+      // didn't check — log the chat_id and Telegram message_id so a
+      // future report can be checked against this instead of guessed at.
+      const body = (await res.json().catch(() => null)) as { result?: { message_id?: number } } | null;
+      logger.info("Telegram sendPhoto ok", { chatId, messageId: body?.result?.message_id });
     }
   } catch (err) {
     logger.error("Telegram sendPhoto threw", { error: err });
