@@ -138,6 +138,16 @@ jobs:
           EOF
           npx firebase-tools@13 deploy --only functions,firestore:rules,firestore:indexes --project vodiy-print --non-interactive --force
 
+      - name: Print recent function logs (temporary diagnostic)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            exit 0
+          fi
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          npx firebase-tools@13 functions:log --project vodiy-print -n 100 || true
+
   # Deploys the standalone webhook receiver (meta-webhook/) to the same
   # VPS as a systemd service, independent of Cloud Functions — no Blaze
   # plan needed. It hosts two integrations: Meta (Facebook/Instagram)
