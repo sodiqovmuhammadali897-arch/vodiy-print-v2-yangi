@@ -1,12 +1,10 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import type { AuthenticationResponseJSON } from "@simplewebauthn/types";
 import { db } from "./admin";
 import { requireStaffEmail, staffFullName } from "./authGuard";
-import { verifyAssertion } from "./webauthnAuthenticate";
 import { getWorkSchedule } from "./workSchedule";
 import { distanceMeters } from "./lib/geo";
-import { uploadAttendancePhoto } from "./lib/attendancePhoto";
+import { sendTelegramAttendancePhoto } from "./lib/telegram";
 import {
   computeCheckInStatus,
   computeCheckOutStats,
@@ -16,7 +14,6 @@ import {
 import type { AttendanceRecord } from "./types";
 
 type CheckPayload = {
-  response: AuthenticationResponseJSON;
   latitude?: number;
   longitude?: number;
   deviceName?: string;
@@ -46,13 +43,12 @@ export const attendanceCheckIn = onCall(async (request) => {
   let email = "unknown";
   try {
     email = await requireStaffEmail(request);
-    const { response, latitude, longitude, deviceName, photoDataUrl } = (request.data || {}) as CheckPayload;
+    const { latitude, longitude, deviceName, photoDataUrl } = (request.data || {}) as CheckPayload;
     if (!photoDataUrl) {
       throw new HttpsError("invalid-argument", "Selfie rasm talab qilinadi.");
     }
 
     await assertWithinOffice(latitude, longitude);
-    await verifyAssertion(email, response);
 
     const now = new Date();
     const dateCode = dateCodeOf(now);
@@ -62,17 +58,17 @@ export const attendanceCheckIn = onCall(async (request) => {
       throw new HttpsError("already-exists", "Siz bugun allaqachon ishni boshlagansiz.");
     }
 
-    const photoUrl = await uploadAttendancePhoto(email, dateCode, "checkin", photoDataUrl);
     const schedule = await getWorkSchedule();
     const { status, lateMinutes } = computeCheckInStatus(now, schedule);
     const fullName = await staffFullName(email);
     const nowIso = now.toISOString();
+    const hm = hmOf(now);
 
     const record: AttendanceRecord = {
       employeeId: email,
       employeeName: fullName,
       dateCode,
-      checkInTime: hmOf(now),
+      checkInTime: hm,
       checkOutTime: null,
       checkInTimestamp: nowIso,
       checkOutTimestamp: null,
@@ -82,18 +78,22 @@ export const attendanceCheckIn = onCall(async (request) => {
       earlyLeaveMinutes: 0,
       overtimeMinutes: 0,
       status,
-      authenticationMethod: "webauthn",
+      authenticationMethod: "selfie",
       checkInLocation:
         typeof latitude === "number" && typeof longitude === "number" ? { latitude, longitude } : null,
       checkOutLocation: null,
-      checkInPhotoUrl: photoUrl,
-      checkOutPhotoUrl: null,
       deviceName: deviceName?.trim() || null,
       createdAt: nowIso,
       updatedAt: nowIso,
     };
 
     await ref.set(record, { merge: true });
+
+    await sendTelegramAttendancePhoto(
+      `✅ ${fullName}\n🕐 Keldi: ${hm} (${dateCode})${lateMinutes ? `\n⚠️ ${lateMinutes} daqiqa kech qoldi` : ""}`,
+      photoDataUrl,
+    );
+
     return { ok: true, record };
   } catch (err) {
     if (err instanceof HttpsError) throw err;
@@ -109,13 +109,12 @@ export const attendanceCheckOut = onCall(async (request) => {
   let email = "unknown";
   try {
     email = await requireStaffEmail(request);
-    const { response, latitude, longitude, photoDataUrl } = (request.data || {}) as CheckPayload;
+    const { latitude, longitude, photoDataUrl } = (request.data || {}) as CheckPayload;
     if (!photoDataUrl) {
       throw new HttpsError("invalid-argument", "Selfie rasm talab qilinadi.");
     }
 
     await assertWithinOffice(latitude, longitude);
-    await verifyAssertion(email, response);
 
     const now = new Date();
     const dateCode = dateCodeOf(now);
@@ -129,7 +128,6 @@ export const attendanceCheckOut = onCall(async (request) => {
       throw new HttpsError("already-exists", "Siz bugun allaqachon ishni tugatgansiz.");
     }
 
-    const photoUrl = await uploadAttendancePhoto(email, dateCode, "checkout", photoDataUrl);
     const schedule = await getWorkSchedule();
     const checkIn = new Date(data.checkInTimestamp as string);
     const { workedMinutes, earlyLeaveMinutes, overtimeMinutes, status } = computeCheckOutStats(
@@ -138,9 +136,11 @@ export const attendanceCheckOut = onCall(async (request) => {
       schedule,
     );
     const nowIso = now.toISOString();
+    const hm = hmOf(now);
+    const fullName = (data.employeeName as string) || email;
 
     await ref.update({
-      checkOutTime: hmOf(now),
+      checkOutTime: hm,
       checkOutTimestamp: nowIso,
       workedMinutes,
       earlyLeaveMinutes,
@@ -148,9 +148,13 @@ export const attendanceCheckOut = onCall(async (request) => {
       status,
       checkOutLocation:
         typeof latitude === "number" && typeof longitude === "number" ? { latitude, longitude } : null,
-      checkOutPhotoUrl: photoUrl,
       updatedAt: nowIso,
     });
+
+    await sendTelegramAttendancePhoto(
+      `🚪 ${fullName}\n🕐 Ketdi: ${hm} (${dateCode})`,
+      photoDataUrl,
+    );
 
     return { ok: true, workedMinutes, earlyLeaveMinutes, overtimeMinutes, status };
   } catch (err) {

@@ -382,19 +382,6 @@ export type TextileCompany = {
 
 export type GeoPoint = { latitude: number; longitude: number };
 
-export type WebAuthnCredential = {
-  id: string; // credentialId (base64url) — also the Firestore doc id
-  employeeEmail: string;
-  employeeName: string;
-  credentialId: string;
-  deviceName: string | null;
-  transports: string[];
-  deviceType: string;
-  backedUp: boolean;
-  createdAt: string;
-  lastUsedAt: string | null;
-};
-
 export type AttendanceStatus =
   | "Kelmagan"
   | "Vaqtida keldi"
@@ -424,11 +411,9 @@ export type AttendanceRecord = {
   earlyLeaveMinutes: number;
   overtimeMinutes: number;
   status: string;
-  authenticationMethod: "webauthn" | "hikvision";
+  authenticationMethod: "selfie" | "hikvision";
   checkInLocation: GeoPoint | null;
   checkOutLocation: GeoPoint | null;
-  checkInPhotoUrl: string | null;
-  checkOutPhotoUrl: string | null;
   deviceName: string | null;
   createdAt: string;
   updatedAt: string;

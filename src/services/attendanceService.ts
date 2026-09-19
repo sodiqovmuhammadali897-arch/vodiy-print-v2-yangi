@@ -1,8 +1,7 @@
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../lib/firebase";
-import { deleteOne, getOne, listWhere } from "../lib/firestoreDb";
-import type { AttendanceRecord, WebAuthnCredential, WorkSchedule } from "../lib/types";
-import { getAuthenticationResponse } from "./webauthnService";
+import { getOne, listWhere } from "../lib/firestoreDb";
+import type { AttendanceRecord, WorkSchedule } from "../lib/types";
 import { getCurrentPosition, GeolocationDeniedError } from "../utils/locationUtils";
 import { dateCodeOf } from "../utils/attendanceCalculations";
 
@@ -24,14 +23,6 @@ export const getWorkSchedule = async (): Promise<WorkSchedule> => {
   const doc = await getOne<WorkSchedule>("work_schedules", "default");
   return doc ? { ...DEFAULT_SCHEDULE, ...doc, id: "default" } : DEFAULT_SCHEDULE;
 };
-
-export const listMyCredentials = (email: string) =>
-  listWhere<WebAuthnCredential>("webauthn_credentials", "employeeEmail", email, {
-    orderBy: ["createdAt", "asc"],
-  });
-
-export const revokeCredential = (credentialId: string) =>
-  deleteOne("webauthn_credentials", credentialId);
 
 export const getTodayAttendance = async (email: string): Promise<AttendanceRecord | null> => {
   const dateCode = dateCodeOf(new Date());
@@ -67,22 +58,20 @@ export const checkIn = async (
   deviceName?: string,
 ): Promise<CheckResult> => {
   const location = await withLocation(schedule);
-  const response = await getAuthenticationResponse();
   const fn = httpsCallable<
-    { response: unknown; latitude?: number; longitude?: number; deviceName?: string; photoDataUrl: string },
+    { latitude?: number; longitude?: number; deviceName?: string; photoDataUrl: string },
     CheckResult
   >(functions, "attendanceCheckIn");
-  const { data } = await fn({ response, ...location, deviceName, photoDataUrl });
+  const { data } = await fn({ ...location, deviceName, photoDataUrl });
   return data;
 };
 
 export const checkOut = async (schedule: WorkSchedule, photoDataUrl: string): Promise<CheckResult> => {
   const location = await withLocation(schedule);
-  const response = await getAuthenticationResponse();
   const fn = httpsCallable<
-    { response: unknown; latitude?: number; longitude?: number; photoDataUrl: string },
+    { latitude?: number; longitude?: number; photoDataUrl: string },
     CheckResult
   >(functions, "attendanceCheckOut");
-  const { data } = await fn({ response, ...location, photoDataUrl });
+  const { data } = await fn({ ...location, photoDataUrl });
   return data;
 };

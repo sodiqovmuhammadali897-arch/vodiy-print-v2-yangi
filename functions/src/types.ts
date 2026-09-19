@@ -1,26 +1,3 @@
-export type StoredCredential = {
-  employeeEmail: string;
-  employeeName: string;
-  credentialId: string;
-  publicKey: string; // base64
-  counter: number;
-  deviceName: string | null;
-  transports: string[];
-  deviceType: string;
-  backedUp: boolean;
-  createdAt: string;
-  lastUsedAt: string | null;
-};
-
-export type ChallengePurpose = "register" | "authenticate";
-
-export type StoredChallenge = {
-  challenge: string;
-  purpose: ChallengePurpose;
-  createdAtMs: number;
-  expiresAtMs: number;
-};
-
 export type WorkSchedule = {
   workStart: string; // "HH:MM"
   workEnd: string; // "HH:MM"
@@ -64,11 +41,9 @@ export type AttendanceRecord = {
   earlyLeaveMinutes: number;
   overtimeMinutes: number;
   status: string;
-  authenticationMethod: "webauthn";
+  authenticationMethod: "selfie" | "hikvision";
   checkInLocation: GeoPoint | null;
   checkOutLocation: GeoPoint | null;
-  checkInPhotoUrl: string | null;
-  checkOutPhotoUrl: string | null;
   deviceName: string | null;
   createdAt: string;
   updatedAt: string;

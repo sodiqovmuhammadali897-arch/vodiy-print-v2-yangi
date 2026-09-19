@@ -1,14 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "webauthn_credentials",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "employeeEmail", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "attendance",
       "queryScope": "COLLECTION",
       "fields": [

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { CalendarCheck, Gauge, Users } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import EmployeeAttendanceCard from "./EmployeeAttendanceCard";
-import PasskeySetup from "./PasskeySetup";
 import KpiPanel from "./KpiPanel";
 import AttendanceAdminTable from "./AttendanceAdminTable";
 
@@ -25,7 +24,7 @@ export default function AttendancePage() {
       <div>
         <h1 className="font-display text-2xl font-bold text-ink-900">Davomat va KPI</h1>
         <p className="text-sm text-ink-500">
-          Face ID / Passkey orqali davomat va shaxsiy ko'rsatkichlar
+          Selfie orqali davomat va shaxsiy ko'rsatkichlar
         </p>
       </div>
 
@@ -47,9 +46,8 @@ export default function AttendancePage() {
       </div>
 
       {tab === "mine" && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="mx-auto max-w-xl">
           <EmployeeAttendanceCard />
-          <PasskeySetup />
         </div>
       )}
       {tab === "kpi" && <KpiPanel />}

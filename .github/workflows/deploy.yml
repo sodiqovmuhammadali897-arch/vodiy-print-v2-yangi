@@ -102,7 +102,8 @@ jobs:
           script: |
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl reload nginx
 
-  # Deploys Cloud Functions (WebAuthn backend) and Firestore rules.
+  # Deploys Cloud Functions (attendance selfie check-in/out + Telegram
+  # notification) and Firestore rules.
   # Skips itself via plain bash (not a workflow "if:") until
   # FIREBASE_SERVICE_ACCOUNT is added as a repo secret.
   deploy-functions:
@@ -122,6 +123,8 @@ jobs:
       - name: Deploy functions and Firestore rules
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
             echo "FIREBASE_SERVICE_ACCOUNT secret not set yet, skipping Cloud Functions deploy."
@@ -129,6 +132,10 @@ jobs:
           fi
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          cat > functions/.env <<EOF
+          TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+          TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID
+          EOF
           npx firebase-tools@13 deploy --only functions,firestore:rules,firestore:indexes --project vodiy-print --non-interactive
 
   # Deploys the standalone webhook receiver (meta-webhook/) to the same
