@@ -136,7 +136,7 @@ jobs:
           TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
           TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID
           EOF
-          npx firebase-tools@13 deploy --only functions,firestore:rules,firestore:indexes --project vodiy-print --non-interactive
+          npx firebase-tools@13 deploy --only functions,firestore:rules,firestore:indexes --project vodiy-print --non-interactive --force
 
   # Deploys the standalone webhook receiver (meta-webhook/) to the same
   # VPS as a systemd service, independent of Cloud Functions — no Blaze
