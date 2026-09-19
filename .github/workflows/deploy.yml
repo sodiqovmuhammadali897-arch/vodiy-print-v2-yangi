@@ -150,6 +150,8 @@ jobs:
             --region=us-central1 --project=vodiy-print --member=allUsers --role=roles/run.invoker
           gcloud run services add-iam-policy-binding attendancecheckout \
             --region=us-central1 --project=vodiy-print --member=allUsers --role=roles/run.invoker
+          echo "Waiting for the IAM policy change to propagate..."
+          sleep 45
 
       - name: Call attendanceCheckIn directly to see the real error (temporary diagnostic)
         env:
