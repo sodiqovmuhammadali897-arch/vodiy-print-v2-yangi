@@ -117,16 +117,19 @@ export default function Reports() {
   const brandMap = useMemo(() => new Map(brands.map((b) => [b.id, b])), [brands]);
   const managerPlanMap = useMemo(() => new Map(managers.map((m) => [m.name, m.monthly_plan])), [managers]);
 
-  // Manager self-service mode: a non-admin staff member whose full name
-  // matches a Managerlar record sees only their own sales/debt numbers
-  // instead of the full company dashboard (company profit, other
-  // managers' rankings, customer/industry breakdowns stay admin-only).
+  // Manager self-service mode: a staff member explicitly linked (in
+  // Sozlamalar > Xodimlar) to a Managerlar record sees only their own
+  // sales/debt numbers instead of the full company dashboard (company
+  // profit, other managers' rankings, customer/industry breakdowns stay
+  // for everyone else). Deliberately independent of the "admin" role —
+  // manager accounts are commonly created with role=admin just to grant
+  // them full module access — and independent of full_name matching,
+  // which is unreliable with inconsistent name spelling/scripts.
   const myManager = useMemo(() => {
-    const myName = (staff?.full_name || "").trim().toLowerCase();
-    if (!myName) return null;
-    return managers.find((m) => m.name.trim().toLowerCase() === myName) || null;
+    if (!staff?.report_manager_id) return null;
+    return managers.find((m) => m.id === staff.report_manager_id) || null;
   }, [managers, staff]);
-  const isManagerMode = !isAdmin && !!myManager;
+  const isManagerMode = !!myManager;
 
   const myOrders = useMemo(() => {
     if (!isManagerMode || !myManager) return [];

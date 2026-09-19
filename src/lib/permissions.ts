@@ -32,6 +32,13 @@ export type Staff = {
   role: StaffRole;
   permissions: StaffPermissions;
   created_at?: string;
+  // Explicit link to a managers/{id} record, set by an admin in the Xodim
+  // form. When present, Hisobot shows this staff member only their own
+  // sales/debt numbers ("Mening hisobotim") regardless of role — this is
+  // deliberately NOT inferred from full_name-vs-manager-name matching,
+  // which broke in practice (accounts are often created with role
+  // "admin" for convenience, and names can be entered inconsistently).
+  report_manager_id?: string | null;
 };
 
 export const MODULES: { key: ModuleKey; label: string }[] = [

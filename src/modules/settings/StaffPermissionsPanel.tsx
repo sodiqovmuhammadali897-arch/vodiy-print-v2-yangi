@@ -10,6 +10,7 @@ import {
   type Staff,
   type StaffRole,
 } from "../../lib/permissions";
+import type { Manager } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
 import Modal from "../../components/ui/Modal";
 import AsyncState from "../../components/ui/AsyncState";
@@ -23,14 +24,19 @@ const ACTIONS: { key: PermissionAction; label: string }[] = [
 export default function StaffPermissionsPanel() {
   const { user } = useAuth();
   const [rows, setRows] = useState<Staff[]>([]);
+  const [managers, setManagers] = useState<Manager[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
 
   const load = async () => {
     setLoading(true);
-    const data = await listAll<Staff>("staff", { orderBy: ["email", "asc"] });
+    const [data, managersData] = await Promise.all([
+      listAll<Staff>("staff", { orderBy: ["email", "asc"] }),
+      listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }),
+    ]);
     setRows(data);
+    setManagers(managersData);
     setLoading(false);
   };
 
@@ -91,6 +97,7 @@ export default function StaffPermissionsPanel() {
                   <th className="table-th">Email</th>
                   <th className="table-th">Ism</th>
                   <th className="table-th">Rol</th>
+                  <th className="table-th">Shaxsiy hisobot</th>
                   <th className="table-th text-right">Amallar</th>
                 </tr>
               </thead>
@@ -110,6 +117,15 @@ export default function StaffPermissionsPanel() {
                         <span className="chip bg-ink-100 text-ink-700">
                           Xodim
                         </span>
+                      )}
+                    </td>
+                    <td className="table-td">
+                      {s.report_manager_id ? (
+                        <span className="chip bg-brand-50 text-brand-700">
+                          {managers.find((m) => m.id === s.report_manager_id)?.name || "Manager"}
+                        </span>
+                      ) : (
+                        <span className="text-ink-400">To'liq hisobot</span>
                       )}
                     </td>
                     <td className="table-td">
@@ -137,6 +153,7 @@ export default function StaffPermissionsPanel() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         staff={editing}
+        managers={managers}
         onSaved={() => {
           setModalOpen(false);
           void load();
@@ -150,14 +167,16 @@ type FormProps = {
   open: boolean;
   onClose: () => void;
   staff: Staff | null;
+  managers: Manager[];
   onSaved: () => void;
 };
 
-function StaffFormModal({ open, onClose, staff, onSaved }: FormProps) {
+function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<StaffRole>("staff");
   const [permissions, setPermissions] = useState(emptyPermissions());
+  const [reportManagerId, setReportManagerId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -170,11 +189,13 @@ function StaffFormModal({ open, onClose, staff, onSaved }: FormProps) {
       // record was created (e.g. a brand-new panel) don't crash the grid —
       // they simply default to "no access" until explicitly granted.
       setPermissions({ ...emptyPermissions(), ...(staff.permissions || {}) });
+      setReportManagerId(staff.report_manager_id || "");
     } else {
       setEmail("");
       setFullName("");
       setRole("staff");
       setPermissions(emptyPermissions());
+      setReportManagerId("");
     }
     setError(null);
   }, [staff, open]);
@@ -206,6 +227,7 @@ function StaffFormModal({ open, onClose, staff, onSaved }: FormProps) {
         full_name: fullName.trim(),
         role,
         permissions: role === "admin" ? fullPermissions() : permissions,
+        report_manager_id: reportManagerId || null,
       });
       setSaving(false);
       onSaved();
@@ -271,6 +293,26 @@ function StaffFormModal({ open, onClose, staff, onSaved }: FormProps) {
             <option value="staff">Xodim (belgilangan ruxsatlar bilan)</option>
             <option value="admin">Admin (to'liq huquq)</option>
           </select>
+        </div>
+        <div>
+          <label className="label">Shaxsiy hisobot (Manager profili)</label>
+          <select
+            className="input"
+            value={reportManagerId}
+            onChange={(e) => setReportManagerId(e.target.value)}
+          >
+            <option value="">To'liq hisobotni ko'rsin</option>
+            {managers.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-ink-500">
+            Tanlansa, bu xodim Hisobot bo'limida — rolidan qat'i nazar —
+            faqat shu managerning o'z buyurtmalari, rejasi va qarzdorligini
+            ko'radi, kompaniya bo'yicha to'liq ma'lumotni emas.
+          </p>
         </div>
       </div>
 
