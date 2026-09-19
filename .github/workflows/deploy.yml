@@ -138,6 +138,19 @@ jobs:
           EOF
           npx firebase-tools@13 deploy --only functions,firestore:rules,firestore:indexes --project vodiy-print --non-interactive --force
 
+      - name: Ensure attendance functions allow public invocation
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            exit 0
+          fi
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-sa.json" --project=vodiy-print
+          gcloud run services add-iam-policy-binding attendancecheckin \
+            --region=us-central1 --project=vodiy-print --member=allUsers --role=roles/run.invoker
+          gcloud run services add-iam-policy-binding attendancecheckout \
+            --region=us-central1 --project=vodiy-print --member=allUsers --role=roles/run.invoker
+
       - name: Call attendanceCheckIn directly to see the real error (temporary diagnostic)
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
