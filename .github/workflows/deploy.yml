@@ -153,28 +153,6 @@ jobs:
           echo "Waiting for the IAM policy change to propagate..."
           sleep 45
 
-      - name: Call attendanceCheckIn directly to see the real error (temporary diagnostic)
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          WEB_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-        run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            exit 0
-          fi
-          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
-          node functions/scripts/diagnose.js
-
-      - name: Print recent function logs (temporary diagnostic)
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            exit 0
-          fi
-          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-sa.json" --project=vodiy-print
-          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("attendancecheckin" OR "attendancecheckout")' \
-            --project=vodiy-print --freshness=1d --limit=100 --format="value(timestamp,severity,textPayload,jsonPayload.message,jsonPayload)" || true
-
   # Deploys the standalone webhook receiver (meta-webhook/) to the same
   # VPS as a systemd service, independent of Cloud Functions — no Blaze
   # plan needed. It hosts two integrations: Meta (Facebook/Instagram)
