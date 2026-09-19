@@ -18,6 +18,7 @@ import {
   History,
   CheckCircle2,
   FileOutput,
+  Wallet,
 } from "lucide-react";
 import {
   getOne,
@@ -54,6 +55,7 @@ import { changeOrderStatus } from "../../lib/orderStatus";
 import { maybePromoteCustomer } from "../../lib/orderService";
 import { useAuth } from "../../lib/AuthContext";
 import RequireCustomerModal from "./RequireCustomerModal";
+import OrderPaymentModal from "./OrderPaymentModal";
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -78,6 +80,7 @@ export default function OrderDetail() {
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -584,9 +587,16 @@ export default function OrderDetail() {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="card p-5">
-          <h2 className="font-display text-base font-bold text-ink-900">
-            To'lovlar
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-ink-900">
+              To'lovlar
+            </h2>
+            {canEdit && (
+              <button className="btn-primary" onClick={() => setPaymentModalOpen(true)}>
+                <Wallet className="h-4 w-4" /> To'lov qabul qilish
+              </button>
+            )}
+          </div>
           {payments.length === 0 ? (
             <div className="mt-3 rounded-xl border border-dashed border-ink-200 p-6 text-center text-sm text-ink-500">
               To'lovlar qayd etilmagan
@@ -833,6 +843,16 @@ export default function OrderDetail() {
         productName={textileProductName}
         orderDate={order.order_date || order.created_at}
         matrix={textileMatrix}
+      />
+
+      <OrderPaymentModal
+        open={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        order={order}
+        onSaved={() => {
+          setPaymentModalOpen(false);
+          void load();
+        }}
       />
     </div>
   );
