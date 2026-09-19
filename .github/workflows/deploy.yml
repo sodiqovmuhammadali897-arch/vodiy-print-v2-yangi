@@ -141,17 +141,6 @@ jobs:
           EOF
           npx firebase-tools@13 deploy --only functions,firestore:rules,firestore:indexes --project vodiy-print --non-interactive --force
 
-      - name: Print recent function logs (temporary diagnostic)
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            exit 0
-          fi
-          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-sa.json" --project=vodiy-print
-          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("attendancecheckin" OR "attendancecheckout") AND jsonPayload.message:*' \
-            --project=vodiy-print --freshness=24h --limit=300 --format="value(timestamp,severity,resource.labels.service_name,jsonPayload.message,jsonPayload)" || true
-
       - name: Ensure attendance functions allow public invocation
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
