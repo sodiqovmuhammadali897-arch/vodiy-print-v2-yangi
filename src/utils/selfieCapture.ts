@@ -24,7 +24,13 @@ const pickPhoto = (): Promise<File> =>
       else reject(new SelfieCancelledError("Rasm tanlanmadi"));
     };
     // No 'cancel' event exists for file inputs; a focus-return with no
-    // file selected covers the user backing out of the camera sheet.
+    // file selected covers the user backing out of the camera sheet. The
+    // delay must be generous: on phones the tab regains focus as soon as
+    // the camera app closes, but `onchange` (which attaches the captured
+    // photo to `input.files`) can lag behind by well over a second while
+    // the photo is encoded — a short delay here false-positives as a
+    // cancel on a real capture, and since the promise settles once,
+    // `onchange`'s later resolve() is silently dropped.
     window.addEventListener(
       "focus",
       () => {
@@ -33,7 +39,7 @@ const pickPhoto = (): Promise<File> =>
             cleanup();
             reject(new SelfieCancelledError("Rasm tanlanmadi"));
           }
-        }, 300);
+        }, 1500);
       },
       { once: true },
     );
