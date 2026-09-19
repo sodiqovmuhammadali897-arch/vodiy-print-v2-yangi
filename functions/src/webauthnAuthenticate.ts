@@ -16,8 +16,9 @@ import { base64urlToUint8Array } from "./lib/base64url";
 import type { StoredCredential } from "./types";
 
 export const webauthnAuthOptions = onCall(async (request) => {
-  const email = await requireStaffEmail(request);
+  let email = "unknown";
   try {
+    email = await requireStaffEmail(request);
     const creds = await db
       .collection("webauthn_credentials")
       .where("employeeEmail", "==", email)

@@ -43,8 +43,9 @@ const assertWithinOffice = async (latitude?: number, longitude?: number): Promis
 };
 
 export const attendanceCheckIn = onCall(async (request) => {
-  const email = await requireStaffEmail(request);
+  let email = "unknown";
   try {
+    email = await requireStaffEmail(request);
     const { response, latitude, longitude, deviceName, photoDataUrl } = (request.data || {}) as CheckPayload;
     if (!photoDataUrl) {
       throw new HttpsError("invalid-argument", "Selfie rasm talab qilinadi.");
@@ -105,8 +106,9 @@ export const attendanceCheckIn = onCall(async (request) => {
 });
 
 export const attendanceCheckOut = onCall(async (request) => {
-  const email = await requireStaffEmail(request);
+  let email = "unknown";
   try {
+    email = await requireStaffEmail(request);
     const { response, latitude, longitude, photoDataUrl } = (request.data || {}) as CheckPayload;
     if (!photoDataUrl) {
       throw new HttpsError("invalid-argument", "Selfie rasm talab qilinadi.");

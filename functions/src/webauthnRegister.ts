@@ -22,8 +22,9 @@ const userIdFor = (email: string): string =>
   createHash("sha256").update(email).digest("hex");
 
 export const webauthnRegisterOptions = onCall(async (request) => {
-  const email = await requireStaffEmail(request);
+  let email = "unknown";
   try {
+    email = await requireStaffEmail(request);
     const fullName = await staffFullName(email);
 
     const existing = await db
@@ -63,8 +64,9 @@ export const webauthnRegisterOptions = onCall(async (request) => {
 });
 
 export const webauthnRegisterVerify = onCall(async (request) => {
-  const email = await requireStaffEmail(request);
+  let email = "unknown";
   try {
+    email = await requireStaffEmail(request);
     const { response, deviceName } = (request.data || {}) as {
       response: RegistrationResponseJSON;
       deviceName?: string;
