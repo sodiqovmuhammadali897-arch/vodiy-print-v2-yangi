@@ -132,6 +132,9 @@ jobs:
           fi
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID repo secrets are not set — attendance selfies will not be posted to Telegram."
+          fi
           cat > functions/.env <<EOF
           TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
           TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID
@@ -152,17 +155,6 @@ jobs:
             --region=us-central1 --project=vodiy-print --member=allUsers --role=roles/run.invoker
           echo "Waiting for the IAM policy change to propagate..."
           sleep 45
-
-      - name: Print recent function logs (temporary diagnostic)
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            exit 0
-          fi
-          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-sa.json" --project=vodiy-print
-          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("attendancecheckin" OR "attendancecheckout")' \
-            --project=vodiy-print --freshness=1d --limit=200 --format="value(timestamp,severity,textPayload,jsonPayload.message,jsonPayload)" || true
 
   # Deploys the standalone webhook receiver (meta-webhook/) to the same
   # VPS as a systemd service, independent of Cloud Functions — no Blaze
