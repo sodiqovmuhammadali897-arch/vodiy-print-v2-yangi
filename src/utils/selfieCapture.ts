@@ -15,31 +15,49 @@ const pickPhoto = (): Promise<File> =>
     input.style.display = "none";
     document.body.appendChild(input);
 
-    const cleanup = () => document.body.removeChild(input);
+    // Guards against settling twice: the real 'change', the modern
+    // 'cancel' event, and the focus-timeout fallback below can all fire
+    // for the same pick, and only the first should count.
+    let settled = false;
+    const cleanup = () => {
+      if (input.parentNode) document.body.removeChild(input);
+    };
+    const succeed = (file: File) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(file);
+    };
+    const cancel = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new SelfieCancelledError("Rasm tanlanmadi"));
+    };
 
     input.onchange = () => {
       const file = input.files?.[0];
-      cleanup();
-      if (file) resolve(file);
-      else reject(new SelfieCancelledError("Rasm tanlanmadi"));
+      if (file) succeed(file);
+      // No file on change is rare; let the fallback below decide.
     };
-    // No 'cancel' event exists for file inputs; a focus-return with no
-    // file selected covers the user backing out of the camera sheet. The
-    // delay must be generous: on phones the tab regains focus as soon as
-    // the camera app closes, but `onchange` (which attaches the captured
-    // photo to `input.files`) can lag behind by well over a second while
-    // the photo is encoded — a short delay here false-positives as a
-    // cancel on a real capture, and since the promise settles once,
-    // `onchange`'s later resolve() is silently dropped.
+    // Chrome/Android WebView fire a real 'cancel' event on the file
+    // input when the picker/camera sheet is dismissed without a
+    // selection — use it when available so cancellation is detected
+    // immediately and correctly instead of guessed at.
+    input.addEventListener("cancel", cancel);
+    // Safari has no 'cancel' event, so fall back to a focus-return
+    // check. The delay must be generous: on phones the tab regains
+    // focus as soon as the camera app closes, but `onchange` (which
+    // attaches the captured photo to `input.files`) can lag behind by
+    // several seconds while the photo is encoded — a short delay here
+    // false-positives as a cancel on a real capture, and since
+    // `settled` latches, the later real success is silently dropped.
     window.addEventListener(
       "focus",
       () => {
         setTimeout(() => {
-          if (!input.files?.length) {
-            cleanup();
-            reject(new SelfieCancelledError("Rasm tanlanmadi"));
-          }
-        }, 1500);
+          if (!settled && !input.files?.length) cancel();
+        }, 3000);
       },
       { once: true },
     );
