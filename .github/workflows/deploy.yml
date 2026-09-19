@@ -138,6 +138,17 @@ jobs:
           EOF
           npx firebase-tools@13 deploy --only functions,firestore:rules,firestore:indexes --project vodiy-print --non-interactive --force
 
+      - name: Call attendanceCheckIn directly to see the real error (temporary diagnostic)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          WEB_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            exit 0
+          fi
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          node functions/scripts/diagnose.js
+
       - name: Print recent function logs (temporary diagnostic)
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
