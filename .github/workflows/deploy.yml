@@ -156,20 +156,6 @@ jobs:
           echo "Waiting for the IAM policy change to propagate..."
           sleep 45
 
-      - name: Verify Telegram bot can post to the channel (temporary diagnostic)
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "Telegram secrets not set, skipping verification."
-            exit 0
-          fi
-          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="✅ CI test: bot kanalga ulandi va yoza oladi." \
-            -w '\nHTTP_STATUS=%{http_code}\n'
-
   # Deploys the standalone webhook receiver (meta-webhook/) to the same
   # VPS as a systemd service, independent of Cloud Functions — no Blaze
   # plan needed. It hosts two integrations: Meta (Facebook/Instagram)
