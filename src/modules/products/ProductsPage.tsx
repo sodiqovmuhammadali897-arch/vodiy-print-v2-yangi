@@ -13,6 +13,10 @@ import ProductCustomerView from "./ProductCustomerView";
 export default function ProductsPage() {
   const auth = useAuth();
   const canEdit = auth.can("products", "edit");
+  // A linked manager profile always sees the customer-facing price view
+  // — never the admin view with cost price/margin — regardless of role,
+  // same reasoning as canViewCostPrice/canEditCostPrice.
+  const forcedCustomerView = auth.isManagerAccount;
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -20,6 +24,7 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [duplicateFrom, setDuplicateFrom] = useState<Product | null>(null);
   const [customerView, setCustomerView] = useState(false);
+  const showCustomerView = forcedCustomerView || customerView;
 
   const load = async (keepSelection = true) => {
     setLoading(true);
@@ -85,7 +90,7 @@ export default function ProductsPage() {
           <h1 className="font-display text-2xl font-bold text-ink-900">Mahsulotlar</h1>
           <p className="text-sm text-ink-500">Barcha mahsulotlar ro'yxati va narxlari</p>
         </div>
-        {selected && canExportCustomerPrice(auth) && (
+        {selected && !forcedCustomerView && canExportCustomerPrice(auth) && (
           <button
             className={`btn-secondary ${customerView ? "!bg-brand-600 !text-white" : ""}`}
             onClick={() => setCustomerView((v) => !v)}
@@ -119,8 +124,11 @@ export default function ProductsPage() {
             emptyIcon={<Boxes className="h-5 w-5" />}
           >
             {selected &&
-              (customerView ? (
-                <ProductCustomerView product={selected} onClose={() => setCustomerView(false)} />
+              (showCustomerView ? (
+                <ProductCustomerView
+                  product={selected}
+                  onClose={forcedCustomerView ? undefined : () => setCustomerView(false)}
+                />
               ) : (
                 <ProductDetails
                   product={selected}

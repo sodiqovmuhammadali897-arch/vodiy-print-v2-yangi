@@ -34,6 +34,14 @@ service cloud.firestore {
         (isStaff() && staffDoc().permissions[module][action] == true);
     }
 
+    // A staff account explicitly linked (Sozlamalar > Xodimlar) to a
+    // Managerlar record — excluded from admin-only cost/margin data even
+    // when role=admin, since manager accounts are routinely created with
+    // role=admin just to grant them full module access.
+    function isManagerAccount() {
+      return isStaff() && ('report_manager_id' in staffDoc()) && staffDoc().report_manager_id != null;
+    }
+
     // First-ever login from the bootstrap admin email may create their own
     // staff record (once) so there's a way into the app before any staff
     // documents exist. Every other write to this collection requires an
@@ -146,7 +154,7 @@ service cloud.firestore {
     // it never reaches a non-admin client even though the product itself
     // (name, category, price tiers) is visible to anyone with products.view.
     match /product_costs/{id} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAdmin() && !isManagerAccount();
     }
 
     // Which company produces a product, and its lead time — operational

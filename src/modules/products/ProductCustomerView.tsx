@@ -10,7 +10,7 @@ import ProductCustomerPrice from "./ProductCustomerPrice";
 
 type Props = {
   product: Product;
-  onClose: () => void;
+  onClose?: () => void;
 };
 
 export default function ProductCustomerView({ product, onClose }: Props) {
@@ -91,9 +91,11 @@ export default function ProductCustomerView({ product, onClose }: Props) {
           >
             <Share2 className="h-4 w-4" /> Ulashish
           </button>
-          <button className="btn-ghost" onClick={onClose}>
-            <X className="h-4 w-4" /> Yopish
-          </button>
+          {onClose && (
+            <button className="btn-ghost" onClick={onClose}>
+              <X className="h-4 w-4" /> Yopish
+            </button>
+          )}
         </div>
       </div>
 

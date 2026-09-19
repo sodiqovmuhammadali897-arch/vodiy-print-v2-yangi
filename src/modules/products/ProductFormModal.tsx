@@ -6,6 +6,7 @@ import { sortTiers } from "../../lib/priceTiers";
 import { compressImageFile, MAX_IMAGE_MB } from "../../lib/imageCompression";
 import type { Product, ProductCost } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
+import { canEditCostPrice } from "../../lib/rolePermissions";
 import Modal from "../../components/ui/Modal";
 
 type Props = {
@@ -84,7 +85,8 @@ export default function ProductFormModal({
   allProducts,
   onSaved,
 }: Props) {
-  const { isAdmin } = useAuth();
+  const auth = useAuth();
+  const canCost = canEditCostPrice(auth);
   const [tab, setTab] = useState<Tab>("Asosiy");
   const [form, setForm] = useState<FormState>(emptyForm());
   const [tiers, setTiers] = useState<TierRow[]>(emptyTiers);
@@ -128,7 +130,7 @@ export default function ProductFormModal({
       });
 
       const priceTiers = source.price_tiers?.length ? source.price_tiers : [{ min_qty: 1, price: 0 }];
-      if (isAdmin && product) {
+      if (canCost && product) {
         void getOne<ProductCost>("product_costs", product.id).then((c) => {
           const costByQty = new Map((c?.cost_tiers || []).map((t) => [t.min_qty, t.cost_price]));
           setTiers(
@@ -146,7 +148,7 @@ export default function ProductFormModal({
       setForm(emptyForm());
       setTiers(emptyTiers);
     }
-  }, [product, duplicateFrom, open, isAdmin]);
+  }, [product, duplicateFrom, open, canCost]);
 
   const toggleSize = (size: string) =>
     setForm((f) => ({ ...f, sizes: f.sizes.includes(size) ? f.sizes.filter((x) => x !== size) : [...f.sizes, size] }));
@@ -227,7 +229,7 @@ export default function ProductFormModal({
         const created = await insertOne("products", payload);
         productId = created.id;
       }
-      if (isAdmin && productId) {
+      if (canCost && productId) {
         await upsertOne("product_costs", productId, {
           cost_tiers: validRows.map(({ min_qty, cost_price }) => ({ min_qty, cost_price })),
           updated_at: new Date().toISOString(),
@@ -480,7 +482,7 @@ export default function ProductFormModal({
           <div className="space-y-2">
             {tiers.map((t, i) => (
               <div key={i} className="grid grid-cols-12 items-end gap-2">
-                <div className={isAdmin ? "col-span-3" : "col-span-5"}>
+                <div className={canCost ? "col-span-3" : "col-span-5"}>
                   <label className="label">Nechtadan boshlab</label>
                   <input
                     type="number"
@@ -489,7 +491,7 @@ export default function ProductFormModal({
                     onChange={(e) => updateTier(i, { min_qty: Number(e.target.value) || 0 })}
                   />
                 </div>
-                <div className={isAdmin ? "col-span-3" : "col-span-5"}>
+                <div className={canCost ? "col-span-3" : "col-span-5"}>
                   <label className="label">Narxi (1 {form.unit || "dona"})</label>
                   <input
                     type="number"
@@ -498,7 +500,7 @@ export default function ProductFormModal({
                     onChange={(e) => updateTier(i, { price: Number(e.target.value) || 0 })}
                   />
                 </div>
-                {isAdmin && (
+                {canCost && (
                   <div className="col-span-4">
                     <label className="label flex items-center gap-1 text-amber-700">
                       <Lock className="h-3 w-3" /> Tan narx (1 {form.unit || "dona"})
@@ -522,7 +524,7 @@ export default function ProductFormModal({
           <p className="mt-2 text-xs text-ink-500">
             Masalan: 1 dan → 5000 so'm, 10 dan → 4500 so'm, 100 dan → 4000 so'm
           </p>
-          {isAdmin && (
+          {canCost && (
             <p className="mt-1 text-xs text-amber-700">
               Tan narx faqat sizga (admin) ko'rinadi — har bir pog'ona uchun alohida, chunki miqdor ko'p bo'lsa
               ta'minotchidan tan narx ham pasayishi mumkin.

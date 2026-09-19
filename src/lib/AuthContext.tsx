@@ -28,6 +28,11 @@ export type AuthContextValue = {
   staff: Staff | null;
   staffLoading: boolean;
   isAdmin: boolean;
+  // A staff account explicitly linked (Sozlamalar > Xodimlar) to a
+  // Managerlar record — sees restricted, self-scoped views (Hisobot,
+  // Mahsulotlar cost price) regardless of its role, since manager
+  // accounts are commonly created with role=admin just for module access.
+  isManagerAccount: boolean;
   can: (module: ModuleKey, action: PermissionAction) => boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -88,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       staff,
       staffLoading,
       isAdmin: staff?.role === "admin",
+      isManagerAccount: !!staff?.report_manager_id,
       can: (moduleKey, action) => {
         if (staff?.role === "admin") return true;
         return !!staff?.permissions?.[moduleKey]?.[action];
