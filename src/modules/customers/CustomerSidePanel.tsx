@@ -56,18 +56,25 @@ export default function CustomerSidePanel({
   const [tab, setTab] = useState<Tab>("asosiy");
   const [notes, setNotes] = useState<CustomerNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(true);
+  const [notesError, setNotesError] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
   const [posting, setPosting] = useState(false);
 
   useEffect(() => {
     setTab("asosiy");
     setNotesLoading(true);
-    void listWhere<CustomerNote>("customer_notes", "customer_id", customer.id, {
+    setNotesError(null);
+    listWhere<CustomerNote>("customer_notes", "customer_id", customer.id, {
       orderBy: ["created_at", "asc"],
-    }).then((rows) => {
-      setNotes(rows);
-      setNotesLoading(false);
-    });
+    })
+      .then((rows) => {
+        setNotes(rows);
+        setNotesLoading(false);
+      })
+      .catch((err) => {
+        setNotesError(err instanceof Error ? err.message : "Izohlarni yuklab bo'lmadi");
+        setNotesLoading(false);
+      });
   }, [customer.id]);
 
   const ordersById = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders]);
@@ -316,6 +323,8 @@ export default function CustomerSidePanel({
             <div className="flex-1 space-y-2.5">
               {notesLoading ? (
                 <p className="text-sm text-ink-400">Yuklanmoqda...</p>
+              ) : notesError ? (
+                <p className="text-sm text-rose-600">{notesError}</p>
               ) : notes.length === 0 ? (
                 <p className="text-sm text-ink-400">Hali izoh yo'q</p>
               ) : (

@@ -43,6 +43,7 @@ export default function CustomerDetail() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<OrderProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [brandModal, setBrandModal] = useState(false);
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [customerModal, setCustomerModal] = useState(false);
@@ -51,23 +52,29 @@ export default function CustomerDetail() {
   const load = async () => {
     if (!id) return;
     setLoading(true);
-    const [c, b, o] = await Promise.all([
-      getOne<Customer>("customers", id),
-      listWhere<Brand>("brands", "customer_id", id, {
-        orderBy: ["created_at", "desc"],
-      }),
-      listWhere<Order>("orders", "customer_id", id, {
-        orderBy: ["created_at", "desc"],
-      }),
-    ]);
-    setCustomer(c);
-    setBrands(b);
-    setOrders(o);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const [c, b, o] = await Promise.all([
+        getOne<Customer>("customers", id),
+        listWhere<Brand>("brands", "customer_id", id, {
+          orderBy: ["created_at", "desc"],
+        }),
+        listWhere<Order>("orders", "customer_id", id, {
+          orderBy: ["created_at", "desc"],
+        }),
+      ]);
+      setCustomer(c);
+      setBrands(b);
+      setOrders(o);
 
-    const orderIds = new Set(o.map((x) => x.id));
-    const allProducts = await listAll<OrderProduct>("order_products");
-    setProducts(allProducts.filter((p) => orderIds.has(p.order_id)));
+      const orderIds = new Set(o.map((x) => x.id));
+      const allProducts = await listAll<OrderProduct>("order_products");
+      setProducts(allProducts.filter((p) => orderIds.has(p.order_id)));
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -110,6 +117,17 @@ export default function CustomerDetail() {
   if (loading) {
     return (
       <div className="py-16 text-center text-ink-500">Yuklanmoqda...</div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="card p-8 text-center">
+        <p className="text-rose-600">{loadError}</p>
+        <button className="btn-secondary mt-3" onClick={() => void load()}>
+          Qayta urinish
+        </button>
+      </div>
     );
   }
 
