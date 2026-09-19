@@ -22,10 +22,12 @@ import {
   AlertTriangle,
   XCircle,
   Gauge,
+  Target,
 } from "lucide-react";
 import { listAll } from "../../lib/firestoreDb";
 import type { Brand, Customer, Expense, Manager, Order, OrderProduct } from "../../lib/types";
-import { formatMoney, formatMoneyShort, monthNameUz } from "../../lib/format";
+import { formatDate, formatMoney, formatMoneyShort, monthNameUz } from "../../lib/format";
+import { monthRange as calendarMonthRange } from "../../lib/workdays";
 import { customerTypeInfo } from "../../lib/orderConstants";
 import { remainingTimeLabel } from "../../lib/remainingTime";
 import {
@@ -61,8 +63,18 @@ const daysBetween = (a: string, b: string): number =>
   Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000));
 
 export default function Reports() {
-  const { can } = useAuth();
+  const { can, isAdmin, staff } = useAuth();
   const canViewFinance = can("finance", "view");
+  // orders/customers/brands are permission-gated in Firestore rules
+  // separately from reports.view (see firestore.rules) — a staff member
+  // can have reports.view without orders.view/customers.view, and
+  // querying those collections anyway throws permission-denied, which
+  // used to reject the whole Promise.all and freeze the page at zero
+  // (same bug class fixed on the Bosh sahifa/Dashboard).
+  const canOrders =
+    isAdmin || can("orders", "view") || can("production", "view") || can("pechatnik", "view") || can("leads", "edit");
+  const canCustomers =
+    isAdmin || can("customers", "view") || can("production", "view") || can("pechatnik", "view") || can("proposals", "view");
   const containerRef = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState<DateRange>(defaultDateRange());
   const [managerFilter, setManagerFilter] = useState("");
@@ -78,10 +90,10 @@ export default function Reports() {
     const load = async () => {
       setLoading(true);
       const [ordersData, productsData, customersData, brandsData, managersData] = await Promise.all([
-        listAll<Order>("orders"),
-        listAll<OrderProduct>("order_products"),
-        listAll<Customer>("customers"),
-        listAll<Brand>("brands"),
+        canOrders ? listAll<Order>("orders") : Promise.resolve([]),
+        canOrders ? listAll<OrderProduct>("order_products") : Promise.resolve([]),
+        canCustomers ? listAll<Customer>("customers") : Promise.resolve([]),
+        canCustomers ? listAll<Brand>("brands") : Promise.resolve([]),
         listAll<Manager>("managers"),
       ]);
       setOrders(ordersData);
@@ -99,11 +111,59 @@ export default function Reports() {
     };
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canViewFinance]);
+  }, [canViewFinance, canOrders, canCustomers]);
 
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const brandMap = useMemo(() => new Map(brands.map((b) => [b.id, b])), [brands]);
   const managerPlanMap = useMemo(() => new Map(managers.map((m) => [m.name, m.monthly_plan])), [managers]);
+
+  // Manager self-service mode: a non-admin staff member whose full name
+  // matches a Managerlar record sees only their own sales/debt numbers
+  // instead of the full company dashboard (company profit, other
+  // managers' rankings, customer/industry breakdowns stay admin-only).
+  const myManager = useMemo(() => {
+    const myName = (staff?.full_name || "").trim().toLowerCase();
+    if (!myName) return null;
+    return managers.find((m) => m.name.trim().toLowerCase() === myName) || null;
+  }, [managers, staff]);
+  const isManagerMode = !isAdmin && !!myManager;
+
+  const myOrders = useMemo(() => {
+    if (!isManagerMode || !myManager) return [];
+    const name = myManager.name.trim().toLowerCase();
+    return orders.filter(
+      (o) => o.status !== "cancelled" && (o.manager_name || "").trim().toLowerCase() === name,
+    );
+  }, [orders, isManagerMode, myManager]);
+  const myOrdersInRange = useMemo(
+    () => myOrders.filter((o) => inRange(o.order_date || o.created_at, range)),
+    [myOrders, range],
+  );
+  const myRevenue = myOrdersInRange.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  const myOrderCount = myOrdersInRange.length;
+  const myAvgCheck = myOrderCount > 0 ? myRevenue / myOrderCount : 0;
+  const myPlanPct = useMemo(() => {
+    if (!isManagerMode || !myManager || !(Number(myManager.monthly_plan) > 0)) return null;
+    const { start, end } = calendarMonthRange(new Date());
+    const monthRevenue = myOrders
+      .filter((o) => o.created_at >= start && o.created_at < end)
+      .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+    return (monthRevenue / Number(myManager.monthly_plan)) * 100;
+  }, [isManagerMode, myManager, myOrders]);
+  // All of the manager's own unpaid balance, active orders (current debt)
+  // and delivered/closed ones alike (old debt left over after the order
+  // was finished) — not range-scoped, same as the company-wide debt card.
+  const myDebtRows = useMemo(() => {
+    return myOrders
+      .map((o) => ({
+        order: o,
+        remaining:
+          Number(o.remaining_amount || 0) || Math.max(0, Number(o.total_amount || 0) - Number(o.paid_amount || 0)),
+      }))
+      .filter((r) => r.remaining > 0)
+      .sort((a, b) => b.remaining - a.remaining);
+  }, [myOrders]);
+  const myTotalDebt = myDebtRows.reduce((s, r) => s + r.remaining, 0);
 
   const managerNames = useMemo(
     () => Array.from(new Set(orders.map((o) => o.manager_name).filter(Boolean))).sort(),
@@ -515,6 +575,115 @@ export default function Reports() {
       await exportNodeToPdf(containerRef.current, `hisobot-${range.from}_${range.to}`);
     }
   };
+
+  if (isManagerMode) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-ink-900">Mening hisobotim</h1>
+          <p className="text-sm text-ink-500">
+            {myManager!.name} — shaxsiy sotuv va qarzdorlik ko'rsatkichlari
+          </p>
+        </div>
+
+        <DateRangeFilter value={range} onChange={setRange} />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Buyurtmalar soni"
+            value={myOrderCount}
+            hint="Tanlangan davr bo'yicha"
+            tone="sky"
+            icon={<ClipboardList className="h-5 w-5" />}
+          />
+          <StatCard
+            title="Sotuv summasi"
+            value={formatMoneyShort(myRevenue)}
+            hint={formatMoney(myRevenue)}
+            tone="emerald"
+            icon={<Wallet className="h-5 w-5" />}
+          />
+          <StatCard
+            title="O'rtacha chek"
+            value={formatMoneyShort(myAvgCheck)}
+            tone="brand"
+            icon={<Receipt className="h-5 w-5" />}
+          />
+          <StatCard
+            title="Oylik reja bajarilishi"
+            value={myPlanPct === null ? "-" : `${myPlanPct.toFixed(0)}%`}
+            hint={
+              Number(myManager!.monthly_plan) > 0
+                ? `Reja: ${formatMoney(myManager!.monthly_plan)}`
+                : "Reja belgilanmagan"
+            }
+            tone={myPlanPct === null ? "brand" : myPlanPct >= 100 ? "emerald" : myPlanPct >= 50 ? "amber" : "rose"}
+            progress={myPlanPct === null ? undefined : Math.min(100, myPlanPct)}
+            icon={<Target className="h-5 w-5" />}
+          />
+        </div>
+
+        <div className="card p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-ink-500" />
+              <h2 className="font-display text-base font-bold text-ink-900">Mening qarzdorliklarim</h2>
+            </div>
+            <p className="text-xs text-ink-500">
+              Umumiy: {formatMoney(myTotalDebt)} · {myDebtRows.length} ta buyurtma
+            </p>
+          </div>
+          <AsyncState
+            loading={loading}
+            empty={myDebtRows.length === 0}
+            emptyLabel="Qarzdorlik yo'q"
+            emptyIcon={<Wallet className="h-5 w-5" />}
+          >
+            <div className="overflow-x-auto rounded-xl border border-ink-100">
+              <table className="w-full text-sm">
+                <thead className="bg-ink-50/60">
+                  <tr>
+                    <th className="table-th">Buyurtma</th>
+                    <th className="table-th">Mijoz</th>
+                    <th className="table-th">Holat</th>
+                    <th className="table-th">Muddat</th>
+                    <th className="table-th text-right">Qarz</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-100">
+                  {myDebtRows.map(({ order, remaining }) => {
+                    const c = order.customer_id ? customerMap.get(order.customer_id) : undefined;
+                    const closed = order.status === "delivered" || order.status === "closed";
+                    return (
+                      <tr key={order.id} className="hover:bg-ink-50/50">
+                        <td className="table-td font-semibold text-brand-700">{order.order_number || "-"}</td>
+                        <td className="table-td text-ink-800">
+                          {c ? `${c.first_name} ${c.last_name}` : order.title || "-"}
+                        </td>
+                        <td className="table-td">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              closed ? "bg-ink-100 text-ink-600" : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {closed ? "Yopilgan (eski qarz)" : "Faol"}
+                          </span>
+                        </td>
+                        <td className="table-td whitespace-nowrap">{formatDate(order.deadline)}</td>
+                        <td className="table-td whitespace-nowrap text-right font-semibold text-rose-600">
+                          {formatMoney(remaining)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </AsyncState>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5" ref={containerRef}>
