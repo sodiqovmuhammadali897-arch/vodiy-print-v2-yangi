@@ -149,8 +149,8 @@ jobs:
             exit 0
           fi
           gcloud auth activate-service-account --key-file="$RUNNER_TEMP/firebase-sa.json" --project=vodiy-print
-          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("attendancecheckin" OR "attendancecheckout")' \
-            --project=vodiy-print --freshness=2h --limit=300 --format="value(timestamp,severity,resource.labels.service_name,textPayload,jsonPayload.message,jsonPayload)" || true
+          gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name=("attendancecheckin" OR "attendancecheckout") AND jsonPayload.message:*' \
+            --project=vodiy-print --freshness=24h --limit=300 --format="value(timestamp,severity,resource.labels.service_name,jsonPayload.message,jsonPayload)" || true
 
       - name: Ensure attendance functions allow public invocation
         env:
