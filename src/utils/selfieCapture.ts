@@ -51,13 +51,18 @@ const pickPhoto = (): Promise<File> =>
     // attaches the captured photo to `input.files`) can lag behind by
     // several seconds while the photo is encoded — a short delay here
     // false-positives as a cancel on a real capture, and since
-    // `settled` latches, the later real success is silently dropped.
+    // `settled` latches, the later real success is silently dropped
+    // (this is exactly what was happening: a real check-out selfie on
+    // a slower device losing the race against a 3s timeout, so the
+    // capture silently "cancelled" and the request never reached the
+    // server at all). 8s gives slower devices/cameras enough room
+    // while still cancelling promptly on a genuine dismissal.
     window.addEventListener(
       "focus",
       () => {
         setTimeout(() => {
           if (!settled && !input.files?.length) cancel();
-        }, 3000);
+        }, 8000);
       },
       { once: true },
     );
