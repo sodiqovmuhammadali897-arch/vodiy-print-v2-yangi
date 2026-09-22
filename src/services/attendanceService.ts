@@ -37,7 +37,7 @@ export const listMonthAttendance = (email: string, monthPrefix: string) =>
     orderBy: ["dateCode", "desc"],
   }).then((rows) => rows.filter((r) => r.dateCode.startsWith(monthPrefix)));
 
-type CheckResult = { ok: boolean; status?: string };
+type CheckResult = { ok: boolean; status?: string; workedMinutes?: number };
 
 const withLocation = async (
   schedule: WorkSchedule,
