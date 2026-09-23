@@ -34,7 +34,7 @@ import StatCard from "../../components/ui/StatCard";
 import StatusBadge, { ORDER_STATUS_OPTIONS, orderStatusLabel } from "../../components/ui/StatusBadge";
 import { ORDER_CLOSED_STATUSES, ORDER_STAGE_GROUPS } from "../../lib/orderConstants";
 import { changeOrderStatus } from "../../lib/orderStatus";
-import { maybePromoteCustomer, type WizardProduct } from "../../lib/orderService";
+import { maybePromoteCustomer } from "../../lib/orderService";
 import { backfillOrderBrand } from "../../lib/brandSync";
 import { nextOrderNumber } from "../../lib/numbering";
 import RequireCustomerModal from "./RequireCustomerModal";
@@ -382,7 +382,7 @@ export default function Orders() {
       });
       const items = productsByOrder.get(order.id) || [];
       if (items.length > 0) {
-        await insertMany<WizardProduct & { order_id: string }>(
+        await insertMany<Omit<OrderProduct, "id">>(
           "order_products",
           items.map((p) => ({
             order_id: created.id,

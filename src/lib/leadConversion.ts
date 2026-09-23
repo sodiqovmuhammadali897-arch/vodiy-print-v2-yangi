@@ -90,7 +90,6 @@ export const convertLeadToCustomer = async (
     },
     [],
     [],
-    [],
   );
 
   if ("error" in orderResult) {

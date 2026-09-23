@@ -61,6 +61,12 @@ export default function ProductionProductCard(props: Props) {
   const productionStatus = product.production_status || "new";
   const colorCount = new Set(sizeBreakdown.map((e) => e.color)).size;
   const sizeCount = new Set(sizeBreakdown.map((e) => e.size)).size;
+  // A file saved before per-product files existed has no
+  // product_position — show it on every product card so it doesn't
+  // just disappear.
+  const productFiles = files.filter(
+    (f) => f.product_position === product.position || f.product_position == null,
+  );
 
   const canAccept =
     mode === "pechatnik" &&
@@ -161,10 +167,10 @@ export default function ProductionProductCard(props: Props) {
         <div>Menejer: <span className="font-semibold text-ink-700">{order.manager_name || "-"}</span></div>
       </div>
 
-      {files.length > 0 && (
+      {productFiles.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <Paperclip className="h-3.5 w-3.5 text-ink-400" />
-          {files.map((f) => (
+          {productFiles.map((f) => (
             <a
               key={f.id}
               href={f.url}

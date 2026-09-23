@@ -180,6 +180,11 @@ export type OrderPayment = {
 export type OrderFile = {
   id: string;
   order_id: string;
+  // Which order_products line this file belongs to (matches that
+  // product's `position`). Missing on files saved before this field
+  // existed — those are treated as belonging to every product line,
+  // since there's no way to know which one they were meant for.
+  product_position: number | null;
   filename: string;
   url: string;
   mime_type: string;

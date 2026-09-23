@@ -506,6 +506,7 @@ export default function OrderDetail() {
                   <tr>
                     <th className="table-th">#</th>
                     <th className="table-th">Mahsulot</th>
+                    <th className="table-th">Fayllar</th>
                     <th className="table-th text-right">Miqdor</th>
                     <th className="table-th text-right">Narx</th>
                     <th className="table-th text-right">Chegirma</th>
@@ -513,31 +514,59 @@ export default function OrderDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
-                  {products.map((p, i) => (
-                    <tr key={p.id}>
-                      <td className="table-td text-ink-500">{i + 1}</td>
-                      <td className="table-td">
-                        <div className="font-medium text-ink-900">
-                          {p.product_name}
-                        </div>
-                        <div className="text-xs text-ink-500">
-                          {[p.category, p.variant, p.color, p.size, p.material]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </div>
-                      </td>
-                      <td className="table-td text-right">{p.quantity}</td>
-                      <td className="table-td text-right">
-                        {formatMoney(p.unit_price)}
-                      </td>
-                      <td className="table-td text-right">
-                        {formatMoney(p.discount)}
-                      </td>
-                      <td className="table-td text-right font-semibold">
-                        {formatMoney(p.total)}
-                      </td>
-                    </tr>
-                  ))}
+                  {products.map((p, i) => {
+                    // A file saved before per-product files existed has
+                    // no product_position — show it on every line so it
+                    // doesn't just disappear.
+                    const productFiles = files.filter(
+                      (f) => f.product_position === p.position || f.product_position == null,
+                    );
+                    return (
+                      <tr key={p.id}>
+                        <td className="table-td text-ink-500">{i + 1}</td>
+                        <td className="table-td">
+                          <div className="font-medium text-ink-900">
+                            {p.product_name}
+                          </div>
+                          <div className="text-xs text-ink-500">
+                            {[p.category, p.variant, p.color, p.size, p.material]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        </td>
+                        <td className="table-td">
+                          {productFiles.length === 0 ? (
+                            <span className="text-xs text-ink-300">—</span>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              {productFiles.map((f) => (
+                                <a
+                                  key={f.id}
+                                  href={f.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline"
+                                >
+                                  <Paperclip className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">{f.filename || "Havola"}</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="table-td text-right">{p.quantity}</td>
+                        <td className="table-td text-right">
+                          {formatMoney(p.unit_price)}
+                        </td>
+                        <td className="table-td text-right">
+                          {formatMoney(p.discount)}
+                        </td>
+                        <td className="table-td text-right font-semibold">
+                          {formatMoney(p.total)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -585,7 +614,7 @@ export default function OrderDetail() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5">
         <div className="card p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-base font-bold text-ink-900">
@@ -617,55 +646,6 @@ export default function OrderDetail() {
                       {p.received_by ? ` · ${p.received_by}` : ""}
                     </div>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-base font-bold text-ink-900">
-              Fayllar
-            </h2>
-            <span className="chip bg-ink-100 text-ink-700">
-              <Paperclip className="h-3 w-3" /> {files.length}
-            </span>
-          </div>
-          {files.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-ink-200 p-6 text-center text-sm text-ink-500">
-              Fayllar biriktirilmagan
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {files.map((f) => (
-                <li
-                  key={f.id}
-                  className="flex items-center gap-3 rounded-xl border border-ink-100 p-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {f.link_type && (
-                        <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-ink-600">
-                          {f.link_type}
-                        </span>
-                      )}
-                      <span className="truncate font-medium text-ink-800">
-                        {f.filename}
-                      </span>
-                    </div>
-                    {f.note && (
-                      <div className="text-xs text-ink-500">{f.note}</div>
-                    )}
-                  </div>
-                  <a
-                    href={f.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-ghost"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
                 </li>
               ))}
             </ul>

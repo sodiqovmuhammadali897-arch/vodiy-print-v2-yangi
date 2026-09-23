@@ -1,7 +1,6 @@
 import type { Brand, Customer } from "../../../lib/types";
 import type {
   OrderPayload,
-  WizardFileLink,
   WizardPayment,
   WizardProduct,
 } from "../../../lib/orderService";
@@ -19,7 +18,6 @@ type Props = {
   brand: Brand | null;
   products: WizardProduct[];
   payments: WizardPayment[];
-  files: WizardFileLink[];
   totals: OrderTotals;
 };
 
@@ -30,14 +28,12 @@ export default function ReviewStep({
   brand,
   products,
   payments,
-  files,
   totals,
 }: Props) {
   const activeProducts = products.filter(
     (p) => p.product_name.trim() || p.quantity > 0,
   );
   const activePayments = payments.filter((p) => Number(p.amount) > 0);
-  const activeFiles = files.filter((f) => f.url.trim());
 
   return (
     <div className="space-y-5">
@@ -127,6 +123,7 @@ export default function ReviewStep({
                 <tr>
                   <th className="px-3 py-2 text-left">#</th>
                   <th className="px-3 py-2 text-left">Mahsulot</th>
+                  <th className="px-3 py-2 text-left">Fayllar</th>
                   <th className="px-3 py-2 text-right">Miqdor</th>
                   <th className="px-3 py-2 text-right">Narx</th>
                   <th className="px-3 py-2 text-right">Chegirma</th>
@@ -134,41 +131,63 @@ export default function ReviewStep({
                 </tr>
               </thead>
               <tbody>
-                {activeProducts.map((p, i) => (
-                  <tr key={i} className="border-t border-ink-100">
-                    <td className="px-3 py-2 text-ink-500">{i + 1}</td>
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-ink-900">
-                        {p.product_name || "-"}
-                      </div>
-                      <div className="text-xs text-ink-500">
-                        {p.size_breakdown.length > 0
-                          ? [
-                              p.category,
-                              p.variant,
-                              `${new Set(p.size_breakdown.map((e) => e.color)).size} rang`,
-                              `${new Set(p.size_breakdown.map((e) => e.size)).size} razmer`,
-                              p.material,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")
-                          : [p.category, p.variant, p.color, p.size, p.material]
-                              .filter(Boolean)
-                              .join(" · ")}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-right">{p.quantity}</td>
-                    <td className="px-3 py-2 text-right">
-                      {formatMoney(p.unit_price)}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {formatMoney(p.discount)}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold">
-                      {formatMoney(p.total)}
-                    </td>
-                  </tr>
-                ))}
+                {activeProducts.map((p, i) => {
+                  const activeFiles = (p.files || []).filter((f) => f.url.trim());
+                  return (
+                    <tr key={i} className="border-t border-ink-100">
+                      <td className="px-3 py-2 text-ink-500">{i + 1}</td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-ink-900">
+                          {p.product_name || "-"}
+                        </div>
+                        <div className="text-xs text-ink-500">
+                          {p.size_breakdown.length > 0
+                            ? [
+                                p.category,
+                                p.variant,
+                                `${new Set(p.size_breakdown.map((e) => e.color)).size} rang`,
+                                `${new Set(p.size_breakdown.map((e) => e.size)).size} razmer`,
+                                p.material,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")
+                            : [p.category, p.variant, p.color, p.size, p.material]
+                                .filter(Boolean)
+                                .join(" · ")}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        {activeFiles.length === 0 ? (
+                          <span className="text-xs text-ink-300">—</span>
+                        ) : (
+                          <div className="flex flex-col gap-0.5">
+                            {activeFiles.map((f, fi) => (
+                              <a
+                                key={fi}
+                                href={f.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="truncate text-xs text-brand-700 hover:underline"
+                              >
+                                {f.filename || f.url}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">{p.quantity}</td>
+                      <td className="px-3 py-2 text-right">
+                        {formatMoney(p.unit_price)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {formatMoney(p.discount)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold">
+                        {formatMoney(p.total)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -208,37 +227,6 @@ export default function ReviewStep({
           </div>
         )}
       </div>
-
-      {activeFiles.length > 0 && (
-        <div className="card p-5">
-          <h3 className="font-display text-base font-bold text-ink-900">
-            Fayllar ({activeFiles.length})
-          </h3>
-          <ul className="mt-3 space-y-1 text-sm">
-            {activeFiles.map((f, i) => (
-              <li
-                key={i}
-                className="flex items-center justify-between rounded-lg bg-ink-50 px-3 py-2"
-              >
-                <span className="truncate text-ink-700">
-                  <span className="mr-2 rounded bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase text-ink-500">
-                    {f.link_type}
-                  </span>
-                  {f.filename || f.url}
-                </span>
-                <a
-                  href={f.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-brand-700 hover:underline"
-                >
-                  Ochish
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {payload.delivery_type && (
         <div className="card p-5">

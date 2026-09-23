@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Trash2, GripVertical, Grid3x3, Pencil, X } from "lucide-react";
-import type { WizardProduct } from "../../../lib/orderService";
+import { Trash2, GripVertical, Grid3x3, Pencil, X, Plus, ExternalLink, Paperclip } from "lucide-react";
+import type { WizardFileLink, WizardProduct } from "../../../lib/orderService";
 import type { SizeBreakdownEntry } from "../../../lib/types";
 import {
   CATEGORY_PRODUCTS,
+  FILE_LINK_TYPES,
   PRODUCT_CATEGORIES,
   PRODUCTION_COMPANIES,
   TEXTILE_COLORS,
@@ -50,6 +51,13 @@ export default function ProductLineItem({
 
   const colorCount = new Set(product.size_breakdown.map((e) => e.color)).size;
   const sizeCount = new Set(product.size_breakdown.map((e) => e.size)).size;
+
+  const files = product.files || [];
+  const addFile = () =>
+    onChange({ files: [...files, { filename: "", url: "", link_type: "Boshqa", note: "" }] });
+  const updateFile = (i: number, patch: Partial<WizardFileLink>) =>
+    onChange({ files: files.map((f, idx) => (idx === i ? { ...f, ...patch } : f)) });
+  const removeFile = (i: number) => onChange({ files: files.filter((_, idx) => idx !== i) });
 
   return (
     <div className="rounded-2xl border border-ink-100 bg-surface p-4 shadow-sm">
@@ -276,6 +284,74 @@ export default function ProductLineItem({
             onChange={(e) => patchAndRecalc({ note: e.target.value })}
           />
         </div>
+      </div>
+
+      <div className="mt-3 border-t border-ink-100 pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
+            <Paperclip className="h-3.5 w-3.5" /> Fayllar
+          </span>
+          <button type="button" className="btn-ghost text-xs" onClick={addFile}>
+            <Plus className="h-3.5 w-3.5" /> Havola qo'shish
+          </button>
+        </div>
+        {files.length === 0 ? (
+          <div className="text-xs text-ink-400">Bu mahsulot uchun fayl biriktirilmagan</div>
+        ) : (
+          <div className="space-y-2">
+            {files.map((f, i) => (
+              <div key={i} className="grid grid-cols-12 gap-2 rounded-xl border border-ink-100 p-2.5">
+                <div className="col-span-12 md:col-span-3">
+                  <input
+                    className="input"
+                    placeholder="Fayl nomi"
+                    value={f.filename}
+                    onChange={(e) => updateFile(i, { filename: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-6 md:col-span-2">
+                  <select
+                    className="input"
+                    value={f.link_type}
+                    onChange={(e) => updateFile(i, { link_type: e.target.value })}
+                  >
+                    {FILE_LINK_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-12 md:col-span-4">
+                  <input
+                    className="input"
+                    placeholder="https://..."
+                    value={f.url}
+                    onChange={(e) => updateFile(i, { url: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-9 md:col-span-2">
+                  <input
+                    className="input"
+                    placeholder="Izoh"
+                    value={f.note}
+                    onChange={(e) => updateFile(i, { note: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-3 md:col-span-1 flex items-center justify-end gap-1">
+                  {f.url && (
+                    <a className="btn-ghost" href={f.url} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                  <button type="button" className="btn-ghost text-rose-600 hover:bg-rose-50" onClick={() => removeFile(i)}>
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {isTextile && (

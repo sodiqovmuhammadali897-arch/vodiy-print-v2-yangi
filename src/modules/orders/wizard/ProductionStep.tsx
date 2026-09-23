@@ -19,7 +19,7 @@ type Props = {
 const emptyProduct: WizardProduct = {
   position: 0, category: "", product_name: "", variant: "", size: "", material: "",
   color: "", quantity: 0, unit_price: 0, discount: 0, total: 0, note: "",
-  size_breakdown: [],
+  size_breakdown: [], files: [],
   production_status: "new", production_company: "Vodiy Print",
   assigned_printer_email: "", assigned_printer_name: "",
   production_accepted_at: null, production_completed_at: null,
@@ -67,17 +67,19 @@ export default function ProductionStep({
           Har bir mahsulot uchun ishlab chiqaruvchini "Mahsulotlar" bo'limida, mahsulot ichida belgilang — turli mahsulotlar turli kompaniyalarga (autros) biriktirilishi mumkin.
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div>
-            <label className="label">Tekstil kompaniyasi</label>
-            <select className="input" value={payload.textile_company_id || ""} onChange={(e) => {
-              const id = e.target.value || null;
-              const found = textileCompanies.find((t) => t.id === id);
-              onPayloadChange({ textile_company_id: id, textile_company_name: found?.name || "" });
-            }}>
-              <option value="">-- yo'q --</option>
-              {textileCompanies.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
+          {products.some((p) => p.category === "Textil") && (
+            <div>
+              <label className="label">Tekstil kompaniyasi</label>
+              <select className="input" value={payload.textile_company_id || ""} onChange={(e) => {
+                const id = e.target.value || null;
+                const found = textileCompanies.find((t) => t.id === id);
+                onPayloadChange({ textile_company_id: id, textile_company_name: found?.name || "" });
+              }}>
+                <option value="">-- yo'q --</option>
+                {textileCompanies.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="label">Ishlab chiqarish menejeri</label>
             <select className="input" value={payload.production_manager} onChange={(e) => onPayloadChange({ production_manager: e.target.value })}>

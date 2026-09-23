@@ -11,8 +11,6 @@ import {
   updateOne,
 } from "./firestoreDb";
 
-export type WizardProduct = Omit<OrderProduct, "id" | "order_id">;
-export type WizardPayment = Omit<OrderPayment, "id" | "order_id" | "created_at">;
 export type WizardFileLink = {
   id?: string;
   filename: string;
@@ -20,6 +18,11 @@ export type WizardFileLink = {
   link_type: string;
   note: string;
 };
+// Files live on the product line they belong to, not on the order as a
+// whole — an order with several products would otherwise have no way to
+// tell which uploaded file/link goes with which one.
+export type WizardProduct = Omit<OrderProduct, "id" | "order_id"> & { files: WizardFileLink[] };
+export type WizardPayment = Omit<OrderPayment, "id" | "order_id" | "created_at">;
 
 export type OrderPayload = {
   id?: string;
@@ -69,17 +72,15 @@ const upsertChildren = async (
   orderId: string,
   products: WizardProduct[],
   payments: WizardPayment[],
-  fileLinks: WizardFileLink[],
 ) => {
   await deleteWhere("order_products", "order_id", orderId);
   if (products.length > 0) {
     await insertMany(
       "order_products",
-      products.map((p, i) => ({
-        ...p,
-        order_id: orderId,
-        position: i,
-      })),
+      products.map((p, i) => {
+        const { files: _files, ...rest } = p;
+        return { ...rest, order_id: orderId, position: i };
+      }),
     );
   }
 
@@ -94,12 +95,12 @@ const upsertChildren = async (
   }
 
   await deleteWhere("order_files", "order_id", orderId);
-  const filesToAdd = fileLinks.filter((f) => f.url.trim());
-  if (filesToAdd.length > 0) {
-    await insertMany(
-      "order_files",
-      filesToAdd.map((f) => ({
+  const filesToAdd = products.flatMap((p, i) =>
+    p.files
+      .filter((f) => f.url.trim())
+      .map((f) => ({
         order_id: orderId,
+        product_position: i,
         filename: f.filename || "Havola",
         url: f.url,
         link_type: f.link_type,
@@ -107,7 +108,9 @@ const upsertChildren = async (
         mime_type: "text/uri-list",
         size: 0,
       })),
-    );
+  );
+  if (filesToAdd.length > 0) {
+    await insertMany("order_files", filesToAdd);
   }
 };
 
@@ -115,7 +118,6 @@ export const saveOrder = async (
   payload: OrderPayload,
   products: WizardProduct[],
   payments: WizardPayment[],
-  fileLinks: WizardFileLink[],
   statusChange?: { previousStatus: string; actorEmail: string; actorName: string },
 ): Promise<{ id: string; order_number: string } | { error: string }> => {
   const totals = computeOrderTotals(products, payload.discount_amount, payments);
@@ -156,7 +158,7 @@ export const saveOrder = async (
       orderId = created.id;
     }
 
-    await upsertChildren(orderId, products, payments, fileLinks);
+    await upsertChildren(orderId, products, payments);
 
     if (record.customer_id) {
       await maybePromoteCustomer(record.customer_id);

@@ -120,6 +120,7 @@ export default function HistoricalOrderModal({ open, onClose, customer, onSaved 
             total: manualTotal,
             note: "",
             size_breakdown: [],
+            files: [],
             production_status: "delivered",
             production_company: "",
             assigned_printer_email: "",
@@ -144,6 +145,7 @@ export default function HistoricalOrderModal({ open, onClose, customer, onSaved 
             total: l.quantity * l.unitPrice,
             note: "",
             size_breakdown: [],
+            files: [],
             production_status: "delivered",
             production_company: "",
             assigned_printer_email: "",
@@ -210,7 +212,7 @@ export default function HistoricalOrderModal({ open, onClose, customer, onSaved 
     };
 
     setSaving(true);
-    const res = await saveOrder(payload, products, payments, []);
+    const res = await saveOrder(payload, products, payments);
     setSaving(false);
     if ("error" in res) {
       setError(res.error);

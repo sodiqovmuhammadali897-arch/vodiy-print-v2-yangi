@@ -8,26 +8,23 @@ import {
   FileText,
   User,
   Package,
-  Paperclip,
   ClipboardCheck,
 } from "lucide-react";
 import { listAll, getOne } from "../../../lib/firestoreDb";
-import type { Brand, Customer, Manager, Order, OrderProduct, OrderPayment, OrderStatus, TextileCompany } from "../../../lib/types";
+import type { Brand, Customer, Manager, Order, OrderFile, OrderProduct, OrderPayment, OrderStatus, TextileCompany } from "../../../lib/types";
 import { ORDER_STATUSES } from "../../../lib/orderConstants";
 import { saveOrder } from "../../../lib/orderService";
-import type { OrderPayload, WizardFileLink, WizardPayment, WizardProduct } from "../../../lib/orderService";
+import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
 import { computeOrderTotals } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
 import { useAuth } from "../../../lib/AuthContext";
 import CustomerStep from "./CustomerStep";
 import ProductionStep from "./ProductionStep";
-import FilesStep from "./FilesStep";
 import ReviewStep from "./ReviewStep";
 
 const STEPS = [
   { key: "customer", label: "Mijoz", icon: User },
   { key: "production", label: "Mahsulot va to'lov", icon: Package },
-  { key: "files", label: "Fayllar", icon: Paperclip },
   { key: "review", label: "Tekshirish", icon: ClipboardCheck },
 ] as const;
 
@@ -99,7 +96,6 @@ export default function OrderWizard() {
   const [payload, setPayload] = useState<OrderPayload>(emptyPayload());
   const [products, setProducts] = useState<WizardProduct[]>([]);
   const [payments, setPayments] = useState<WizardPayment[]>([]);
-  const [files, setFiles] = useState<WizardFileLink[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -181,33 +177,43 @@ export default function OrderWizard() {
           const [pr, pay, fl] = await Promise.all([
             listAll<OrderProduct>("order_products"),
             listAll<OrderPayment>("order_payments"),
-            listAll<WizardFileLink & { order_id: string }>("order_files"),
+            listAll<OrderFile>("order_files"),
           ]);
+          const orderFiles = fl.filter((f) => f.order_id === id);
+          const orderProducts = pr.filter((p) => p.order_id === id).sort((a, b) => a.position - b.position);
           setProducts(
-            pr
-              .filter((p) => p.order_id === id)
-              .sort((a, b) => a.position - b.position)
-              .map((p) => ({
-                position: p.position,
-                category: p.category,
-                product_name: p.product_name,
-                variant: p.variant,
-                size: p.size,
-                material: p.material,
-                color: p.color,
-                quantity: Number(p.quantity),
-                unit_price: Number(p.unit_price),
-                discount: Number(p.discount),
-                total: Number(p.total),
-                note: p.note,
-                size_breakdown: Array.isArray(p.size_breakdown) ? p.size_breakdown : [],
-                production_status: p.production_status || "new",
-                production_company: p.production_company || "Vodiy Print",
-                assigned_printer_email: p.assigned_printer_email || "",
-                assigned_printer_name: p.assigned_printer_name || "",
-                production_accepted_at: p.production_accepted_at || null,
-                production_completed_at: p.production_completed_at || null,
-              })),
+            orderProducts.map((p) => ({
+              position: p.position,
+              category: p.category,
+              product_name: p.product_name,
+              variant: p.variant,
+              size: p.size,
+              material: p.material,
+              color: p.color,
+              quantity: Number(p.quantity),
+              unit_price: Number(p.unit_price),
+              discount: Number(p.discount),
+              total: Number(p.total),
+              note: p.note,
+              size_breakdown: Array.isArray(p.size_breakdown) ? p.size_breakdown : [],
+              // A file saved before per-product files existed has no
+              // product_position — attach it to every line so nothing
+              // that used to be visible on the order disappears.
+              files: orderFiles
+                .filter((f) => f.product_position === p.position || f.product_position == null)
+                .map((f) => ({
+                  filename: f.filename,
+                  url: f.url,
+                  link_type: f.link_type || "Boshqa",
+                  note: f.note || "",
+                })),
+              production_status: p.production_status || "new",
+              production_company: p.production_company || "Vodiy Print",
+              assigned_printer_email: p.assigned_printer_email || "",
+              assigned_printer_name: p.assigned_printer_name || "",
+              production_accepted_at: p.production_accepted_at || null,
+              production_completed_at: p.production_completed_at || null,
+            })),
           );
           setPayments(
             pay
@@ -218,16 +224,6 @@ export default function OrderWizard() {
                 payment_date: p.payment_date,
                 received_by: p.received_by,
                 note: p.note,
-              })),
-          );
-          setFiles(
-            fl
-              .filter((f) => f.order_id === id)
-              .map((f) => ({
-                filename: f.filename,
-                url: f.url,
-                link_type: f.link_type || "Boshqa",
-                note: f.note || "",
               })),
           );
         }
@@ -277,7 +273,6 @@ export default function OrderWizard() {
       },
       filteredProducts,
       payments,
-      files,
       initialStatus
         ? {
             previousStatus: initialStatus,
@@ -389,9 +384,7 @@ export default function OrderWizard() {
         />
       )}
 
-      {step === 2 && <FilesStep files={files} setFiles={setFiles} />}
-
-      {step === 3 && (
+      {step === 2 && (
         <ReviewStep
           orderNumber={payload.order_number || ""}
           payload={payload}
@@ -399,7 +392,6 @@ export default function OrderWizard() {
           brand={linkedBrand}
           products={products}
           payments={payments}
-          files={files}
           totals={totals}
         />
       )}
