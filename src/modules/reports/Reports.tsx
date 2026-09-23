@@ -23,9 +23,12 @@ import {
   XCircle,
   Gauge,
   Target,
+  UserCheck,
 } from "lucide-react";
-import { listAll } from "../../lib/firestoreDb";
-import type { Brand, Customer, Expense, Manager, Order, OrderProduct } from "../../lib/types";
+import { getOne, listAll } from "../../lib/firestoreDb";
+import type { AttendanceRecord, Brand, Customer, Expense, KpiSettings, Manager, Order, OrderProduct, WorkSchedule } from "../../lib/types";
+import { DEFAULT_KPI_WEIGHTS } from "../../lib/types";
+import type { Staff } from "../../lib/permissions";
 import { formatDate, formatMoney, formatMoneyShort, monthNameUz } from "../../lib/format";
 import { monthRange as calendarMonthRange } from "../../lib/workdays";
 import { customerTypeInfo } from "../../lib/orderConstants";
@@ -42,6 +45,8 @@ import { segmentCustomersByFirstOrder } from "../../lib/customerSegments";
 import { exportCsv } from "../../lib/exportCsv";
 import { exportNodeToPdf } from "../../lib/exportPdf";
 import { useAuth } from "../../lib/AuthContext";
+import { getWorkSchedule } from "../../services/attendanceService";
+import { attendancePercent, dateCodeOf, formatMinutes, isWeeklyOff } from "../../utils/attendanceCalculations";
 import StatCard from "../../components/ui/StatCard";
 import DateRangeFilter from "../../components/ui/DateRangeFilter";
 import SimpleBarChart, { type BarPoint } from "../../components/ui/SimpleBarChart";
@@ -75,6 +80,7 @@ export default function Reports() {
     isAdmin || can("orders", "view") || can("production", "view") || can("pechatnik", "view") || can("leads", "edit");
   const canCustomers =
     isAdmin || can("customers", "view") || can("production", "view") || can("pechatnik", "view") || can("proposals", "view");
+  const canAttendance = isAdmin || can("attendance", "view");
   const containerRef = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState<DateRange>(defaultDateRange());
   const [managerFilter, setManagerFilter] = useState("");
@@ -85,6 +91,10 @@ export default function Reports() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [managers, setManagers] = useState<Manager[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [workSchedule, setWorkSchedule] = useState<WorkSchedule | null>(null);
+  const [kpiWeights, setKpiWeights] = useState(DEFAULT_KPI_WEIGHTS);
 
   useEffect(() => {
     const load = async () => {
@@ -107,11 +117,26 @@ export default function Reports() {
       if (canViewFinance) {
         setExpenses(await listAll<Expense>("expenses"));
       }
+      // Same permission-gating reason as orders/customers above — a
+      // reports viewer without attendance.view would get a Firestore
+      // permission error fetching the whole `attendance` collection.
+      if (canAttendance) {
+        const [staffData, attendanceData, schedule, kpiSettings] = await Promise.all([
+          listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }),
+          listAll<AttendanceRecord>("attendance"),
+          getWorkSchedule(),
+          getOne<KpiSettings>("kpi_settings", "default"),
+        ]);
+        setStaffList(staffData);
+        setAttendanceRecords(attendanceData);
+        setWorkSchedule(schedule);
+        if (kpiSettings?.weights) setKpiWeights(kpiSettings.weights);
+      }
       setLoading(false);
     };
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canViewFinance, canOrders, canCustomers]);
+  }, [canViewFinance, canOrders, canCustomers, canAttendance]);
 
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const brandMap = useMemo(() => new Map(brands.map((b) => [b.id, b])), [brands]);
@@ -365,6 +390,83 @@ export default function Reports() {
       })
       .sort((a, b) => b.revenue - a.revenue);
   }, [ordersInRange, managerPlanMap]);
+
+  // Employee performance for the current calendar month: attendance rate,
+  // punctuality and hours worked feed the same weighted score KpiPanel
+  // shows each employee for themselves, computed here company-wide. Kept
+  // deliberately limited to what attendance data alone can support (no
+  // tasks/manager-review component) rather than approximating those.
+  const employeeStats = useMemo(() => {
+    if (!canAttendance || !workSchedule || staffList.length === 0) return [];
+    const monthPrefix = dateCodeOf(new Date()).slice(0, 7);
+    const todayCode = dateCodeOf(new Date());
+    let workingDays = 0;
+    const [year, month] = monthPrefix.split("-").map(Number);
+    for (let d = 1; d <= new Date(year, month, 0).getDate(); d++) {
+      const dateCode = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      if (dateCode > todayCode) break;
+      if (!isWeeklyOff(new Date(`${dateCode}T00:00:00`), workSchedule)) workingDays++;
+    }
+    const byEmployee = new Map<string, AttendanceRecord[]>();
+    for (const r of attendanceRecords) {
+      if (!r.dateCode.startsWith(monthPrefix)) continue;
+      const arr = byEmployee.get(r.employeeId) || [];
+      arr.push(r);
+      byEmployee.set(r.employeeId, arr);
+    }
+    const revenueByManager = new Map(managerRows.map((m) => [m.name, m.revenue]));
+    const expectedMinutesPerDay = 8 * 60;
+    const expectedMinutes = workingDays * expectedMinutesPerDay;
+    const maxScore = kpiWeights.attendance + kpiWeights.punctuality + kpiWeights.hoursWorked;
+    return staffList
+      .map((s) => {
+        const records = byEmployee.get(s.email) || [];
+        const present = records.filter((r) => r.checkInTime).length;
+        const lateCount = records.filter((r) => (r.lateMinutes || 0) > 0).length;
+        const onTime = present - lateCount;
+        const totalLateMinutes = records.reduce((sum, r) => sum + (r.lateMinutes || 0), 0);
+        const totalWorkedMinutes = records.reduce((sum, r) => sum + (r.workedMinutes || 0), 0);
+        const attendancePct = attendancePercent(present, workingDays);
+        const attendanceScore = (attendancePct / 100) * kpiWeights.attendance;
+        const punctualityScore = present > 0 ? (onTime / present) * kpiWeights.punctuality : 0;
+        const hoursScore =
+          expectedMinutes > 0 ? Math.min(1, totalWorkedMinutes / expectedMinutes) * kpiWeights.hoursWorked : 0;
+        const score = Math.round((attendanceScore + punctualityScore + hoursScore) * 10) / 10;
+        return {
+          staff: s,
+          workingDays,
+          present,
+          absent: Math.max(0, workingDays - present),
+          lateCount,
+          totalLateMinutes,
+          totalWorkedMinutes,
+          attendancePct,
+          score,
+          maxScore,
+          revenue: revenueByManager.get(s.full_name) ?? null,
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+  }, [canAttendance, workSchedule, staffList, attendanceRecords, kpiWeights, managerRows]);
+
+  const attendanceDonut: DonutSlice[] = useMemo(() => {
+    if (employeeStats.length === 0) return [];
+    let onTime = 0;
+    let late = 0;
+    let absent = 0;
+    for (const e of employeeStats) {
+      onTime += e.present - e.lateCount;
+      late += e.lateCount;
+      absent += e.absent;
+    }
+    return [
+      { label: "Vaqtida keldi", value: onTime, color: "#10b981" },
+      { label: "Kech qoldi", value: late, color: "#f59e0b" },
+      { label: "Kelmadi", value: absent, color: "#f43f5e" },
+    ];
+  }, [employeeStats]);
+
+  const topEmployees = useMemo(() => employeeStats.slice(0, 5), [employeeStats]);
 
   // Production company breakdown, as a table (spend, product count, avg
   // fulfillment days, share) rather than just a donut. Aggregated per
@@ -925,6 +1027,81 @@ export default function Reports() {
           </AsyncState>
         </div>
       </div>
+
+      {canAttendance && (
+        <div className="card p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <UserCheck className="h-4 w-4 text-ink-500" />
+            <h2 className="font-display text-base font-bold text-ink-900">Xodimlar samaradorligi</h2>
+            <span className="text-xs text-ink-400">— shu oy, davomat asosida</span>
+          </div>
+          <AsyncState loading={loading} empty={employeeStats.length === 0} emptyLabel="Xodimlar ma'lumoti yo'q">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-ink-700">Davomat holati</h3>
+                <SimpleDonutChart data={attendanceDonut} valueFormat="count" size={150} />
+              </div>
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-ink-700">TOP xodimlar — davomat KPI</h3>
+                <div className="space-y-2">
+                  {topEmployees.map((e, i) => (
+                    <div key={e.staff.email} className="rounded-xl border border-ink-100 px-3 py-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-ink-400">{i + 1}</span>
+                          <span className="font-medium text-ink-800">{e.staff.full_name}</span>
+                        </div>
+                        <span className="text-xs font-semibold text-ink-800">
+                          {e.score} / {e.maxScore}
+                        </span>
+                      </div>
+                      <div className="mt-2 progress-track">
+                        <div
+                          className="progress-bar bg-emerald-500"
+                          style={{ width: `${e.maxScore > 0 ? Math.min(100, (e.score / e.maxScore) * 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-ink-100 text-xs uppercase text-ink-500">
+                    <th className="table-th">Xodim</th>
+                    <th className="table-th text-right">Davomat</th>
+                    <th className="table-th text-right">Kech qolish</th>
+                    <th className="table-th text-right">Ishlagan soat</th>
+                    <th className="table-th text-right">KPI ball</th>
+                    <th className="table-th text-right">Sotuvga hissa</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-100">
+                  {employeeStats.map((e) => (
+                    <tr key={e.staff.email}>
+                      <td className="table-td font-medium text-ink-800">{e.staff.full_name}</td>
+                      <td className="table-td text-right">{e.attendancePct}%</td>
+                      <td className="table-td text-right">
+                        {e.totalLateMinutes > 0 ? `${e.totalLateMinutes} daq` : "-"}
+                      </td>
+                      <td className="table-td text-right">{formatMinutes(e.totalWorkedMinutes)}</td>
+                      <td className="table-td text-right font-semibold">
+                        {e.score} / {e.maxScore}
+                      </td>
+                      <td className="table-td text-right">
+                        {e.revenue != null ? formatMoneyShort(e.revenue) : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </AsyncState>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="card p-5">
