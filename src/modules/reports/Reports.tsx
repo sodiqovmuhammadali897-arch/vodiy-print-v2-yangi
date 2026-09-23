@@ -468,6 +468,32 @@ export default function Reports() {
 
   const topEmployees = useMemo(() => employeeStats.slice(0, 5), [employeeStats]);
 
+  // Calendar-month revenue for the last 12 months, independent of the
+  // date-range picker — the "Oylik daromad" headline always compares this
+  // month to last month, whatever range the rest of the page is showing.
+  // Still honours the manager filter so the whole page stays consistent.
+  const monthlyRevenue = useMemo(() => {
+    const [cy, cm] = dateCodeOf(new Date()).slice(0, 7).split("-").map(Number);
+    const keys: string[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(cy, cm - 1 - i, 1);
+      keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    const totals = new Map(keys.map((k) => [k, 0]));
+    for (const o of orders) {
+      if (o.status === "cancelled") continue;
+      if (managerFilter && o.manager_name !== managerFilter) continue;
+      const k = (o.order_date || o.created_at || "").slice(0, 7);
+      if (totals.has(k)) totals.set(k, (totals.get(k) || 0) + Number(o.total_amount || 0));
+    }
+    return keys.map((k) => ({ key: k, label: monthNameUz(Number(k.slice(5, 7))).slice(0, 3), value: totals.get(k) || 0 }));
+  }, [orders, managerFilter]);
+  const thisMonthRevenue = monthlyRevenue[11]?.value || 0;
+  const lastMonthRevenue = monthlyRevenue[10]?.value || 0;
+  const monthGrowth = growthPercent(thisMonthRevenue, lastMonthRevenue);
+  const heroTrend = monthlyRevenue.slice(-6);
+  const heroTrendMax = Math.max(1, ...heroTrend.map((m) => m.value));
+
   // Production company breakdown, as a table (spend, product count, avg
   // fulfillment days, share) rather than just a donut. Aggregated per
   // product line (not per order) — a single order's products can go to
@@ -823,6 +849,50 @@ export default function Reports() {
         )}
       </div>
 
+      <div className="flex flex-wrap items-center gap-8 rounded-2xl bg-gradient-to-br from-brand-900 to-brand-600 p-6 text-white shadow-lg md:p-8">
+        <div className="flex min-w-[260px] flex-1 flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
+              <Wallet className="h-4 w-4" />
+            </span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-white/75">
+              Oylik daromad · {monthNameUz(Number(monthlyRevenue[11]?.key.slice(5, 7) || 1))}
+            </span>
+          </div>
+          <div className="font-display text-3xl font-extrabold tabular-nums md:text-4xl">
+            {formatMoney(thisMonthRevenue)}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            {monthGrowth !== null && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                  monthGrowth >= 0 ? "bg-emerald-400/25 text-emerald-100" : "bg-rose-400/25 text-rose-100"
+                }`}
+              >
+                {monthGrowth >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {monthGrowth >= 0 ? "+" : ""}
+                {monthGrowth.toFixed(1)}%
+              </span>
+            )}
+            <span className="text-white/70">o'tgan oy: {formatMoney(lastMonthRevenue)}</span>
+          </div>
+        </div>
+        <div className="flex h-24 items-end gap-2.5">
+          {heroTrend.map((m, i) => {
+            const isCurrent = i === heroTrend.length - 1;
+            return (
+              <div key={m.key} className="flex flex-col items-center gap-1.5" title={formatMoney(m.value)}>
+                <div
+                  className={`w-6 rounded-t-md ${isCurrent ? "bg-white" : "bg-white/30"}`}
+                  style={{ height: `${Math.max(4, (m.value / heroTrendMax) * 72)}px` }}
+                />
+                <span className={`text-[10px] ${isCurrent ? "font-bold text-white" : "text-white/60"}`}>{m.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Buyurtmalar soni"
@@ -917,6 +987,17 @@ export default function Reports() {
           <h2 className="mb-4 font-display text-base font-bold text-ink-900">Tushum dinamikasi</h2>
           <SimpleBarChart data={trendData} />
         </div>
+      </div>
+
+      <div className="card p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-ink-500" />
+            <h2 className="font-display text-base font-bold text-ink-900">Oylik daromad dinamikasi</h2>
+          </div>
+          <span className="text-xs text-ink-500">So'nggi 12 oy</span>
+        </div>
+        <SimpleBarChart data={monthlyRevenue} height={200} />
       </div>
 
       <div className="card p-5">
