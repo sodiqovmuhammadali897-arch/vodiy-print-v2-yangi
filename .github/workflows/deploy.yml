@@ -12,7 +12,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Every deploy job below waits on this — if an order-total, debt, KPI or
+  # attendance calculation test fails, nothing reaches the server.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -107,6 +127,7 @@ jobs:
   # Skips itself via plain bash (not a workflow "if:") until
   # FIREBASE_SERVICE_ACCOUNT is added as a repo secret.
   deploy-functions:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -166,6 +187,7 @@ jobs:
   # that webhook until all four of those are also set (see
   # meta-webhook/README.md).
   deploy-meta-webhook:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

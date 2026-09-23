@@ -1,4 +1,4 @@
-import type { AttendanceRecord, LeaveRequest, WorkSchedule } from "../lib/types";
+import type { AttendanceRecord, KpiWeights, LeaveRequest, WorkSchedule } from "../lib/types";
 
 export const formatMinutes = (total: number): string => {
   const m = Math.max(0, Math.round(total || 0));
@@ -88,3 +88,61 @@ export const attendancePercent = (
   presentDays: number,
   totalWorkingDays: number,
 ): number => (totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 1000) / 10 : 0);
+
+// Working days in `todayCode`'s month from the 1st up to and including
+// today, skipping the weekly day off. Future days of the month don't count
+// yet — an employee can't have been absent on a day that hasn't happened.
+export const workingDaysSoFar = (
+  todayCode: string,
+  schedule: Pick<WorkSchedule, "weeklyOffDay">,
+): number => {
+  const [year, month] = todayCode.split("-").map(Number);
+  let count = 0;
+  for (let d = 1; d <= new Date(year, month, 0).getDate(); d++) {
+    const dateCode = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    if (dateCode > todayCode) break;
+    if (!isWeeklyOff(new Date(`${dateCode}T00:00:00`), schedule)) count++;
+  }
+  return count;
+};
+
+const round1 = (n: number): number => Math.round(n * 10) / 10;
+
+// The weighted monthly KPI score from attendance (and optionally tasks) —
+// the single formula behind both an employee's own "Shaxsiy KPI" panel and
+// the company-wide ranking in Hisobot, so the two can never disagree.
+export const computeAttendanceKpi = (
+  records: Pick<AttendanceRecord, "checkInTime" | "lateMinutes" | "workedMinutes">[],
+  workingDays: number,
+  weights: Pick<KpiWeights, "attendance" | "punctuality" | "hoursWorked" | "tasksCompleted">,
+  tasks?: { total: number; done: number },
+) => {
+  const present = records.filter((r) => r.checkInTime).length;
+  const onTime = records.filter((r) => r.checkInTime && !(r.lateMinutes > 0)).length;
+  const totalWorkedMinutes = records.reduce((sum, r) => sum + (r.workedMinutes || 0), 0);
+  const expectedMinutes = workingDays * 8 * 60;
+
+  const attendanceScore = (attendancePercent(present, workingDays) / 100) * weights.attendance;
+  const punctualityScore = present > 0 ? (onTime / present) * weights.punctuality : 0;
+  const hoursScore =
+    expectedMinutes > 0 ? Math.min(1, totalWorkedMinutes / expectedMinutes) * weights.hoursWorked : 0;
+  const hasTasks = !!tasks && tasks.total > 0;
+  const tasksScore = hasTasks ? (tasks.done / tasks.total) * weights.tasksCompleted : 0;
+
+  return {
+    present,
+    onTime,
+    lateCount: present - onTime,
+    absent: Math.max(0, workingDays - present),
+    totalWorkedMinutes,
+    attendancePct: attendancePercent(present, workingDays),
+    attendanceScore: round1(attendanceScore),
+    punctualityScore: round1(punctualityScore),
+    hoursScore: round1(hoursScore),
+    tasksScore: round1(tasksScore),
+    hasTasks,
+    maxScore:
+      weights.attendance + weights.punctuality + weights.hoursWorked + (hasTasks ? weights.tasksCompleted : 0),
+    score: round1(attendanceScore + punctualityScore + hoursScore + tasksScore),
+  };
+};

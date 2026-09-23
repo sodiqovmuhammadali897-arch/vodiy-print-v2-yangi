@@ -7,7 +7,7 @@ import {
   getWorkSchedule,
   listMonthAttendance,
 } from "../../services/attendanceService";
-import { attendancePercent, dateCodeOf, formatMinutes, isWeeklyOff } from "../../utils/attendanceCalculations";
+import { attendancePercent, dateCodeOf, formatMinutes, workingDaysSoFar } from "../../utils/attendanceCalculations";
 import CheckInButton from "./CheckInButton";
 import CheckOutButton from "./CheckOutButton";
 
@@ -59,15 +59,7 @@ export default function EmployeeAttendanceCard() {
 
   const monthStats = useMemo(() => {
     if (!schedule) return null;
-    const todayCode = dateCodeOf(now);
-    let workingDays = 0;
-    const [year, month] = todayCode.split("-").map(Number);
-    for (let d = 1; d <= new Date(year, month, 0).getDate(); d++) {
-      const dateCode = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      if (dateCode > todayCode) break;
-      const date = new Date(`${dateCode}T00:00:00`);
-      if (!isWeeklyOff(date, schedule)) workingDays++;
-    }
+    const workingDays = workingDaysSoFar(dateCodeOf(now), schedule);
     const present = monthRecords.filter((r) => r.checkInTime).length;
     const lateCount = monthRecords.filter((r) => r.lateMinutes > 0).length;
     const totalMinutes = monthRecords.reduce((sum, r) => sum + (r.workedMinutes || 0), 0);

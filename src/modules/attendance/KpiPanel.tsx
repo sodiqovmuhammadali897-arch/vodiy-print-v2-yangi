@@ -4,7 +4,7 @@ import { useAuth } from "../../lib/AuthContext";
 import { getOne, listWhere } from "../../lib/firestoreDb";
 import { DEFAULT_KPI_WEIGHTS, type AttendanceRecord, type KpiSettings, type Task, type WorkSchedule } from "../../lib/types";
 import { getWorkSchedule, listMonthAttendance } from "../../services/attendanceService";
-import { attendancePercent, dateCodeOf, isWeeklyOff } from "../../utils/attendanceCalculations";
+import { computeAttendanceKpi, dateCodeOf, workingDaysSoFar } from "../../utils/attendanceCalculations";
 
 export default function KpiPanel() {
   const { user } = useAuth();
@@ -43,45 +43,15 @@ export default function KpiPanel() {
 
   const result = useMemo(() => {
     if (!schedule) return null;
-    const todayCode = dateCodeOf(new Date());
-    let workingDays = 0;
-    const [year, month] = todayCode.split("-").map(Number);
-    for (let d = 1; d <= new Date(year, month, 0).getDate(); d++) {
-      const dateCode = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      if (dateCode > todayCode) break;
-      if (!isWeeklyOff(new Date(`${dateCode}T00:00:00`), schedule)) workingDays++;
-    }
-    const present = records.filter((r) => r.checkInTime).length;
-    const onTime = records.filter((r) => r.checkInTime && r.lateMinutes === 0).length;
-    const totalWorkedMinutes = records.reduce((sum, r) => sum + (r.workedMinutes || 0), 0);
-    const expectedMinutesPerDay = 8 * 60;
-    const expectedMinutes = workingDays * expectedMinutesPerDay;
-
-    const attendanceScore = (attendancePercent(present, workingDays) / 100) * weights.attendance;
-    const punctualityScore = present > 0 ? (onTime / present) * weights.punctuality : 0;
-    const hoursScore =
-      expectedMinutes > 0
-        ? Math.min(1, totalWorkedMinutes / expectedMinutes) * weights.hoursWorked
-        : 0;
+    const workingDays = workingDaysSoFar(dateCodeOf(new Date()), schedule);
     const doneTasks = tasks.filter((t) => t.status === "done").length;
-    const tasksScore =
-      tasks.length > 0 ? (doneTasks / tasks.length) * weights.tasksCompleted : 0;
-
-    const availableMax =
-      weights.attendance + weights.punctuality + weights.hoursWorked +
-      (tasks.length > 0 ? weights.tasksCompleted : 0);
-    const availableScore = attendanceScore + punctualityScore + hoursScore + tasksScore;
-
+    const kpi = computeAttendanceKpi(records, workingDays, weights, { total: tasks.length, done: doneTasks });
     return {
-      attendanceScore: Math.round(attendanceScore * 10) / 10,
-      punctualityScore: Math.round(punctualityScore * 10) / 10,
-      hoursScore: Math.round(hoursScore * 10) / 10,
-      tasksScore: Math.round(tasksScore * 10) / 10,
-      hasTasks: tasks.length > 0,
+      ...kpi,
       taskCount: tasks.length,
       doneTasks,
-      availableMax,
-      availableScore: Math.round(availableScore * 10) / 10,
+      availableMax: kpi.maxScore,
+      availableScore: kpi.score,
     };
   }, [schedule, records, tasks, weights]);
 

@@ -46,7 +46,12 @@ import { exportCsv } from "../../lib/exportCsv";
 import { exportNodeToPdf } from "../../lib/exportPdf";
 import { useAuth } from "../../lib/AuthContext";
 import { getWorkSchedule } from "../../services/attendanceService";
-import { attendancePercent, dateCodeOf, formatMinutes, isWeeklyOff } from "../../utils/attendanceCalculations";
+import {
+  computeAttendanceKpi,
+  dateCodeOf,
+  formatMinutes,
+  workingDaysSoFar,
+} from "../../utils/attendanceCalculations";
 import StatCard from "../../components/ui/StatCard";
 import DateRangeFilter from "../../components/ui/DateRangeFilter";
 import SimpleBarChart, { type BarPoint } from "../../components/ui/SimpleBarChart";
@@ -398,15 +403,9 @@ export default function Reports() {
   // tasks/manager-review component) rather than approximating those.
   const employeeStats = useMemo(() => {
     if (!canAttendance || !workSchedule || staffList.length === 0) return [];
-    const monthPrefix = dateCodeOf(new Date()).slice(0, 7);
     const todayCode = dateCodeOf(new Date());
-    let workingDays = 0;
-    const [year, month] = monthPrefix.split("-").map(Number);
-    for (let d = 1; d <= new Date(year, month, 0).getDate(); d++) {
-      const dateCode = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      if (dateCode > todayCode) break;
-      if (!isWeeklyOff(new Date(`${dateCode}T00:00:00`), workSchedule)) workingDays++;
-    }
+    const monthPrefix = todayCode.slice(0, 7);
+    const workingDays = workingDaysSoFar(todayCode, workSchedule);
     const byEmployee = new Map<string, AttendanceRecord[]>();
     for (const r of attendanceRecords) {
       if (!r.dateCode.startsWith(monthPrefix)) continue;
@@ -415,34 +414,13 @@ export default function Reports() {
       byEmployee.set(r.employeeId, arr);
     }
     const revenueByManager = new Map(managerRows.map((m) => [m.name, m.revenue]));
-    const expectedMinutesPerDay = 8 * 60;
-    const expectedMinutes = workingDays * expectedMinutesPerDay;
-    const maxScore = kpiWeights.attendance + kpiWeights.punctuality + kpiWeights.hoursWorked;
     return staffList
       .map((s) => {
         const records = byEmployee.get(s.email) || [];
-        const present = records.filter((r) => r.checkInTime).length;
-        const lateCount = records.filter((r) => (r.lateMinutes || 0) > 0).length;
-        const onTime = present - lateCount;
-        const totalLateMinutes = records.reduce((sum, r) => sum + (r.lateMinutes || 0), 0);
-        const totalWorkedMinutes = records.reduce((sum, r) => sum + (r.workedMinutes || 0), 0);
-        const attendancePct = attendancePercent(present, workingDays);
-        const attendanceScore = (attendancePct / 100) * kpiWeights.attendance;
-        const punctualityScore = present > 0 ? (onTime / present) * kpiWeights.punctuality : 0;
-        const hoursScore =
-          expectedMinutes > 0 ? Math.min(1, totalWorkedMinutes / expectedMinutes) * kpiWeights.hoursWorked : 0;
-        const score = Math.round((attendanceScore + punctualityScore + hoursScore) * 10) / 10;
         return {
           staff: s,
-          workingDays,
-          present,
-          absent: Math.max(0, workingDays - present),
-          lateCount,
-          totalLateMinutes,
-          totalWorkedMinutes,
-          attendancePct,
-          score,
-          maxScore,
+          ...computeAttendanceKpi(records, workingDays, kpiWeights),
+          totalLateMinutes: records.reduce((sum, r) => sum + (r.lateMinutes || 0), 0),
           revenue: revenueByManager.get(s.full_name) ?? null,
         };
       })
