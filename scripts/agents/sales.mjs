@@ -26,7 +26,15 @@ if (!getDb()) {
   process.exit(0);
 }
 
-const [leads, tasks] = await Promise.all([readAll("leads"), readAll("lead_tasks")]);
+const [leads, tasks, allCalls] = await Promise.all([readAll("leads"), readAll("lead_tasks"), readAll("calls")]);
+// Phones are stored in whatever shape they were typed ("+998 97 625 13 13"
+// vs "+998976251313"); the last 9 digits identify a Uzbek number.
+const phoneKey = (p) => String(p || "").replace(/\D/g, "").slice(-9);
+// A lead created from a phone call looks untouched in the pipeline
+// (status "new", no first_contact_at) even when that call was answered —
+// an answered or outgoing call to its number counts as contact.
+const talkedTo = new Set(allCalls.filter((c) => c.answered || c.direction === "out").map((c) => phoneKey(c.phone)).filter(Boolean));
+const leadName = (l) => (l.full_name && !l.full_name.startsWith("Noma'lum") ? esc(l.full_name) : esc(l.phone || l.full_name));
 
 await r.section("📥 Kechagi lidlar", async () => {
   const fresh = leads.filter((l) => inYesterday(l.created_at));
@@ -45,16 +53,22 @@ await r.section("⏰ Javobsiz lidlar", async () => {
   // Still "new" and never contacted, older than 24h — "har bir lid
   // javobsiz qolmasin".
   const stale = leads
-    .filter((l) => l.status === "new" && !l.first_contact_at && hoursSince(l.created_at) >= 24)
+    .filter((l) => l.status === "new" && !l.first_contact_at && hoursSince(l.created_at) >= 24 && !talkedTo.has(phoneKey(l.phone)))
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const stuckInNew = leads.filter(
+    (l) => l.status === "new" && !l.first_contact_at && hoursSince(l.created_at) >= 24 && talkedTo.has(phoneKey(l.phone)),
+  );
   const unassigned = leads.filter((l) => OPEN_STAGES.has(l.status) && !l.assigned_to_email);
   const lines = [];
   if (stale.length === 0) lines.push(r.ok("24 soatdan ortiq javobsiz qolgan lid yo'q"));
   else {
     lines.push(r.fail(`${stale.length} ta lid bilan 24 soatdan beri hech kim bog'lanmagan:`));
     lines.push(
-      ...bullets(stale, 6, (l) => `${esc(l.lead_number || "")} ${esc(l.full_name)} — ${who(l.assigned_to_name)}, ${Math.floor(hoursSince(l.created_at) / 24)} kun`),
+      ...bullets(stale, 6, (l) => `${esc(l.lead_number || "")} ${leadName(l)} — ${who(l.assigned_to_name)}, ${Math.floor(hoursSince(l.created_at) / 24)} kun`),
     );
+  }
+  if (stuckInNew.length > 0) {
+    lines.push(r.warn(`${stuckInNew.length} ta lid bilan telefonda gaplashilgan, lekin hali "Yangi lid" ustunida turibdi`));
   }
   if (unassigned.length > 0) lines.push(r.warn(`${unassigned.length} ta faol lid hech kimga biriktirilmagan`));
   return lines;
@@ -93,8 +107,7 @@ await r.section("📋 Vazifalar", async () => {
 await r.section("📞 Javobsiz qo'ng'iroqlar", async () => {
   // Incoming calls nobody picked up yesterday, and whether anyone has
   // called or been called by that number since.
-  const snap = await getDb().collection("calls").where("created_at", ">=", yStart).get();
-  const calls = snap.docs.map((d) => d.data());
+  const calls = allCalls.filter((c) => c.created_at >= yStart);
   const missed = calls.filter((c) => c.direction === "in" && !c.answered && inYesterday(c.created_at) && c.phone);
   const missedPhones = new Map();
   for (const c of missed) if (!missedPhones.has(c.phone) || c.created_at > missedPhones.get(c.phone).created_at) missedPhones.set(c.phone, c);

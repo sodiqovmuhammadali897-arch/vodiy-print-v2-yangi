@@ -112,7 +112,10 @@ await r.section("🚚 Topshirilgan, lekin to'lanmagan", async () => {
   const total = risky.reduce((s, x) => s + orderDebt(x.o), 0);
   return [
     r.warn(`${risky.length} ta buyurtma, ${money(total)} — 7+ kundan beri to'lov yo'q:`),
-    ...bullets(risky, 8, ({ o, since }) => `${orderLabel(o)} ${esc(customerName.get(o.customer_id) || "")} — ${money(orderDebt(o))}, ${since} kun (${esc(o.manager_name || "—")})`),
+    ...bullets(risky, 8, ({ o, since }) =>
+      [orderLabel(o), esc(customerName.get(o.customer_id) || o.title || "")].filter(Boolean).join(" ") +
+        ` — ${money(orderDebt(o))}, ${since} kun (${esc(o.manager_name || "—")})`,
+    ),
   ];
 });
 

@@ -75,11 +75,14 @@ await r.section("🐢 Bir joyda qotib qolganlar", async () => {
   for (const h of history) {
     if (!lastChange.has(h.order_id) || h.changed_at > lastChange.get(h.order_id)) lastChange.set(h.order_id, h.changed_at);
   }
+  // Overdue orders were already listed above; don't repeat them here.
+  const isOverdue = (o) => o.deadline && dayCodeOf(o.deadline) < todayCode;
   const stuck = active
+    .filter((o) => !isOverdue(o))
     .map((o) => ({ o, days: daysBetween(dayCodeOf(lastChange.get(o.id) || o.created_at), todayCode) }))
     .filter(({ o, days }) => days >= (STUCK_AFTER_DAYS[o.status] ?? DEFAULT_STUCK_DAYS))
     .sort((a, b) => b.days - a.days);
-  if (stuck.length === 0) return [r.ok("Uzoq bir bosqichda turib qolgan buyurtma yo'q")];
+  if (stuck.length === 0) return [r.ok("Muddati hali o'tmagan, lekin bir bosqichda qotib qolgan buyurtma yo'q")];
   return [
     r.warn(`${stuck.length} ta buyurtma bosqichi uzoq vaqtdan beri o'zgarmagan:`),
     ...bullets(stuck, 8, ({ o, days }) => `${orderLabel(o)} ${esc(o.title || "")} — ${statusLabel(o.status)}, ${days} kun (${who(o)})`),
