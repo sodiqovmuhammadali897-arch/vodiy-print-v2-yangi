@@ -6,7 +6,6 @@
 // reply. Only chats listed in ASSISTANT_CHAT_IDS are ever answered.
 const crypto = require("crypto");
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const MODEL = process.env.ASSISTANT_MODEL || "claude-sonnet-5";
 const PUBLIC_BASE = process.env.PUBLIC_BASE_URL || process.env.MOIZVONKI_CALLBACK_BASE || "https://printvodiy.uz";
@@ -35,6 +34,8 @@ const {
   clip,
 } = require("./shared");
 const { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback, decideAction } = require("./actions");
+const { telegram, BOT_TOKEN } = require("./telegram");
+const { staffFromRequest } = require("./auth");
 
 const TOOLS = [
   {
@@ -338,17 +339,6 @@ const answer = async (db, question, context, ctx) => {
   return "Savol juda murakkab bo'lib ketdi — iltimos, aniqroq so'rang.";
 };
 
-const telegram = async (method, body) => {
-  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!data.ok) console.error(`Telegram ${method} failed:`, JSON.stringify(data));
-  return data;
-};
-
 // Which colleague the Hisobchi "walks to" on the AI Ofis page, by the
 // first data tool it used to answer.
 const TOOL_VISIT = { receivables: "fin", cash_flow: "fin", supplier_balances: "fin", orders_search: "prod", leads_summary: "sales", warehouse_stock: "wh" };
@@ -376,7 +366,7 @@ const handleQuestion = async (db, { chatId, replyTo, text, context = "", source 
   return { reply, pending: ctx.pending };
 };
 
-const register = (app, db) => {
+const register = (app, db, hr = null) => {
   const configured = Boolean(BOT_TOKEN && ANTHROPIC_API_KEY && ALLOWED_CHATS.size > 0);
   if (!configured) {
     console.log("Hisobchi bot: TELEGRAM_BOT_TOKEN / ANTHROPIC_API_KEY / ASSISTANT_CHAT_IDS not all set — not enabled.");
@@ -399,6 +389,10 @@ const register = (app, db) => {
 
     const msg = req.body?.channel_post || req.body?.message;
     const text = msg?.text?.trim();
+    if (msg?.chat?.type === "private") {
+      if (hr && text) await hr.handlePrivateMessage(msg).catch((err) => console.error("HR private message failed", err));
+      return;
+    }
     if (!msg || !text || msg.from?.is_bot || !ALLOWED_CHATS.has(String(msg.chat?.id))) return;
 
     try {
@@ -417,19 +411,9 @@ const register = (app, db) => {
   // Same bot, asked from printvodiy.uz. The caller must be a signed-in
   // staff admin (Firebase ID token); the question and answer are also
   // posted to the Telegram channel so the team sees everything in one place.
-  const { getAuth } = require("firebase-admin/auth");
   const webAdmin = async (req) => {
-    const token = (req.get("Authorization") || "").replace(/^Bearer /, "");
-    if (!token) return null;
-    try {
-      const decoded = await getAuth().verifyIdToken(token);
-      const email = String(decoded.email || "").toLowerCase();
-      const staff = (await db.collection("staff").doc(email).get()).data();
-      if (!staff || staff.role !== "admin") return null;
-      return { email, name: staff.full_name || email };
-    } catch {
-      return null;
-    }
+    const who = await staffFromRequest(db, req);
+    return who && who.role === "admin" ? who : null;
   };
   const recent = new Map(); // email -> timestamps, a simple per-user rate limit
   const tooFast = (email) => {

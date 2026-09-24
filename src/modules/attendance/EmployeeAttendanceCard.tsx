@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock, AlarmClock, CalendarX, Percent } from "lucide-react";
+import { Clock, AlarmClock, CalendarX, Percent, Send, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
+import { getOne } from "../../lib/firestoreDb";
+import type { Staff } from "../../lib/permissions";
 import type { AttendanceRecord, WorkSchedule } from "../../lib/types";
 import {
   getTodayAttendance,
@@ -132,6 +134,73 @@ export default function EmployeeAttendanceCard() {
             <StatBox icon={<Percent className="h-4 w-4" />} label="Davomat foizi" value={`${monthStats.percent}%`} tone={monthStats.percent >= 90 ? "emerald" : monthStats.percent >= 75 ? "amber" : "rose"} />
           </div>
         </div>
+      )}
+
+      <TelegramLinkCard />
+    </div>
+  );
+}
+
+// Lets an employee receive attendance reminders / late notices in Telegram
+// (free) instead of SMS: the server issues a one-time t.me deep link, the
+// bot stores their chat id when they press Start.
+function TelegramLinkCard() {
+  const { user, staff } = useAuth();
+  const [linked, setLinked] = useState(Boolean(staff?.telegram_chat_id));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => setLinked(Boolean(staff?.telegram_chat_id)), [staff]);
+
+  const link = async () => {
+    setBusy(true);
+    setError(null);
+    // Open the tab synchronously so popup blockers allow it, then point it at the link.
+    const tab = window.open("", "_blank");
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch("/webhooks/hr/link", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || "Havola olinmadi");
+      if (tab) tab.location.href = data.url;
+      else window.location.href = data.url;
+      // Wait for the bot to confirm (the employee presses Start in Telegram).
+      const email = (user?.email || "").toLowerCase();
+      for (let i = 0; i < 40; i += 1) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const fresh = await getOne<Staff>("staff", email);
+        if (fresh?.telegram_chat_id) {
+          setLinked(true);
+          break;
+        }
+      }
+    } catch (e) {
+      tab?.close();
+      setError(e instanceof Error ? e.message : "Xatolik");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card flex flex-wrap items-center justify-between gap-3 p-5">
+      <div>
+        <h2 className="font-display text-base font-bold text-ink-900">Davomat xabarlari</h2>
+        <p className="text-sm text-ink-500">
+          {linked
+            ? "Kech qolish va eslatmalar Telegram'ingizga keladi."
+            : "Telegram'ni ulasangiz, eslatmalar SMS o'rniga Telegram'ga keladi."}
+        </p>
+        {error && <p className="mt-1 text-sm text-rose-600">{error}</p>}
+      </div>
+      {linked ? (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
+          <CheckCircle2 className="h-4 w-4" /> Telegram ulangan
+        </span>
+      ) : (
+        <button className="btn-primary" onClick={link} disabled={busy}>
+          <Send className="h-4 w-4" /> {busy ? "Telegram'da Start bosing…" : "Telegram'ga ulash"}
+        </button>
       )}
     </div>
   );

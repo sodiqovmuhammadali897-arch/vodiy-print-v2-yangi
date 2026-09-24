@@ -25,6 +25,8 @@ const KIND_STYLE: Record<AgentEvent["kind"], string> = {
   cancelled: "border-l-ink-300",
 };
 
+const AGENT_COUNT = Object.keys(AGENT_NAMES).length;
+
 const timeOf = (iso: string) =>
   new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" });
 const dayOf = (iso: string) => new Date(Date.parse(iso) + 5 * 3600 * 1000).toISOString().slice(0, 10);
@@ -203,8 +205,8 @@ export default function AiOffice() {
       </div>
 
       <div className="flex flex-wrap gap-2 text-sm font-semibold">
-        <span className="rounded-full border border-ink-100 bg-surface px-3 py-1 text-ink-600">6 agent</span>
-        <span className="rounded-full bg-sky-100 px-3 py-1 text-sky-700">{6 - walking} stolida ishlayapti</span>
+        <span className="rounded-full border border-ink-100 bg-surface px-3 py-1 text-ink-600">{AGENT_COUNT} agent</span>
+        <span className="rounded-full bg-sky-100 px-3 py-1 text-sky-700">{AGENT_COUNT - walking} stolida ishlayapti</span>
         <span className="rounded-full border border-ink-100 bg-surface px-3 py-1 text-ink-600">{walking} yo'lda</span>
         <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-700">{alertCount} ta e'tibor talab qiladi</span>
         <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">Bugun {todayCount} ta voqea</span>
@@ -212,7 +214,7 @@ export default function AiOffice() {
 
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-3">
-          <div ref={stageRef} className="ao-stage" role="img" aria-label="3D ofis: 6 ta AI agent o'z stollarida ishlayapti">
+          <div ref={stageRef} className="ao-stage" role="img" aria-label="3D ofis: AI agentlar o'z stollarida ishlayapti">
             <div ref={overlayRef} className="ao-overlay" />
             <div className="ao-hud">
               <button type="button" className={view === "3d" ? "on" : ""} onClick={() => changeView("3d")}>3D</button>

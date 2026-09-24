@@ -106,3 +106,27 @@ The page can also talk to the bot: `POST /webhooks/assistant {text}` and
 caller's Firebase ID token (`Authorization: Bearer …`) and allowed only
 for staff with role `admin`. Website questions are posted to the Telegram
 channel too, and a confirmation made on either side updates the other.
+
+## HR agent (`hr.js`)
+
+Runs inside this service (same bot token):
+- at work start + 5 min (from `work_schedules/default`, 09:05 by default)
+  every staff member with `attendance_notify !== false` and a phone or a
+  linked Telegram who hasn't checked in gets a reminder (skips the weekly
+  day off, `holidays` and approved `leave_requests`; claimed once per day
+  in `hr_runs/{date}` so restarts never double-send);
+- a fresh late check-in (`attendance.lateMinutes > 0`) gets one notice,
+  claimed via `attendance.lateNotifiedAt`.
+
+Delivery: the employee's Telegram when linked (free), otherwise SMS via
+Eskiz.uz. Every message is logged in `hr_notifications`. Employees link
+Telegram from Davomat → "Telegram'ga ulash" (`POST /webhooks/hr/link`
+returns a one-time `t.me/<bot>?start=<code>` link; the bot stores their
+chat id on their staff record).
+
+Env: `ESKIZ_EMAIL`, `ESKIZ_PASSWORD`, optional `ESKIZ_FROM` (default
+`4546`). Without them the agent sends Telegram only. Eskiz delivers only
+texts matching templates approved in its cabinet — submit these two:
+
+    Hurmatli %w, ish kuni soat %w da boshlandi. Siz hali ishga kelganingizni belgilamadingiz. Vodiy Print
+    Hurmatli %w, bugun ishga %w kech qoldingiz (kelgan vaqtingiz %w). Iltimos, vaqtida keling. Vodiy Print

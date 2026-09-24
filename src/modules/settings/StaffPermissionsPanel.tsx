@@ -98,6 +98,7 @@ export default function StaffPermissionsPanel() {
                   <th className="table-th">Ism</th>
                   <th className="table-th">Rol</th>
                   <th className="table-th">Shaxsiy hisobot</th>
+                  <th className="table-th">Davomat xabari</th>
                   <th className="table-th text-right">Amallar</th>
                 </tr>
               </thead>
@@ -126,6 +127,17 @@ export default function StaffPermissionsPanel() {
                         </span>
                       ) : (
                         <span className="text-ink-400">To'liq hisobot</span>
+                      )}
+                    </td>
+                    <td className="table-td whitespace-nowrap text-xs">
+                      {s.attendance_notify === false ? (
+                        <span className="text-ink-400">O'chirilgan</span>
+                      ) : s.telegram_chat_id ? (
+                        <span className="chip bg-sky-100 text-sky-700">Telegram</span>
+                      ) : s.phone ? (
+                        <span className="chip bg-amber-100 text-amber-800">SMS · {s.phone}</span>
+                      ) : (
+                        <span className="text-rose-600">Telefon yo'q</span>
                       )}
                     </td>
                     <td className="table-td">
@@ -177,6 +189,8 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
   const [role, setRole] = useState<StaffRole>("staff");
   const [permissions, setPermissions] = useState(emptyPermissions());
   const [reportManagerId, setReportManagerId] = useState("");
+  const [phone, setPhone] = useState("");
+  const [notify, setNotify] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -190,12 +204,16 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       // they simply default to "no access" until explicitly granted.
       setPermissions({ ...emptyPermissions(), ...(staff.permissions || {}) });
       setReportManagerId(staff.report_manager_id || "");
+      setPhone(staff.phone || "");
+      setNotify(staff.attendance_notify !== false);
     } else {
       setEmail("");
       setFullName("");
       setRole("staff");
       setPermissions(emptyPermissions());
       setReportManagerId("");
+      setPhone("");
+      setNotify(true);
     }
     setError(null);
   }, [staff, open]);
@@ -228,6 +246,8 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
         role,
         permissions: role === "admin" ? fullPermissions() : permissions,
         report_manager_id: reportManagerId || null,
+        phone: phone.trim(),
+        attendance_notify: notify,
       });
       setSaving(false);
       onSaved();
@@ -282,6 +302,27 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
           />
+        </div>
+        <div>
+          <label className="label">Telefon (davomat SMS uchun)</label>
+          <input
+            id="staff-phone"
+            className="input"
+            inputMode="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+998 90 123 45 67"
+          />
+        </div>
+        <div>
+          <label className="label">Davomat xabarlari</label>
+          <label className="flex h-[42px] items-center gap-2 text-sm text-ink-700">
+            <input id="staff-notify" type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+            Kech qolsa yoki kelmasa xabar yuborilsin
+          </label>
+          <p className="mt-1 text-xs text-ink-500">
+            {staff?.telegram_chat_id ? "Telegram ulangan: xabar Telegram'ga boradi (bepul)." : "Telegram ulanmagan: xabar SMS bo'lib boradi."}
+          </p>
         </div>
         <div>
           <label className="label">Rol</label>

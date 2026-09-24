@@ -5,7 +5,7 @@
 // agent carrying a box to the shelf. Plain three.js, no React inside.
 import * as THREE from "three";
 
-export type AgentId = "it" | "sales" | "fin" | "prod" | "wh" | "bot";
+export type AgentId = "it" | "sales" | "fin" | "prod" | "wh" | "bot" | "hr";
 
 export type AgentEvent = {
   id: string;
@@ -26,11 +26,12 @@ export const AGENT_NAMES: Record<AgentId, string> = {
   prod: "Ishlab chiqarish",
   wh: "Omborchi",
   bot: "Hisobchi",
+  hr: "HR (Kadrlar)",
 };
 
 type AgentDef = {
   id: AgentId; x: number; z: number; shirt: string; skin: string; hair: string;
-  hat: "headset" | "tie" | "glasses" | "cap" | "robot" | "hardhat"; zone: string; zoneColor: string;
+  hat: "headset" | "tie" | "glasses" | "cap" | "robot" | "hardhat" | "bun"; zone: string; zoneColor: string;
 };
 
 type Agent = AgentDef & {
@@ -51,6 +52,7 @@ const FONT = '"Manrope", "Inter", system-ui, sans-serif';
 const AGENT_DEFS: AgentDef[] = [
   { id: "it", x: -7.5, z: BACK, shirt: "#2a9d8f", skin: "#f1c7a0", hair: "#2b1d16", hat: "headset", zone: "SERVER XONASI", zoneColor: "#1d3b4f" },
   { id: "sales", x: -1.2, z: BACK, shirt: "#3b6fb6", skin: "#e3ae84", hair: "#3b2a20", hat: "tie", zone: "SOTUV BO'LIMI", zoneColor: "#2b5c86" },
+  { id: "hr", x: 3.4, z: BACK, shirt: "#d9577a", skin: "#f3c9a8", hair: "#3a2418", hat: "bun", zone: "KADRLAR BO'LIMI", zoneColor: "#8a3a5c" },
   { id: "fin", x: 7.5, z: BACK, shirt: "#8e5bb5", skin: "#f5d0b0", hair: "#6b3b24", hat: "glasses", zone: "BUXGALTERIYA", zoneColor: "#4a3f7a" },
   { id: "prod", x: -6.5, z: FRONT, shirt: "#e07a3f", skin: "#d9a178", hair: "#1e1511", hat: "cap", zone: "ISHLAB CHIQARISH", zoneColor: "#8a4b2a" },
   { id: "bot", x: 0.8, z: FRONT, shirt: "#9fb3c1", skin: "#c7d5de", hair: "#c7d5de", hat: "robot", zone: "QABULXONA", zoneColor: "#1d6a7d" },
@@ -540,6 +542,10 @@ export class OfficeScene {
         this.mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.03, 20), this.mat("#d9a916"), head, 0, 0.05, 0.02);
       }
       if (a.hat === "tie") this.box(0.07, 0.34, 0.02, "#c23b4a", body, 0, 1.06, 0.33);
+      if (a.hat === "bun") {
+        this.mesh(new THREE.SphereGeometry(0.12, 12, 10), this.mat(a.hair), head, 0, 0.2, -0.2);
+        this.box(0.16, 0.2, 0.02, "#ffffff", body, 0.12, 1.02, 0.33); // staff badge
+      }
     }
     this.scene.add(root);
     return { root, body, legs, arms, head, robot, antenna };
@@ -547,7 +553,7 @@ export class OfficeScene {
 
   private buildAgents() {
     for (const def of AGENT_DEFS) {
-      const r = this.box(4.6, 0.02, 3.6, def.id === "bot" ? "#bfe0e6" : "#e8dcc6", this.scene, def.x, 0.012, def.z + 0.55);
+      const r = this.box(def.id === "hr" ? 3.4 : 4.6, 0.02, 3.6, def.id === "bot" ? "#bfe0e6" : "#e8dcc6", this.scene, def.x, 0.012, def.z + 0.55);
       r.castShadow = false;
       this.floorLabel(def.zone, def.x, def.z + (def.z === BACK ? 2.45 : 2.55), def.zoneColor);
       this.makeDesk(def.id, def.x, def.z, def.id === "bot" ? "#e9eef1" : "#c98b4f");

@@ -51,8 +51,13 @@ const app = express();
 // still parsing JSON for convenience.
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
-// Telegram "Hisobchi" Q&A bot — see assistant.js.
-const assistant = require("./assistant").register(app, db);
+// HR agent (attendance reminders / late notices) — see hr.js — and the
+// Telegram "Hisobchi" Q&A bot — see assistant.js. Both use the same bot.
+const hr = process.env.TELEGRAM_BOT_TOKEN
+  ? require("./hr").create(db, { channelId: (process.env.ASSISTANT_CHAT_IDS || "").split(",")[0].trim() })
+  : null;
+if (hr) hr.register(app);
+const assistant = require("./assistant").register(app, db, hr);
 
 const slugify = (s) =>
   s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -386,4 +391,5 @@ app.listen(PORT, () => {
   console.log(`Meta leads webhook listening on :${PORT}`);
   void subscribeMoizvonkiWebhook();
   void assistant.start();
+  if (hr) void hr.start();
 });

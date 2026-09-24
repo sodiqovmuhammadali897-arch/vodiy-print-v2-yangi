@@ -62,7 +62,7 @@ const createReader = (db) => {
 // an agent say something, walk to another agent (`visit`) or post to the
 // channel. Failures are logged, never thrown — the bot's real work must
 // not depend on the animation feed.
-const AGENT_IDS = ["it", "sales", "fin", "prod", "wh", "bot"];
+const AGENT_IDS = ["it", "sales", "fin", "prod", "wh", "bot", "hr"];
 const emitEvent = async (db, ev) => {
   try {
     await db.collection("agent_events").add({ source: "telegram", ...ev, created_at: new Date().toISOString() });

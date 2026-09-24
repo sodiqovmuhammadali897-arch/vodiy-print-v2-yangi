@@ -39,6 +39,12 @@ export type Staff = {
   // which broke in practice (accounts are often created with role
   // "admin" for convenience, and names can be entered inconsistently).
   report_manager_id?: string | null;
+  // HR agent (meta-webhook/hr.js): where attendance reminders and late
+  // notices go. Telegram when linked (free), otherwise SMS to `phone`.
+  phone?: string;
+  attendance_notify?: boolean;
+  telegram_chat_id?: number | null;
+  telegram_linked_at?: string | null;
 };
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
