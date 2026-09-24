@@ -1,0 +1,67 @@
+name: Kunlik IT hisobot
+
+# "IT hodim": every morning checks the site, deploys/tests, attendance
+# functions, Mois Zvonki calls, the VPS and yesterday's activity, then posts
+# a summary to a dedicated Telegram channel (TELEGRAM_IT_CHAT_ID). Can also
+# be run by hand from the Actions tab.
+on:
+  schedule:
+    - cron: "0 3 * * *" # 08:00 Asia/Tashkent
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix functions
+
+      - name: Run tests
+        id: tests
+        continue-on-error: true
+        run: npm test > /tmp/tests.txt 2>&1
+
+      - name: Server checks
+        id: server
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          capture_stdout: true
+          script: |
+            J=$(echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S journalctl -u meta-webhook --since "24 hours ago" --no-pager 2>/dev/null)
+            echo "SVC_WEBHOOK=$(systemctl is-active meta-webhook)"
+            echo "SVC_NGINX=$(systemctl is-active nginx)"
+            echo "DISK_USED_PCT=$(df --output=pcent / | tail -1 | tr -dc '0-9')"
+            echo "DISK_FREE=$(df -h --output=avail / | tail -1 | tr -d ' ')"
+            echo "MEM_AVAILABLE_MB=$(free -m | awk '/Mem:/{print $7}')"
+            echo "UPTIME=$(uptime -p)"
+            echo "CALLS_LOGGED=$(grep -c 'Call logged' <<< "$J" || true)"
+            echo "META_LEADS=$(grep -c 'Lead ingested' <<< "$J" || true)"
+            echo "WEBHOOK_ERRORS=$(grep -ciE 'failed|error' <<< "$J" || true)"
+
+      - name: Build and send report
+        env:
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          SERVER_OUT: ${{ steps.server.outputs.stdout }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_IT_CHAT_ID: ${{ secrets.TELEGRAM_IT_CHAT_ID }}
+        run: node scripts/daily-report.mjs
