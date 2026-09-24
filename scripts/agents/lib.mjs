@@ -32,19 +32,28 @@ export const dayCodeOf = (value) => {
 export const daysBetween = (fromCode, toCode) => Math.round((Date.parse(toCode) - Date.parse(fromCode)) / DAY_MS);
 export const hoursSince = (iso) => Math.floor((Date.now() - Date.parse(iso)) / 3600000);
 
+// Telegram HTML -> plain text for the AI Ofis feed.
+const plain = (s) => String(s).replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
 export class Report {
-  constructor(title) {
+  // agentId: this report's character on the AI Ofis page (it, sales, fin,
+  // prod, wh).
+  constructor(title, agentId) {
     this.title = title;
+    this.agentId = agentId;
     this.problems = 0;
+    this.problemTexts = [];
     this.sections = [];
   }
   ok = (text) => `✅ ${text}`;
   warn = (text) => {
     this.problems += 1;
+    this.problemTexts.push(plain(text));
     return `⚠️ ${text}`;
   };
   fail = (text) => {
     this.problems += 1;
+    this.problemTexts.push(plain(text));
     return `❌ ${text}`;
   };
   // One failing check becomes a line in the report instead of killing it.
@@ -83,6 +92,29 @@ export class Report {
       process.exit(1);
     }
     console.log("Report sent to Telegram.");
+    await this.emit();
+  };
+  // Tells the AI Ofis page this agent posted its report (it animates the
+  // agent sending it to the channel and raises a red "!" on problems).
+  emit = async () => {
+    const d = getDb();
+    if (!d || !this.agentId) return;
+    const first = this.problemTexts[0] || "";
+    const text = this.problems === 0 ? "Kunlik hisobot: hammasi joyida" : `${this.problems} ta masala. ${first}`;
+    const now = new Date().toISOString();
+    try {
+      await d.collection("agent_events").add({
+        agent: this.agentId,
+        kind: this.problems ? "alert" : "report",
+        text: text.slice(0, 220),
+        bubble: (this.problems ? first : "Hisobot yuborildi ✅").slice(0, 90),
+        source: "schedule",
+        created_at: now,
+      });
+      await d.collection("agent_status").doc(this.agentId).set({ alert: this.problems > 0, summary: text.slice(0, 220), updated_at: now });
+    } catch (err) {
+      console.error("agent_events write failed:", err.message);
+    }
   };
 }
 

@@ -2,7 +2,7 @@
 // stock movements.
 import { Report, bullets, esc, getDb, readAll, readCreatedYesterday } from "./lib.mjs";
 
-const r = new Report("📦 Omborchi — kunlik hisobot");
+const r = new Report("📦 Omborchi — kunlik hisobot", "wh");
 
 if (!getDb()) {
   r.sections.push(r.warn("FIREBASE_SERVICE_ACCOUNT sozlanmagan"));

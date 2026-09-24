@@ -15,7 +15,7 @@ import {
   yesterdayCode,
 } from "./lib.mjs";
 
-const r = new Report("💰 Moliyachi — kunlik hisobot");
+const r = new Report("💰 Moliyachi — kunlik hisobot", "fin");
 
 if (!getDb()) {
   r.sections.push(r.warn("FIREBASE_SERVICE_ACCOUNT sozlanmagan"));

@@ -93,3 +93,16 @@ rules as the web app (payment recalculates the order's debt, an order
 with debt can't be closed, stock can't go negative). Nothing can be
 deleted. `bot_actions` is also the audit log (who confirmed, when,
 result).
+
+### AI Ofis feed and website commands
+
+Every question, answer, proposal and confirmed action is also written to
+`agent_events` (the daily report agents add theirs, and keep
+`agent_status/{agent}` with their alert flag). The AI Ofis page
+(`src/modules/aioffice`) listens to both and animates them in a 3D office.
+
+The page can also talk to the bot: `POST /webhooks/assistant {text}` and
+`POST /webhooks/assistant/confirm {id, ok}`, authenticated with the
+caller's Firebase ID token (`Authorization: Bearer …`) and allowed only
+for staff with role `admin`. Website questions are posted to the Telegram
+channel too, and a confirmation made on either side updates the other.

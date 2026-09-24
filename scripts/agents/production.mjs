@@ -17,7 +17,7 @@ import {
   yStart,
 } from "./lib.mjs";
 
-const r = new Report("🏭 Ishlab chiqarish nazoratchisi — kunlik hisobot");
+const r = new Report("🏭 Ishlab chiqarish nazoratchisi — kunlik hisobot", "prod");
 
 if (!getDb()) {
   r.sections.push(r.warn("FIREBASE_SERVICE_ACCOUNT sozlanmagan"));

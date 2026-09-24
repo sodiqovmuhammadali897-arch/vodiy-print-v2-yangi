@@ -58,7 +58,27 @@ const createReader = (db) => {
   };
 };
 
+// The AI Ofis page (src/modules/aioffice) animates these: each event makes
+// an agent say something, walk to another agent (`visit`) or post to the
+// channel. Failures are logged, never thrown — the bot's real work must
+// not depend on the animation feed.
+const AGENT_IDS = ["it", "sales", "fin", "prod", "wh", "bot"];
+const emitEvent = async (db, ev) => {
+  try {
+    await db.collection("agent_events").add({ source: "telegram", ...ev, created_at: new Date().toISOString() });
+  } catch (err) {
+    console.error("agent_events write failed", err.message);
+  }
+};
+const clip = (s, n) => {
+  const t = String(s || "").replace(/\s+/g, " ").trim();
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+};
+
 module.exports = {
+  AGENT_IDS,
+  emitEvent,
+  clip,
   VENDOR_EXPENSE_CATEGORY,
   EXPENSE_CATEGORIES,
   PAYMENT_TYPES,

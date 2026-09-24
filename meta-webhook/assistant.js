@@ -31,8 +31,10 @@ const {
   norm,
   matches,
   createReader,
+  emitEvent,
+  clip,
 } = require("./shared");
-const { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback } = require("./actions");
+const { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback, decideAction } = require("./actions");
 
 const TOOLS = [
   {
@@ -322,6 +324,7 @@ const answer = async (db, question, context, ctx) => {
     messages.push({ role: "assistant", content: reply.content });
     const results = [];
     for (const block of reply.content.filter((b) => b.type === "tool_use")) {
+      ctx.toolsUsed.push(block.name);
       let out;
       try {
         out = await tools[block.name](block.input || {});
@@ -346,12 +349,40 @@ const telegram = async (method, body) => {
   return data;
 };
 
+// Which colleague the Hisobchi "walks to" on the AI Ofis page, by the
+// first data tool it used to answer.
+const TOOL_VISIT = { receivables: "fin", cash_flow: "fin", supplier_balances: "fin", orders_search: "prod", leads_summary: "sales", warehouse_stock: "wh" };
+
+// One path for a question from the Telegram channel or from the website:
+// answer it in the channel (as a reply), post confirmation buttons for any
+// proposed change, and emit the AI Ofis events.
+const handleQuestion = async (db, { chatId, replyTo, text, context = "", source = "telegram" }) => {
+  await emitEvent(db, { agent: "bot", kind: "question", text: clip(text, 160), bubble: clip(text, 90), source });
+  await telegram("sendChatAction", { chat_id: chatId, action: "typing" });
+  const ctx = { chatId, text, pending: [], toolsUsed: [] };
+  const reply = (await answer(db, text, context, ctx)) || "Javob topilmadi.";
+  await telegram("sendMessage", {
+    chat_id: chatId,
+    text: reply.slice(0, 4000),
+    reply_parameters: { message_id: replyTo, allow_sending_without_reply: true },
+    disable_web_page_preview: true,
+  });
+  await sendConfirmations(db, telegram, chatId, replyTo, ctx.pending);
+  const visit = ctx.toolsUsed.map((t) => TOOL_VISIT[t]).find(Boolean) || null;
+  await emitEvent(db, ctx.pending.length
+    ? { agent: "bot", kind: "proposed", text: clip(ctx.pending[0].summary.replace(/\n/g, " · "), 180), bubble: "Tasdiqlaysizmi? ⏳", source }
+    : { agent: "bot", kind: "answer", text: clip(reply, 220), bubble: clip(reply, 90), visit, source });
+  console.log(`Hisobchi answered (${source}) in ${chatId}: ${text.slice(0, 80)}${ctx.pending.length ? ` (+${ctx.pending.length} to confirm)` : ""}`);
+  return { reply, pending: ctx.pending };
+};
+
 const register = (app, db) => {
   const configured = Boolean(BOT_TOKEN && ANTHROPIC_API_KEY && ALLOWED_CHATS.size > 0);
   if (!configured) {
     console.log("Hisobchi bot: TELEGRAM_BOT_TOKEN / ANTHROPIC_API_KEY / ASSISTANT_CHAT_IDS not all set — not enabled.");
     return { start: () => {} };
   }
+  const mainChat = [...ALLOWED_CHATS][0];
 
   app.post("/webhooks/telegram", async (req, res) => {
     if (req.get("X-Telegram-Bot-Api-Secret-Token") !== WEBHOOK_SECRET) return res.sendStatus(401);
@@ -371,17 +402,7 @@ const register = (app, db) => {
     if (!msg || !text || msg.from?.is_bot || !ALLOWED_CHATS.has(String(msg.chat?.id))) return;
 
     try {
-      await telegram("sendChatAction", { chat_id: msg.chat.id, action: "typing" });
-      const ctx = { chatId: msg.chat.id, text, pending: [] };
-      const reply = await answer(db, text, msg.reply_to_message?.text || "", ctx);
-      await telegram("sendMessage", {
-        chat_id: msg.chat.id,
-        text: (reply || "Javob topilmadi.").slice(0, 4000),
-        reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true },
-        disable_web_page_preview: true,
-      });
-      await sendConfirmations(telegram, msg.chat.id, msg.message_id, ctx.pending);
-      console.log(`Hisobchi answered in ${msg.chat.id}: ${text.slice(0, 80)}${ctx.pending.length ? ` (+${ctx.pending.length} to confirm)` : ""}`);
+      await handleQuestion(db, { chatId: msg.chat.id, replyTo: msg.message_id, text, context: msg.reply_to_message?.text || "" });
     } catch (err) {
       console.error("Hisobchi failed", err);
       await telegram("sendMessage", {
@@ -389,6 +410,64 @@ const register = (app, db) => {
         text: "Kechirasiz, hozir javob bera olmadim. Birozdan keyin qayta so'rang.",
         reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true },
       });
+    }
+  });
+
+  // ── Website (AI Ofis page) ───────────────────────────────
+  // Same bot, asked from printvodiy.uz. The caller must be a signed-in
+  // staff admin (Firebase ID token); the question and answer are also
+  // posted to the Telegram channel so the team sees everything in one place.
+  const { getAuth } = require("firebase-admin/auth");
+  const webAdmin = async (req) => {
+    const token = (req.get("Authorization") || "").replace(/^Bearer /, "");
+    if (!token) return null;
+    try {
+      const decoded = await getAuth().verifyIdToken(token);
+      const email = String(decoded.email || "").toLowerCase();
+      const staff = (await db.collection("staff").doc(email).get()).data();
+      if (!staff || staff.role !== "admin") return null;
+      return { email, name: staff.full_name || email };
+    } catch {
+      return null;
+    }
+  };
+  const recent = new Map(); // email -> timestamps, a simple per-user rate limit
+  const tooFast = (email) => {
+    const now = Date.now();
+    const list = (recent.get(email) || []).filter((t) => now - t < 60000);
+    list.push(now);
+    recent.set(email, list);
+    return list.length > 15;
+  };
+
+  app.post("/webhooks/assistant", async (req, res) => {
+    const who = await webAdmin(req);
+    if (!who) return res.status(403).json({ error: "Faqat admin buyruq bera oladi" });
+    const text = String(req.body?.text || "").trim().slice(0, 500);
+    if (!text) return res.status(400).json({ error: "Buyruq bo'sh" });
+    if (tooFast(who.email)) return res.status(429).json({ error: "Juda ko'p so'rov — bir daqiqa kuting" });
+    try {
+      const posted = await telegram("sendMessage", { chat_id: mainChat, text: `🌐 Saytdan · ${who.name}:\n${text}` });
+      const replyTo = posted?.result?.message_id;
+      const out = await handleQuestion(db, { chatId: mainChat, replyTo, text, source: "web" });
+      res.json({ reply: out.reply, pending: out.pending.map((p) => ({ id: p.id, summary: p.summary })) });
+    } catch (err) {
+      console.error("Hisobchi web failed", err);
+      res.status(500).json({ error: "Hozir javob bera olmadim. Birozdan keyin qayta urinib ko'ring." });
+    }
+  });
+
+  app.post("/webhooks/assistant/confirm", async (req, res) => {
+    const who = await webAdmin(req);
+    if (!who) return res.status(403).json({ error: "Faqat admin tasdiqlay oladi" });
+    const id = String(req.body?.id || "");
+    if (!/^[A-Za-z0-9]{1,64}$/.test(id)) return res.status(400).json({ error: "Noto'g'ri so'rov" });
+    try {
+      const out = await decideAction(db, telegram, id, Boolean(req.body?.ok), who.name, { via: "web" });
+      res.json(out);
+    } catch (err) {
+      console.error("Hisobchi web confirm failed", err);
+      res.status(500).json({ error: "Tasdiqlab bo'lmadi" });
     }
   });
 

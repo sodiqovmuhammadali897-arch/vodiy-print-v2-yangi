@@ -183,6 +183,17 @@ service cloud.firestore {
       allow delete: if can('finance', 'delete');
     }
 
+    // AI Ofis feed: written only by the server (daily agents, Hisobchi
+    // bot) through the Admin SDK; any staff member may watch it.
+    match /agent_events/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+    match /agent_status/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
     match /supplier_invoices/{id} {
       allow read: if can('finance', 'view');
       allow create, update: if can('finance', 'edit');

@@ -15,7 +15,7 @@ import {
   yStart,
 } from "./lib.mjs";
 
-const r = new Report("💼 Sotuv nazoratchisi — kunlik hisobot");
+const r = new Report("💼 Sotuv nazoratchisi — kunlik hisobot", "sales");
 const OPEN_STAGES = new Set(["new", "info_given", "telegram"]);
 const inYesterday = (iso) => !!iso && iso >= yStart && iso < yEnd;
 const who = (name) => esc(name || "biriktirilmagan");

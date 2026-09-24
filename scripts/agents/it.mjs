@@ -6,7 +6,7 @@ import tls from "node:tls";
 import { Report, env, esc, getDb, money, readCreatedYesterday, yStart, yesterdayCode } from "./lib.mjs";
 
 const SITE = "printvodiy.uz";
-const r = new Report("🤖 Vodiy Print — kunlik IT hisobot");
+const r = new Report("🤖 Vodiy Print — kunlik IT hisobot", "it");
 const db = getDb();
 
 // ── Sayt ──────────────────────────────────────────────────────────────

@@ -15,6 +15,8 @@ const {
   norm,
   matches,
   createReader,
+  emitEvent,
+  clip,
 } = require("./shared");
 
 const PENDING_TTL_MS = 30 * 60 * 1000;
@@ -333,9 +335,9 @@ const execute = async (db, action, actor) => {
   throw new Error(`Noma'lum amal: ${action.kind}`);
 };
 
-const sendConfirmations = async (telegram, chatId, replyTo, pending) => {
+const sendConfirmations = async (db, telegram, chatId, replyTo, pending) => {
   for (const a of pending) {
-    await telegram("sendMessage", {
+    const sent = await telegram("sendMessage", {
       chat_id: chatId,
       text: `${a.summary}\n\nTasdiqlaysizmi?`,
       reply_parameters: { message_id: replyTo, allow_sending_without_reply: true },
@@ -346,6 +348,11 @@ const sendConfirmations = async (telegram, chatId, replyTo, pending) => {
         ]],
       },
     });
+    // Remembered so a confirmation made on the website also updates this
+    // Telegram message.
+    if (sent && sent.result) {
+      await db.collection("bot_actions").doc(a.id).update({ tg_chat_id: chatId, tg_message_id: sent.result.message_id }).catch(() => {});
+    }
   }
 };
 
@@ -363,50 +370,74 @@ const isChatAdmin = async (telegram, chatId, userId) => {
   return ids.has(userId);
 };
 
+// Which agent the Hisobchi "walks to" on the AI Ofis page for each action.
+const ACTION_VISIT = { order_status: "prod", customer_payment: "fin", expense: "fin", supplier_invoice: "fin", warehouse_move: "wh" };
+
+// One decision path for both the Telegram buttons and the website:
+// claims the pending action atomically (a double tap can't run it twice),
+// executes it, updates the Telegram message and emits the AI Ofis event.
+const decideAction = async (db, telegram, id, ok, actor, extra = {}) => {
+  const ref = db.collection("bot_actions").doc(id);
+  const claimed = await db.runTransaction(async (tx) => {
+    const a = (await tx.get(ref)).data();
+    if (!a) return { status: "missing", message: "Topilmadi" };
+    if (extra.chatId && a.chat_id !== String(extra.chatId)) return { status: "missing", message: "Topilmadi" };
+    if (a.status !== "pending") return { status: a.status, message: "Bu amal allaqachon ko'rib chiqilgan" };
+    if (Date.now() - Date.parse(a.created_at) > PENDING_TTL_MS) {
+      tx.update(ref, { status: "expired" });
+      return { status: "expired", message: "Muddati o'tdi (30 daqiqa) — qaytadan so'rang", action: a };
+    }
+    tx.update(ref, { status: ok ? "processing" : "cancelled", decided_by: actor, decided_via: extra.via || "telegram", decided_at: new Date().toISOString(), ...(extra.tgUserId ? { decided_by_tg_id: extra.tgUserId } : {}) });
+    return { status: ok ? "processing" : "cancelled", action: a };
+  });
+
+  const a = claimed.action;
+  // The stored message, or — for a tap on an older confirmation — the
+  // message whose button was pressed.
+  const target = a && a.tg_chat_id && a.tg_message_id ? { chat_id: a.tg_chat_id, message_id: a.tg_message_id } : extra.message;
+  const edit = (text) => (target ? telegram("editMessageText", { ...target, text }) : Promise.resolve());
+  if (claimed.status === "expired") {
+    await edit(`⌛ Muddati o'tdi:\n${a.summary}`);
+    return { status: "expired", message: claimed.message };
+  }
+  if (!a || (claimed.status !== "processing" && claimed.status !== "cancelled")) return { status: claimed.status, message: claimed.message };
+  if (claimed.status === "cancelled") {
+    await edit(`❌ Bekor qilindi:\n${a.summary}\n— ${actor}`);
+    await emitEvent(db, { agent: "bot", kind: "cancelled", text: `Bekor qilindi: ${clip(a.summary, 120)}`, bubble: "Bekor qilindi", source: extra.via || "telegram" });
+    return { status: "cancelled", message: "Bekor qilindi" };
+  }
+  try {
+    const result = await execute(db, a, actor);
+    await ref.update({ status: "done", result });
+    await edit(`✅ Bajarildi:\n${a.summary}${result ? `\n${result}` : ""}\n— ${actor}`);
+    await emitEvent(db, {
+      agent: "bot",
+      kind: "action",
+      text: `${clip(a.summary.split("\n")[0], 140)}${result ? ` · ${result}` : ""} — ${actor} tasdiqladi`,
+      bubble: "Bajarildi ✅",
+      visit: ACTION_VISIT[a.kind] || null,
+      detail: a.kind === "warehouse_move" ? { direction: a.params.type, item: a.params.item_name, quantity: a.params.quantity } : { kind: a.kind },
+      source: extra.via || "telegram",
+    });
+    console.log(`Hisobchi action done: ${a.kind} ${id} by ${actor} (${extra.via || "telegram"})`);
+    return { status: "done", message: `Bajarildi ✅${result ? ` ${result}` : ""}` };
+  } catch (err) {
+    await ref.update({ status: "failed", error: err.message });
+    await edit(`⚠️ Bajarilmadi:\n${a.summary}\nSabab: ${err.message}`);
+    console.error("Hisobchi action failed", id, err);
+    return { status: "failed", message: `Bajarilmadi: ${err.message}` };
+  }
+};
+
 const handleCallback = async (db, telegram, cq, allowedChats) => {
   const answer = (text, alert = false) => telegram("answerCallbackQuery", { callback_query_id: cq.id, text, show_alert: alert });
   const chatId = cq.message && cq.message.chat && cq.message.chat.id;
   const m = /^(ok|no):([A-Za-z0-9]+)$/.exec(cq.data || "");
   if (!m || !chatId || !allowedChats.has(String(chatId))) return answer("Ruxsat yo'q");
   if (!(await isChatAdmin(telegram, chatId, cq.from.id))) return answer("Faqat kanal adminlari tasdiqlay oladi", true);
-
   const actor = [cq.from.first_name, cq.from.last_name].filter(Boolean).join(" ") || cq.from.username || String(cq.from.id);
-  const ref = db.collection("bot_actions").doc(m[2]);
-  // Claim the action atomically so a double tap can't run it twice.
-  const claimed = await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const a = snap.data();
-    if (!a || a.chat_id !== String(chatId)) return { skip: "Topilmadi" };
-    if (a.status !== "pending") return { skip: "Bu amal allaqachon ko'rib chiqilgan" };
-    if (Date.now() - Date.parse(a.created_at) > PENDING_TTL_MS) {
-      tx.update(ref, { status: "expired" });
-      return { skip: "Muddati o'tdi (30 daqiqa) — qaytadan so'rang", expired: true, action: a };
-    }
-    tx.update(ref, { status: m[1] === "ok" ? "processing" : "cancelled", decided_by: actor, decided_by_tg_id: cq.from.id, decided_at: new Date().toISOString() });
-    return { action: a };
-  });
-
-  const edit = (text) => telegram("editMessageText", { chat_id: chatId, message_id: cq.message.message_id, text });
-  if (claimed.skip) {
-    if (claimed.expired) await edit(`⌛ Muddati o'tdi:\n${claimed.action.summary}`);
-    return answer(claimed.skip, true);
-  }
-  if (m[1] === "no") {
-    await edit(`❌ Bekor qilindi:\n${claimed.action.summary}\n— ${actor}`);
-    return answer("Bekor qilindi");
-  }
-  try {
-    const extra = await execute(db, claimed.action, actor);
-    await ref.update({ status: "done", result: extra });
-    await edit(`✅ Bajarildi:\n${claimed.action.summary}${extra ? `\n${extra}` : ""}\n— ${actor}`);
-    console.log(`Hisobchi action done: ${claimed.action.kind} ${m[2]} by ${actor}`);
-    return answer("Bajarildi ✅");
-  } catch (err) {
-    await ref.update({ status: "failed", error: err.message });
-    await edit(`⚠️ Bajarilmadi:\n${claimed.action.summary}\nSabab: ${err.message}`);
-    console.error("Hisobchi action failed", m[2], err);
-    return answer("Bajarilmadi", true);
-  }
+  const res = await decideAction(db, telegram, m[2], m[1] === "ok", actor, { chatId, tgUserId: cq.from.id, via: "telegram", message: { chat_id: chatId, message_id: cq.message.message_id } });
+  return answer(res.message, !["done", "cancelled"].includes(res.status));
 };
 
-module.exports = { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback, findOrders, execute };
+module.exports = { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback, decideAction, findOrders, execute };

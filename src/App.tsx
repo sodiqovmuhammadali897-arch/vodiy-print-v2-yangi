@@ -20,6 +20,7 @@ const Textile = lazy(() => import("./modules/textile/Textile"));
 const Warehouse = lazy(() => import("./modules/warehouse/Warehouse"));
 const Finance = lazy(() => import("./modules/finance/Finance"));
 const Reports = lazy(() => import("./modules/reports/Reports"));
+const AiOffice = lazy(() => import("./modules/aioffice/AiOffice"));
 const Production = lazy(() => import("./modules/production/Production"));
 const Pechatnik = lazy(() => import("./modules/production/Pechatnik"));
 const AttendancePage = lazy(() => import("./modules/attendance/AttendancePage"));
@@ -78,6 +79,7 @@ export default function App() {
 
           <Route element={<PermissionRoute module="reports" />}>
             <Route path="/reports" element={<Reports />} />
+            <Route path="/ai-office" element={<AiOffice />} />
           </Route>
 
           <Route element={<PermissionRoute module="production" />}>
