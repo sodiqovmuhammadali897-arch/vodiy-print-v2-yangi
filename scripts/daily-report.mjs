@@ -47,8 +47,11 @@ const section = async (title, fn) => {
 // ── Sayt ──────────────────────────────────────────────────────────────
 await section("🌐 Sayt", async () => {
   const lines = [];
-  const started = Date.now();
   try {
+    // The runner sits far from Uzbekistan; a warm-up request absorbs the
+    // one-off DNS + TLS handshake so the timed one reflects page speed.
+    await fetch(`https://${SITE}`, { signal: AbortSignal.timeout(15000) }).catch(() => {});
+    const started = Date.now();
     const res = await fetch(`https://${SITE}`, { signal: AbortSignal.timeout(15000) });
     const ms = Date.now() - started;
     const line = `${SITE} — ${res.status}, ${ms} ms`;
@@ -75,7 +78,8 @@ await section("🚀 Deploy va testlar", async () => {
   const lines = [];
   const testSummary = (() => {
     try {
-      return readFileSync("/tmp/tests.txt", "utf8").match(/Tests\s+(.+)/)?.[1]?.trim() || "";
+      const out = readFileSync("/tmp/tests.txt", "utf8").replace(/\x1b\[[0-9;]*m/g, ""); // strip colours
+      return out.match(/Tests\s+(.+)/)?.[1]?.trim() || "";
     } catch {
       return "";
     }
@@ -193,7 +197,13 @@ await section("🖥 Server", async () => {
   const disk = Number(kv.DISK_USED_PCT);
   const diskLine = `Disk: ${disk}% band, ${esc(kv.DISK_FREE)} bo'sh`;
   lines.push(disk >= 90 ? fail(diskLine) : disk >= 80 ? warn(diskLine) : ok(diskLine));
-  lines.push(`• Bo'sh xotira: ${esc(kv.MEM_AVAILABLE_MB)} MB · ${esc(kv.UPTIME)}`);
+  const uptime = String(kv.UPTIME || "")
+    .replace(/^up\s+/, "")
+    .replace(/\bweeks?\b/g, "hafta")
+    .replace(/\bdays?\b/g, "kun")
+    .replace(/\bhours?\b/g, "soat")
+    .replace(/\bminutes?\b/g, "daqiqa");
+  lines.push(`• Bo'sh xotira: ${esc(kv.MEM_AVAILABLE_MB)} MB · uzluksiz ishlamoqda: ${esc(uptime)}`);
   const whErrors = Number(kv.WEBHOOK_ERRORS || 0);
   lines.push(whErrors > 0 ? warn(`Webhook loglarida ${whErrors} ta xato (24 soat)`) : ok("Webhook loglarida xato yo'q"));
   lines.push(`• Webhook 24 soatda: ${esc(kv.CALLS_LOGGED)} ta qo'ng'iroq, ${esc(kv.META_LEADS)} ta Meta lid qabul qildi`);

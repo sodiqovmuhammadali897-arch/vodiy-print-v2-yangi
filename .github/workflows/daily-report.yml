@@ -63,5 +63,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_IT_CHAT_ID: ${{ secrets.TELEGRAM_IT_CHAT_ID }}
+          # "IT hisobot" channel; a TELEGRAM_IT_CHAT_ID secret overrides it.
+          TELEGRAM_IT_CHAT_ID: ${{ secrets.TELEGRAM_IT_CHAT_ID || '-1004454640881' }}
         run: node scripts/daily-report.mjs
