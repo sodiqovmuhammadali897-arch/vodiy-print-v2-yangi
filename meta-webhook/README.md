@@ -70,3 +70,16 @@ FIREBASE_SERVICE_ACCOUNT_PATH=./service-account.json \
 META_VERIFY_TOKEN=test META_APP_SECRET=... META_PAGE_ACCESS_TOKEN=... \
 npm start
 ```
+
+## Hisobchi — Telegram Q&A bot (`assistant.js`)
+
+Answers questions typed into the report channel ("Kans Printga qancha
+qarzimiz bor?", "bizdan qancha qarzdorlik bor?") using Claude with
+read-only Firestore tools (receivables, supplier balances, cash flow,
+orders, leads, warehouse). On every start it registers
+`https://printvodiy.uz/webhooks/telegram` with Telegram (fresh secret
+token each time) and only answers chats listed in `ASSISTANT_CHAT_IDS`.
+
+Needs `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY` and `ASSISTANT_CHAT_IDS`
+(defaults to the IT report channel); stays off until all are set.
+`ASSISTANT_MODEL` optionally overrides the Claude model.

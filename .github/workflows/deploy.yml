@@ -235,11 +235,16 @@ jobs:
           MOIZVONKI_USER_EMAIL: ${{ secrets.MOIZVONKI_USER_EMAIL }}
           MOIZVONKI_API_KEY: ${{ secrets.MOIZVONKI_API_KEY }}
           MOIZVONKI_WEBHOOK_TOKEN: ${{ secrets.MOIZVONKI_WEBHOOK_TOKEN }}
+          # "Hisobchi" Telegram Q&A bot (meta-webhook/assistant.js) — stays
+          # off until ANTHROPIC_API_KEY is set. Answers only in these chats.
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ASSISTANT_CHAT_IDS: ${{ secrets.ASSISTANT_CHAT_IDS || secrets.TELEGRAM_IT_CHAT_ID || '-1004454640881' }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          envs: FIREBASE_SERVICE_ACCOUNT,META_APP_SECRET,META_PAGE_ACCESS_TOKEN,META_VERIFY_TOKEN,MOIZVONKI_DOMAIN,MOIZVONKI_USER_EMAIL,MOIZVONKI_API_KEY,MOIZVONKI_WEBHOOK_TOKEN
+          envs: FIREBASE_SERVICE_ACCOUNT,META_APP_SECRET,META_PAGE_ACCESS_TOKEN,META_VERIFY_TOKEN,MOIZVONKI_DOMAIN,MOIZVONKI_USER_EMAIL,MOIZVONKI_API_KEY,MOIZVONKI_WEBHOOK_TOKEN,TELEGRAM_BOT_TOKEN,ANTHROPIC_API_KEY,ASSISTANT_CHAT_IDS
           script: |
             if ! command -v node >/dev/null 2>&1; then
               echo "Node.js not found on server — installing Node 20 via NodeSource"
@@ -263,6 +268,9 @@ jobs:
             MOIZVONKI_USER_EMAIL=$MOIZVONKI_USER_EMAIL
             MOIZVONKI_API_KEY=$MOIZVONKI_API_KEY
             MOIZVONKI_WEBHOOK_TOKEN=$MOIZVONKI_WEBHOOK_TOKEN
+            TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+            ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+            ASSISTANT_CHAT_IDS=$ASSISTANT_CHAT_IDS
             EOF
             cd /opt/meta-webhook && npm install --omit=dev --no-audit --no-fund
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S cp /tmp/deploy/meta-webhook.service /etc/systemd/system/meta-webhook.service

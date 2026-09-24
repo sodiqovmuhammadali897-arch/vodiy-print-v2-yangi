@@ -41,6 +41,7 @@ import DateRangeFilter from "../../components/ui/DateRangeFilter";
 import SimpleDonutChart, { type DonutSlice } from "../../components/ui/SimpleDonutChart";
 import ExpensesPanel from "./ExpensesPanel";
 import DebtsPanel from "./DebtsPanel";
+import SuppliersPanel from "./SuppliersPanel";
 
 const PAYMENT_COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#0ea5e9", "#f43f5e", "#8b5cf6"];
 
@@ -343,6 +344,8 @@ export default function Finance() {
       <ExpensesPanel expenses={expensesInRange} loading={loading} onChanged={load} />
 
       <DebtsPanel orders={orders} customers={customers} loading={loading} />
+
+      <SuppliersPanel expenses={expenses} loading={loading} onChanged={load} />
     </div>
   );
 }

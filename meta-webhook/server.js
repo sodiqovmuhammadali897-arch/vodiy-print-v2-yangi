@@ -51,6 +51,9 @@ const app = express();
 // still parsing JSON for convenience.
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
+// Telegram "Hisobchi" Q&A bot — see assistant.js.
+const assistant = require("./assistant").register(app, db);
+
 const slugify = (s) =>
   s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
@@ -388,4 +391,5 @@ const subscribeMoizvonkiWebhook = async () => {
 app.listen(PORT, () => {
   console.log(`Meta leads webhook listening on :${PORT}`);
   void subscribeMoizvonkiWebhook();
+  void assistant.start();
 });

@@ -361,6 +361,22 @@ export type Expense = {
   created_at: string;
 };
 
+// A bill a supplier (production_companies) has given us — what we owe
+// them. Payments against it are ordinary expenses in the
+// VENDOR_EXPENSE_CATEGORY with the same vendor_id, so a supplier's
+// balance is sum(invoices) − sum(those expenses).
+export type SupplierInvoice = {
+  id: string;
+  vendor_id: string;
+  vendor_name: string;
+  amount: number;
+  date: string;
+  order_number: string;
+  note: string;
+  created_by: string;
+  created_at: string;
+};
+
 export type StatusHistoryEntry = {
   id: string;
   order_id: string;
