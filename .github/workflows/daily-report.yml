@@ -1,9 +1,9 @@
-name: Kunlik IT hisobot
+name: Kunlik hisobotlar
 
-# "IT hodim": every morning checks the site, deploys/tests, attendance
-# functions, Mois Zvonki calls, the VPS and yesterday's activity, then posts
-# a summary to a dedicated Telegram channel (TELEGRAM_IT_CHAT_ID). Can also
-# be run by hand from the Actions tab.
+# Virtual employees: every morning each one checks its own area and posts
+# a separate report to Telegram (scripts/agents/*.mjs). All go to the
+# "IT hisobot" channel; an agent can get its own channel later via its
+# TELEGRAM_<AGENT>_CHAT_ID secret. Can also be run by hand from Actions.
 on:
   schedule:
     - cron: "0 3 * * *" # 08:00 Asia/Tashkent
@@ -16,6 +16,15 @@ permissions:
 jobs:
   report:
     runs-on: ubuntu-latest
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      # "IT hisobot" channel; a TELEGRAM_IT_CHAT_ID secret overrides it.
+      TELEGRAM_IT_CHAT_ID: ${{ secrets.TELEGRAM_IT_CHAT_ID || '-1004454640881' }}
+      TELEGRAM_SALES_CHAT_ID: ${{ secrets.TELEGRAM_SALES_CHAT_ID }}
+      TELEGRAM_FINANCE_CHAT_ID: ${{ secrets.TELEGRAM_FINANCE_CHAT_ID }}
+      TELEGRAM_PRODUCTION_CHAT_ID: ${{ secrets.TELEGRAM_PRODUCTION_CHAT_ID }}
+      TELEGRAM_WAREHOUSE_CHAT_ID: ${{ secrets.TELEGRAM_WAREHOUSE_CHAT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,13 +65,28 @@ jobs:
             echo "META_LEADS=$(grep -c 'Lead ingested' <<< "$J" || true)"
             echo "WEBHOOK_ERRORS=$(grep -ciE 'failed|error' <<< "$J" || true)"
 
-      - name: Build and send report
+      # Each agent runs even if an earlier one failed, so one broken
+      # report never silences the others; the job still turns red.
+      - name: IT hodim
+        if: ${{ !cancelled() }}
         env:
           TESTS_OUTCOME: ${{ steps.tests.outcome }}
           SERVER_OUT: ${{ steps.server.outputs.stdout }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          # "IT hisobot" channel; a TELEGRAM_IT_CHAT_ID secret overrides it.
-          TELEGRAM_IT_CHAT_ID: ${{ secrets.TELEGRAM_IT_CHAT_ID || '-1004454640881' }}
-        run: node scripts/daily-report.mjs
+        run: node scripts/agents/it.mjs
+
+      - name: Sotuv nazoratchisi
+        if: ${{ !cancelled() }}
+        run: node scripts/agents/sales.mjs
+
+      - name: Moliyachi
+        if: ${{ !cancelled() }}
+        run: node scripts/agents/finance.mjs
+
+      - name: Ishlab chiqarish nazoratchisi
+        if: ${{ !cancelled() }}
+        run: node scripts/agents/production.mjs
+
+      - name: Omborchi
+        if: ${{ !cancelled() }}
+        run: node scripts/agents/warehouse.mjs
