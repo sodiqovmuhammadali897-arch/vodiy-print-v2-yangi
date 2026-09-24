@@ -83,3 +83,13 @@ token each time) and only answers chats listed in `ASSISTANT_CHAT_IDS`.
 Needs `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY` and `ASSISTANT_CHAT_IDS`
 (defaults to the IT report channel); stays off until all are set.
 `ASSISTANT_MODEL` optionally overrides the Claude model.
+
+It can also make changes (`actions.js`): order status, customer payments,
+expenses / supplier payments, supplier invoices and warehouse in/out.
+Claude only *proposes* them — each is stored as a pending `bot_actions`
+record and posted with ✅/❌ buttons; it runs only when a current
+administrator of that chat taps ✅, within 30 minutes, using the same
+rules as the web app (payment recalculates the order's debt, an order
+with debt can't be closed, stock can't go negative). Nothing can be
+deleted. `bot_actions` is also the audit log (who confirmed, when,
+result).

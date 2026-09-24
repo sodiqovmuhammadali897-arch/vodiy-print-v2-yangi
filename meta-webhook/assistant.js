@@ -20,50 +20,19 @@ const ALLOWED_CHATS = new Set(
 // needs to be stored anywhere; it proves a request really came from
 // Telegram.
 const WEBHOOK_SECRET = crypto.randomBytes(24).toString("hex");
-const VENDOR_EXPENSE_CATEGORY = "Ta'minotchiga to'lov";
-const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Tashkent
-
-const ORDER_STATUS_LABELS = {
-  new: "Yangi",
-  accepted: "Qabul qilindi",
-  calculating: "Hisob-kitob qilinmoqda",
-  awaiting_advance: "Avans kutilmoqda",
-  design: "Dizaynda",
-  approving: "Tasdiqlanmoqda",
-  sent_to_production: "Ishlab chiqarishga yuborildi",
-  production: "Ishlab chiqarishda",
-  quality_control: "Sifat nazoratida",
-  ready: "Tayyor",
-  ready_to_deliver: "Yetkazishga tayyor",
-  delivered: "Yetkazildi",
-  closed: "Yopildi",
-  cancelled: "Bekor qilindi",
-};
-
-const todayCode = () => new Date(Date.now() + TZ_OFFSET_MS).toISOString().slice(0, 10);
-const dayCodeOf = (v) => (!v ? "" : v.length === 10 ? v : new Date(Date.parse(v) + TZ_OFFSET_MS).toISOString().slice(0, 10));
-const money = (n) => `${Math.round(Number(n) || 0).toLocaleString("ru-RU").replace(/[\s,  ]/g, " ")} so'm`;
-const orderDebt = (o) =>
-  Number(o.remaining_amount || 0) || Math.max(0, Number(o.total_amount || 0) - Number(o.paid_amount || 0));
-
-// Loose text matching: case, apostrophe variants, and Cyrillic vs Latin
-// spelling of the same name ("Тахмина" / "Taxmina") all match.
-const CYR = { а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo", ж: "j", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "x", ц: "ts", ч: "ch", ш: "sh", щ: "sh", ъ: "", ы: "i", ь: "", э: "e", ю: "yu", я: "ya", ў: "o", қ: "q", ғ: "g", ҳ: "h" };
-const norm = (s) =>
-  String(s || "")
-    .toLowerCase()
-    .replace(/[а-яёўқғҳ]/g, (c) => CYR[c] ?? c)
-    .replace(/[ʻʼ'`‘’]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-const matches = (query, ...fields) => {
-  const q = norm(query);
-  if (!q) return true;
-  const hay = norm(fields.join(" "));
-  const digits = q.replace(/\D/g, "");
-  if (digits.length >= 5 && fields.join(" ").replace(/\D/g, "").includes(digits)) return true;
-  return q.split(" ").every((w) => hay.includes(w));
-};
+const {
+  VENDOR_EXPENSE_CATEGORY,
+  ORDER_STATUS_LABELS,
+  todayCode,
+  dayCodeOf,
+  money,
+  orderDebt,
+  customerName,
+  norm,
+  matches,
+  createReader,
+} = require("./shared");
+const { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback } = require("./actions");
 
 const TOOLS = [
   {
@@ -128,12 +97,7 @@ const TOOLS = [
 ];
 
 const createTools = (db) => {
-  const cache = new Map();
-  const all = (col) => {
-    if (!cache.has(col)) cache.set(col, db.collection(col).get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    return cache.get(col);
-  };
-  const customerName = (c) => [c.first_name, c.last_name].filter(Boolean).join(" ") || c.company || c.phone || "Noma'lum";
+  const all = createReader(db);
 
   return {
     async receivables({ customer }) {
@@ -320,9 +284,15 @@ const systemPrompt = () =>
     "- Javob o'zbek tilida (lotin), qisqa va aniq: avval asosiy raqam, keyin kerak bo'lsa 3–10 qatorlik tafsilot.",
     "- Telegram oddiy matn: Markdown (**, #, ```) ishlatma. Ro'yxat uchun \"•\" ishlat.",
     "- Savol kompaniya ishiga aloqasiz bo'lsa, bir gap bilan javob ber.",
+    "O'zgartirishlar (holat, to'lov, xarajat, ta'minotchi fakturasi, ombor kirim/chiqim):",
+    "- Tegishli propose_* vositasini chaqir. Sen hech narsani o'zing o'zgartirmaysan — bot tasdiqlash tugmali xabar yuboradi, admin bosgandagina bajariladi.",
+    "- Taklif tayyor bo'lsa, javobing bitta qisqa gap bo'lsin (masalan: \"Quyidagini tasdiqlang 👇\"); tafsilotni takrorlama. Hech qachon \"bajarildi\" dema.",
+    "- Summalar: \"2 mln\" = 2000000, \"500 ming\" = 500000, \"1,5 mln\" = 1500000. Sana aytilmasa bugun. To'lov turi aytilmasa Naqd.",
+    "- Buyurtma raqami aytilmasa, avval orders_search bilan top; bitta aniq buyurtma topilmasa, variantlarni ko'rsatib so'ra.",
+    "- Vosita xato yoki variantlar qaytarsa, buni foydalanuvchiga tushuntir va aniqlashtirishni so'ra.",
   ].join("\n");
 
-const callClaude = async (messages) => {
+const callClaude = async (messages, tools) => {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -330,19 +300,22 @@ const callClaude = async (messages) => {
       "x-api-key": ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01",
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: systemPrompt(), tools: TOOLS, messages }),
+    body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: systemPrompt(), tools, messages }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${data?.error?.message || JSON.stringify(data)}`);
   return data;
 };
 
-const answer = async (db, question, context) => {
-  const tools = createTools(db);
+// ctx.pending collects the actions proposed while answering, so the
+// caller can post their confirmation buttons after the reply.
+const answer = async (db, question, context, ctx) => {
+  const tools = { ...createTools(db), ...createActionTools(db, ctx) };
+  const toolDefs = [...TOOLS, ...ACTION_TOOLS];
   const content = context ? `Oldingi xabar (kontekst):\n${context}\n\nSavol:\n${question}` : question;
   const messages = [{ role: "user", content }];
   for (let step = 0; step < 6; step += 1) {
-    const reply = await callClaude(messages);
+    const reply = await callClaude(messages, toolDefs);
     if (reply.stop_reason !== "tool_use") {
       return reply.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
     }
@@ -384,20 +357,31 @@ const register = (app, db) => {
     if (req.get("X-Telegram-Bot-Api-Secret-Token") !== WEBHOOK_SECRET) return res.sendStatus(401);
     res.sendStatus(200); // ack first; Telegram retries slow webhooks
 
+    if (req.body?.callback_query) {
+      try {
+        await handleCallback(db, telegram, req.body.callback_query, ALLOWED_CHATS);
+      } catch (err) {
+        console.error("Hisobchi callback failed", err);
+      }
+      return;
+    }
+
     const msg = req.body?.channel_post || req.body?.message;
     const text = msg?.text?.trim();
     if (!msg || !text || msg.from?.is_bot || !ALLOWED_CHATS.has(String(msg.chat?.id))) return;
 
     try {
       await telegram("sendChatAction", { chat_id: msg.chat.id, action: "typing" });
-      const reply = await answer(db, text, msg.reply_to_message?.text || "");
+      const ctx = { chatId: msg.chat.id, text, pending: [] };
+      const reply = await answer(db, text, msg.reply_to_message?.text || "", ctx);
       await telegram("sendMessage", {
         chat_id: msg.chat.id,
         text: (reply || "Javob topilmadi.").slice(0, 4000),
         reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true },
         disable_web_page_preview: true,
       });
-      console.log(`Hisobchi answered in ${msg.chat.id}: ${text.slice(0, 80)}`);
+      await sendConfirmations(telegram, msg.chat.id, msg.message_id, ctx.pending);
+      console.log(`Hisobchi answered in ${msg.chat.id}: ${text.slice(0, 80)}${ctx.pending.length ? ` (+${ctx.pending.length} to confirm)` : ""}`);
     } catch (err) {
       console.error("Hisobchi failed", err);
       await telegram("sendMessage", {
@@ -413,7 +397,7 @@ const register = (app, db) => {
     const data = await telegram("setWebhook", {
       url,
       secret_token: WEBHOOK_SECRET,
-      allowed_updates: ["message", "channel_post"],
+      allowed_updates: ["message", "channel_post", "callback_query"],
       drop_pending_updates: true,
     });
     if (data.ok) console.log(`Hisobchi bot webhook set: ${url} (chats: ${[...ALLOWED_CHATS].join(", ")}, model ${MODEL})`);
