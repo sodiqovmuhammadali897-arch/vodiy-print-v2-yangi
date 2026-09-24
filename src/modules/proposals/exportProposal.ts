@@ -1,12 +1,7 @@
-import { htmlToPdf, htmlToPng } from "../../lib/htmlToPdf";
+import { htmlToPdf } from "../../lib/htmlToPdf";
+import { exportNodeToPng } from "../../lib/exportPng";
 
-export const exportProposalPng = async (node: HTMLElement, fileBase: string) => {
-  const dataUrl = await htmlToPng(node);
-  const link = document.createElement("a");
-  link.download = `${fileBase}.png`;
-  link.href = dataUrl;
-  link.click();
-};
+export const exportProposalPng = (node: HTMLElement, fileBase: string) => exportNodeToPng(node, fileBase);
 
 export const exportProposalPdf = async (node: HTMLElement, fileBase: string) => {
   const pdf = await htmlToPdf(node);

@@ -61,8 +61,3 @@ export const htmlToPdf = async (node: HTMLElement): Promise<jsPDF> => {
 
   return pdf;
 };
-
-export const htmlToPng = async (node: HTMLElement): Promise<string> => {
-  const canvas = await capture(node);
-  return canvas.toDataURL("image/png");
-};
