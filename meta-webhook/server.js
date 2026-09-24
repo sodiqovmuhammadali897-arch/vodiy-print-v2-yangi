@@ -251,15 +251,9 @@ const handleCallFinish = async (event) => {
     duration,
     answered,
   } = event || {};
-  // The exact field Mois Zvonki uses for the recording link isn't
-  // confirmed from their docs (unreachable from this environment), so
-  // accept every name seen across similar telephony webhook APIs
-  // instead of gambling on one. TEMP: also logs the raw event so the
-  // real field name can be confirmed from a live call and this list
-  // trimmed down afterward.
-  const recording =
-    event?.recording || event?.record || event?.record_link || event?.recording_url || event?.audio_url || "";
-  console.log("Mois Zvonki call.finish raw event (temporary diagnostic):", JSON.stringify(event));
+  // Confirmed from live call.finish events: the link arrives in
+  // `recording` (an .aac URL), empty for unanswered calls.
+  const recording = event?.recording || "";
 
   const now = new Date().toISOString();
   const isIncoming = direction !== 1;
