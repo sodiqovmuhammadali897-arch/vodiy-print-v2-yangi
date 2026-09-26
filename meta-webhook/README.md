@@ -130,3 +130,13 @@ texts matching templates approved in its cabinet — submit these two:
 
     Hurmatli %w, ish kuni soat %w da boshlandi. Siz hali ishga kelganingizni belgilamadingiz. Vodiy Print
     Hurmatli %w, bugun ishga %w kech qoldingiz (kelgan vaqtingiz %w). Iltimos, vaqtida keling. Vodiy Print
+
+### Price sheet PDFs (`pdf.js`)
+
+"Paket 45 narxini PDF qilib tashla" → the `product_price_pdf` tool finds
+the product (by code, e.g. `45`, or name), renders the customer-facing
+price sheet (same content as the website's mijoz narx varag'i: price
+tiers, specs, contacts, 30-day validity — never cost or supplier data)
+with pdfkit and the bundled DejaVu fonts (Latin + Cyrillic), and the bot
+posts it to the channel as a document. An optional quantity adds a
+"N dona uchun jami" box.

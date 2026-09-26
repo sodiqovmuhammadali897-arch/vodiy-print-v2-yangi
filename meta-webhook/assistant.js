@@ -34,7 +34,8 @@ const {
   clip,
 } = require("./shared");
 const { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback, decideAction } = require("./actions");
-const { telegram, BOT_TOKEN } = require("./telegram");
+const { telegram, sendDocument, BOT_TOKEN } = require("./telegram");
+const { buildPriceSheet } = require("./pdf");
 const { staffFromRequest } = require("./auth");
 
 const TOOLS = [
@@ -275,6 +276,52 @@ const createTools = (db) => {
   };
 };
 
+// Tools that produce a file for the channel instead of data for Claude.
+const FILE_TOOLS = [
+  {
+    name: "product_price_pdf",
+    description:
+      "Mahsulotning MIJOZGA ko'rsatiladigan narxlar varag'ini PDF qilib kanalga yuboradi (tannarxsiz: tiraj bo'yicha narxlar, xususiyatlar, kompaniya kontaktlari). Mahsulot nomi yoki kodi bo'yicha topadi.",
+    input_schema: {
+      type: "object",
+      properties: {
+        product: { type: "string", description: "Mahsulot nomi yoki kodi, masalan \"Paket 45\" yoki \"45\"" },
+        quantity: { type: "number", description: "Mijoz so'ragan tiraj bo'lsa — PDF'da shu miqdor uchun jami summa ham chiqadi" },
+      },
+      required: ["product"],
+    },
+  },
+];
+
+const createFileTools = (db, ctx) => {
+  const all = createReader(db);
+  return {
+    async product_price_pdf({ product, quantity }) {
+      const products = (await all("products")).filter((p) => p.is_active !== false && !p.archived_at);
+      const digits = String(product || "").replace(/\D/g, "").replace(/^0+/, "");
+      const byCode = digits ? products.filter((p) => String(p.product_code || "").replace(/\D/g, "").replace(/^0+/, "") === digits) : [];
+      const words = String(product || "").replace(/\d+/g, " ").trim();
+      let found = byCode.length ? byCode : products.filter((p) => matches(product, p.name, p.product_code, p.category));
+      if (found.length > 1 && words) {
+        const narrowed = found.filter((p) => matches(words, p.name, p.category));
+        if (narrowed.length) found = narrowed;
+      }
+      if (found.length === 0 && words) found = products.filter((p) => matches(words, p.name, p.product_code, p.category));
+      if (found.length === 0) return { xato: `"${product}" mahsuloti topilmadi` };
+      if (found.length > 1) {
+        return { xato: "Bir nechta mahsulot mos keldi — qaysi biri?", variantlar: found.slice(0, 10).map((p) => `${p.name}${p.product_code ? ` (kod ${p.product_code})` : ""}`) };
+      }
+      const p = found[0];
+      const companySnap = await db.collection("company_settings").doc("main").get();
+      const qty = Number(quantity) > 0 ? Math.round(Number(quantity)) : 0;
+      const buffer = await buildPriceSheet({ product: p, company: companySnap.exists ? companySnap.data() : {}, quantity: qty });
+      const safe = String(p.name || "mahsulot").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 40) || "mahsulot";
+      ctx.files.push({ buffer, filename: `${safe}-narxlar.pdf`, caption: `📄 ${p.name} — narxlar (mijoz uchun)${qty ? ` · ${qty} ${p.unit || "dona"}` : ""}` });
+      return { tayyor: true, mahsulot: p.name, kod: p.product_code || undefined, tirajlar_soni: (p.price_tiers || []).length, eslatma: "PDF kanalga fayl bo'lib yuboriladi" };
+    },
+  };
+};
+
 const systemPrompt = () =>
   [
     "Sen Vodiy Print poligrafiya kompaniyasining hisobchisisan. Rahbar Telegram kanalida savol yozadi, sen javob berasan.",
@@ -293,6 +340,7 @@ const systemPrompt = () =>
     "- Summalar: \"2 mln\" = 2000000, \"500 ming\" = 500000, \"1,5 mln\" = 1500000. Sana aytilmasa bugun. To'lov turi aytilmasa Naqd.",
     "- Buyurtma raqami aytilmasa, avval orders_search bilan top; bitta aniq buyurtma topilmasa, variantlarni ko'rsatib so'ra.",
     "- Vosita xato yoki variantlar qaytarsa, buni foydalanuvchiga tushuntir va aniqlashtirishni so'ra.",
+    "Fayllar: mahsulot narxini PDF / mijozga narx varag'i so'ralsa product_price_pdf ni chaqir. PDF kanalga o'zi yuboriladi — javobda bir qisqa gap yoz (masalan \"PDF tayyor 👇\").",
   ].join("\n");
 
 const callClaude = async (messages, tools) => {
@@ -313,8 +361,8 @@ const callClaude = async (messages, tools) => {
 // ctx.pending collects the actions proposed while answering, so the
 // caller can post their confirmation buttons after the reply.
 const answer = async (db, question, context, ctx) => {
-  const tools = { ...createTools(db), ...createActionTools(db, ctx) };
-  const toolDefs = [...TOOLS, ...ACTION_TOOLS];
+  const tools = { ...createTools(db), ...createActionTools(db, ctx), ...createFileTools(db, ctx) };
+  const toolDefs = [...TOOLS, ...ACTION_TOOLS, ...FILE_TOOLS];
   const content = context ? `Oldingi xabar (kontekst):\n${context}\n\nSavol:\n${question}` : question;
   const messages = [{ role: "user", content }];
   for (let step = 0; step < 6; step += 1) {
@@ -341,7 +389,7 @@ const answer = async (db, question, context, ctx) => {
 
 // Which colleague the Hisobchi "walks to" on the AI Ofis page, by the
 // first data tool it used to answer.
-const TOOL_VISIT = { receivables: "fin", cash_flow: "fin", supplier_balances: "fin", orders_search: "prod", leads_summary: "sales", warehouse_stock: "wh" };
+const TOOL_VISIT = { product_price_pdf: "sales", receivables: "fin", cash_flow: "fin", supplier_balances: "fin", orders_search: "prod", leads_summary: "sales", warehouse_stock: "wh" };
 
 // One path for a question from the Telegram channel or from the website:
 // answer it in the channel (as a reply), post confirmation buttons for any
@@ -349,7 +397,7 @@ const TOOL_VISIT = { receivables: "fin", cash_flow: "fin", supplier_balances: "f
 const handleQuestion = async (db, { chatId, replyTo, text, context = "", source = "telegram" }) => {
   await emitEvent(db, { agent: "bot", kind: "question", text: clip(text, 160), bubble: clip(text, 90), source });
   await telegram("sendChatAction", { chat_id: chatId, action: "typing" });
-  const ctx = { chatId, text, pending: [], toolsUsed: [] };
+  const ctx = { chatId, text, pending: [], toolsUsed: [], files: [] };
   const reply = (await answer(db, text, context, ctx)) || "Javob topilmadi.";
   await telegram("sendMessage", {
     chat_id: chatId,
@@ -357,13 +405,14 @@ const handleQuestion = async (db, { chatId, replyTo, text, context = "", source 
     reply_parameters: { message_id: replyTo, allow_sending_without_reply: true },
     disable_web_page_preview: true,
   });
+  for (const f of ctx.files) await sendDocument({ chatId, buffer: f.buffer, filename: f.filename, caption: f.caption, replyTo });
   await sendConfirmations(db, telegram, chatId, replyTo, ctx.pending);
   const visit = ctx.toolsUsed.map((t) => TOOL_VISIT[t]).find(Boolean) || null;
   await emitEvent(db, ctx.pending.length
     ? { agent: "bot", kind: "proposed", text: clip(ctx.pending[0].summary.replace(/\n/g, " · "), 180), bubble: "Tasdiqlaysizmi? ⏳", source }
     : { agent: "bot", kind: "answer", text: clip(reply, 220), bubble: clip(reply, 90), visit, source });
   console.log(`Hisobchi answered (${source}) in ${chatId}: ${text.slice(0, 80)}${ctx.pending.length ? ` (+${ctx.pending.length} to confirm)` : ""}`);
-  return { reply, pending: ctx.pending };
+  return { reply, pending: ctx.pending, files: ctx.files.map((f) => f.filename) };
 };
 
 const register = (app, db, hr = null) => {
