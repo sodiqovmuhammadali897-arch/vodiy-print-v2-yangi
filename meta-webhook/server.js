@@ -60,19 +60,18 @@ if (groups) groups.register(app);
 const hr = groups ? require("./hr").create(db, { route: groups.route }) : null;
 if (hr) hr.register(app);
 const assistant = require("./assistant").register(app, db, hr, groups);
-
-const slugify = (s) =>
-  s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-
-const nextLeadNumber = async () => {
-  const snap = await db.collection("leads").get();
-  let max = 0;
-  snap.forEach((doc) => {
-    const m = /^LID-(\d+)$/.exec(doc.data().lead_number || "");
-    if (m) max = Math.max(max, parseInt(m[1], 10));
-  });
-  return `LID-${String(max + 1).padStart(3, "0")}`;
-};
+const { slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
+// Instagram Direct agent — see instagram.js. Its webhooks arrive on the
+// same Meta callback below (object "instagram").
+const instagram = require("./instagram").create(db, {
+  graphVersion: GRAPH_VERSION,
+  pageToken: PAGE_ACCESS_TOKEN,
+  appSecret: APP_SECRET,
+  verifyToken: VERIFY_TOKEN,
+  callbackBase: process.env.META_CALLBACK_BASE || "https://printvodiy.uz",
+  route: groups ? groups.route : null,
+});
+instagram.register(app);
 
 const fieldValue = (fieldData, ...names) => {
   for (const f of fieldData || []) {
@@ -119,17 +118,10 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
   ]);
 
   const source = lead.platform === "ig" ? "Instagram Target" : "Facebook Lead Ads";
-  const now = new Date().toISOString();
-  const lead_number = await nextLeadNumber();
-
-  await db.collection("leads").add({
-    lead_number,
+  const { lead_number } = await createLead(db, {
     full_name: fullName,
-    brand: "",
     phone,
     telegram,
-    interested_product_id: "",
-    interested_product_name: "",
     source,
     campaign_name: campaignName,
     campaign_id: campaignId || "",
@@ -139,25 +131,8 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
     ad_id: adId || "",
     form_name: formName,
     form_id: formId || "",
-    assigned_to_email: "",
-    assigned_to_name: "",
-    status: "new",
-    region: "",
-    industry: "",
-    estimated_amount: 0,
-    next_contact_at: null,
-    first_contact_at: null,
-    last_contact_at: null,
-    note: "",
-    lost_reason: "",
-    lost_comment: "",
-    converted_customer_id: null,
-    converted_order_id: null,
-    created_at: now,
-    updated_at: now,
   });
 
-  if (source) await db.collection("lead_sources").doc(slugify(source)).set({ name: source }, { merge: true });
   if (campaignName) {
     await db
       .collection("lead_campaigns")
@@ -189,6 +164,11 @@ app.post("/webhooks/meta-leads", async (req, res) => {
   // Ack immediately — Meta expects a fast 200, and retries on timeout.
   res.sendStatus(200);
 
+  if (req.body && req.body.object === "instagram") {
+    instagram.handleWebhook(req.body);
+    return;
+  }
+
   try {
     for (const entry of req.body.entry || []) {
       for (const change of entry.changes || []) {
@@ -212,11 +192,6 @@ app.get("/webhooks/meta-leads/health", (_req, res) => res.json({ ok: true }));
 // JSON with no signature, so the subscribed URL carries a shared-secret
 // query token instead.
 
-// Strips everything but digits so "+998 90 123 45 67", "998901234567"
-// and "90 123 45 67" all compare equal — mirrors src/lib/format.ts's
-// normalizePhone (this service can't import frontend TS directly).
-const normalizePhone = (phone) => (phone || "").replace(/\D/g, "").slice(-9);
-
 const moizvonkiCall = async (action, params = {}) => {
   const res = await fetch(`https://${MOIZVONKI_DOMAIN}/api/v1`, {
     method: "POST",
@@ -228,17 +203,7 @@ const moizvonkiCall = async (action, params = {}) => {
   return data;
 };
 
-const findByPhone = async (collection, phone) => {
-  const target = normalizePhone(phone);
-  if (!target) return null;
-  const snap = await db.collection(collection).get();
-  let found = null;
-  snap.forEach((doc) => {
-    if (found) return;
-    if (normalizePhone(doc.data().phone) === target) found = { id: doc.id, ...doc.data() };
-  });
-  return found;
-};
+const findByPhone = (collection, phone) => findByPhoneIn(db, collection, phone);
 
 const formatCallDuration = (seconds) => {
   const s = Math.max(0, Number(seconds) || 0);
@@ -275,44 +240,12 @@ const handleCallFinish = async (event) => {
   // enquiry over the phone, so it becomes a lead like any other channel
   // (a call should never go untracked, same rule as the Meta leads).
   if (!lead && !customer && isIncoming) {
-    const lead_number = await nextLeadNumber();
-    const ref = await db.collection("leads").add({
-      lead_number,
-      full_name: clientName || "Noma'lum (qo'ng'iroq)",
-      brand: "",
-      phone: clientNumber || "",
-      telegram: "",
-      interested_product_id: "",
-      interested_product_name: "",
-      source: "Telefon qo'ng'irog'i",
-      campaign_name: "",
-      campaign_id: "",
-      ad_set_name: "",
-      ad_set_id: "",
-      ad_name: "",
-      ad_id: "",
-      form_name: "",
-      form_id: "",
-      assigned_to_email: "",
-      assigned_to_name: "",
-      status: "new",
-      region: "",
-      industry: "",
-      estimated_amount: 0,
-      next_contact_at: null,
-      first_contact_at: null,
-      last_contact_at: null,
-      note: "",
-      lost_reason: "",
-      lost_comment: "",
-      converted_customer_id: null,
-      converted_order_id: null,
-      created_at: now,
-      updated_at: now,
-    });
-    lead = { id: ref.id, lead_number };
-    await db.collection("lead_sources").doc("telefon-qongirogi").set({ name: "Telefon qo'ng'irog'i" }, { merge: true });
-    console.log(`Call created new lead: ${lead_number} (${clientNumber})`);
+    lead = await createLead(
+      db,
+      { full_name: clientName || "Noma'lum (qo'ng'iroq)", phone: clientNumber || "", source: "Telefon qo'ng'irog'i" },
+      "telefon-qongirogi",
+    );
+    console.log(`Call created new lead: ${lead.lead_number} (${clientNumber})`);
   }
 
   await db.collection("calls").add({
@@ -393,5 +326,7 @@ app.listen(PORT, () => {
   console.log(`Meta leads webhook listening on :${PORT}`);
   void subscribeMoizvonkiWebhook();
   void assistant.start();
+  if (groups) groups.ensureTopics().catch((err) => console.error("Telegram topics check failed", err.message));
   if (hr) void hr.start();
+  void instagram.start();
 });

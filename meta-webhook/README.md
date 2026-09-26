@@ -158,3 +158,35 @@ Hisobchi answers everything in its own topic and elsewhere only when
 everything keeps going to the channel.
 The format follows the request: `pdf` (document), `png` (drawn with
 @napi-rs/canvas at 2x, sent as a photo) or `text` (written into the reply).
+
+## Instagram Direct agent (`instagram.js`)
+
+Answers people who write to the business Instagram's Direct — or comment
+under a post (a one-time private reply) — asking for their name and phone.
+When a phone number arrives it creates a lead in Sotuv bo'limi (source
+"Instagram Direct" / "Instagram izoh"; an existing lead with the same phone
+just gets an activity), thanks the person and posts to the
+"📸 Instagram Direct" topic of the work group (the topic is created on
+start if the group is already linked).
+
+- At most three messages per person: greeting → one reminder → thank you.
+  After that further messages are only forwarded to Telegram.
+- When a manager replies from Instagram themselves (an echo we didn't
+  send), the agent leaves that chat for good; a phone number left there is
+  still saved as a lead, silently.
+- Texts and the on/off switches live in `instagram_config/main`
+  (Sozlamalar → Instagram Direct); empty text = the default in
+  `DEFAULT_TEXTS`. Chats are in `ig_conversations/{igsid}`.
+- Webhooks come to the same `/webhooks/meta-leads` callback (object
+  `instagram`). On start the service subscribes the app to the `instagram`
+  object (`messages`, `comments`) through the Graph API using
+  `META_APP_SECRET`, so nothing has to be clicked in the dashboard.
+- `GET /webhooks/instagram/status` (admin) reports the Page, the linked
+  Instagram account, missing token permissions and the webhook
+  subscription; `POST` re-runs the subscription first.
+
+Needs, besides the Lead Ads setup: the Instagram professional account
+linked to the Facebook Page, "Allow access to messages" turned on in the
+Instagram app, and a Page token with `instagram_basic`,
+`instagram_manage_messages`, `instagram_manage_comments`,
+`pages_manage_metadata` in `META_PAGE_ACCESS_TOKEN`.

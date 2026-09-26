@@ -4,7 +4,7 @@
 // bot to some other group never redirects company reports there.
 //
 // Config lives in telegram_config/main: { group_chat_id, group_title,
-// topics: { it, sales, fin, prod, wh, hr, bot: <message_thread_id> } }.
+// topics: { it, sales, fin, prod, wh, hr, ig, bot: <message_thread_id> } }.
 const crypto = require("crypto");
 const { telegram } = require("./telegram");
 const { staffFromRequest } = require("./auth");
@@ -20,6 +20,7 @@ const TOPICS = [
   { key: "prod", name: "🏭 Ishlab chiqarish", color: 0xfb6f5f, intro: "Har kuni 08:00 da: kechikayotgan va bugun topshiriladigan buyurtmalar." },
   { key: "wh", name: "📦 Ombor / Ta'minot", color: 0x8eee98, intro: "Har kuni 08:00 da: tugayotgan materiallar, kirim-chiqim." },
   { key: "hr", name: "🧑‍💼 HR / Davomat", color: 0xff93b2, intro: "Davomat: ishga kelish/ketish rasmlari, 09:05 eslatmalari, kech qolganlar." },
+  { key: "ig", name: "📸 Instagram Direct", color: 0xff93b2, intro: "Instagram Direct va izohlar: yangi murojaatlar, raqam qoldirganlar (Sotuv bo'limiga lid bo'lib tushadi)." },
 ];
 
 const create = (db, { fallbackChatId }) => {
@@ -67,6 +68,29 @@ const create = (db, { fallbackChatId }) => {
       const me = await telegram("getMe", {});
       res.json({ command: `/ulash ${code}`, bot: me?.result?.username || "", expires_minutes: CODE_TTL_MS / 60000 });
     });
+  };
+
+  // A linked group gets topics added later (a new agent) without having
+  // to /ulash again — runs on start, quietly skips if the bot can't.
+  const ensureTopics = async () => {
+    const c = await config();
+    if (!c.group_chat_id) return;
+    const topics = { ...(c.topics || {}) };
+    const created = [];
+    for (const t of TOPICS) {
+      if (topics[t.key]) continue;
+      const r = await telegram("createForumTopic", { chat_id: c.group_chat_id, name: t.name, icon_color: t.color });
+      if (!r.ok) return;
+      topics[t.key] = r.result.message_thread_id;
+      created.push(t);
+    }
+    if (!created.length) return;
+    await db.collection("telegram_config").doc("main").set({ topics }, { merge: true });
+    cached = null;
+    for (const t of created) {
+      await telegram("sendMessage", { chat_id: c.group_chat_id, message_thread_id: topics[t.key], text: `${t.name}\n${t.intro}` });
+    }
+    console.log(`Telegram work group: added topics ${created.map((t) => t.key).join(",")}`);
   };
 
   const reply = (msg, text) =>
@@ -128,7 +152,7 @@ const create = (db, { fallbackChatId }) => {
     return true;
   };
 
-  return { route, isWorkChat, isGroup, botTopic, register, handleLinkCommand, config, TOPICS };
+  return { route, isWorkChat, isGroup, botTopic, register, handleLinkCommand, ensureTopics, config, TOPICS };
 };
 
 module.exports = { create, TOPICS };

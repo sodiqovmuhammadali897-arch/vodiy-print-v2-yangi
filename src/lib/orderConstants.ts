@@ -347,6 +347,8 @@ export const LEAD_STAGE_TO_ORDER_STATUS: Record<"design" | "production" | "ready
 
 export const LEAD_SOURCES = [
   "Instagram Target",
+  "Instagram Direct",
+  "Instagram izoh",
   "Facebook Lead Ads",
   "Telegram",
   "Sayt",
