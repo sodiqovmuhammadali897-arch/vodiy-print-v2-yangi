@@ -70,14 +70,25 @@ export class Report {
       this.problems === 0 ? "✅ <b>Hammasi joyida</b>" : `⚠️ <b>${this.problems} ta masala e'tibor talab qiladi</b>`;
     return [`<b>${this.title}</b>\n${todayCode}\n\n${summary}`, ...this.sections].join("\n\n");
   }
-  // chatEnv lets a single agent be pointed at its own channel later
-  // (e.g. TELEGRAM_SALES_CHAT_ID); until then everything goes to the IT
-  // channel.
+  // Destination: this agent's topic in the linked work group
+  // (telegram_config/main, set up from Sozlamalar → Telegram guruh);
+  // before a group is linked, the agent's own channel secret (chatEnv,
+  // e.g. TELEGRAM_SALES_CHAT_ID) or the IT channel.
   send = async (chatEnv) => {
     const text = this.text();
     console.log(`${text}\n`);
     const token = env.TELEGRAM_BOT_TOKEN;
-    const chatId = (chatEnv && env[chatEnv]) || env.TELEGRAM_IT_CHAT_ID;
+    let chatId = (chatEnv && env[chatEnv]) || env.TELEGRAM_IT_CHAT_ID;
+    let threadId = null;
+    try {
+      const cfg = getDb() ? (await getDb().collection("telegram_config").doc("main").get()).data() : null;
+      if (cfg?.group_chat_id) {
+        chatId = cfg.group_chat_id;
+        threadId = cfg.topics?.[this.agentId] || null;
+      }
+    } catch (err) {
+      console.error("telegram_config read failed, using the channel:", err.message);
+    }
     if (!token || !chatId) {
       console.log("::warning::TELEGRAM_BOT_TOKEN / chat id not set — report printed above but not sent.");
       return;
@@ -85,7 +96,7 @@ export class Report {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+      body: JSON.stringify({ chat_id: chatId, ...(threadId ? { message_thread_id: threadId } : {}), text, parse_mode: "HTML", disable_web_page_preview: true }),
     });
     if (!res.ok) {
       console.error(`Telegram sendMessage failed: ${res.status} ${await res.text()}`);

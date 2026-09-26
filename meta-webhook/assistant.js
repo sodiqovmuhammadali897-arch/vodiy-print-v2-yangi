@@ -394,19 +394,21 @@ const TOOL_VISIT = { product_price_pdf: "sales", receivables: "fin", cash_flow: 
 // One path for a question from the Telegram channel or from the website:
 // answer it in the channel (as a reply), post confirmation buttons for any
 // proposed change, and emit the AI Ofis events.
-const handleQuestion = async (db, { chatId, replyTo, text, context = "", source = "telegram" }) => {
+const handleQuestion = async (db, { chatId, threadId = null, replyTo, text, context = "", source = "telegram" }) => {
+  const thread = threadId ? { message_thread_id: threadId } : {};
   await emitEvent(db, { agent: "bot", kind: "question", text: clip(text, 160), bubble: clip(text, 90), source });
-  await telegram("sendChatAction", { chat_id: chatId, action: "typing" });
+  await telegram("sendChatAction", { chat_id: chatId, action: "typing", ...thread });
   const ctx = { chatId, text, pending: [], toolsUsed: [], files: [] };
   const reply = (await answer(db, text, context, ctx)) || "Javob topilmadi.";
   await telegram("sendMessage", {
     chat_id: chatId,
+    ...thread,
     text: reply.slice(0, 4000),
     reply_parameters: { message_id: replyTo, allow_sending_without_reply: true },
     disable_web_page_preview: true,
   });
-  for (const f of ctx.files) await sendDocument({ chatId, buffer: f.buffer, filename: f.filename, caption: f.caption, replyTo });
-  await sendConfirmations(db, telegram, chatId, replyTo, ctx.pending);
+  for (const f of ctx.files) await sendDocument({ chatId, threadId, buffer: f.buffer, filename: f.filename, caption: f.caption, replyTo });
+  await sendConfirmations(db, telegram, chatId, replyTo, ctx.pending, threadId);
   const visit = ctx.toolsUsed.map((t) => TOOL_VISIT[t]).find(Boolean) || null;
   await emitEvent(db, ctx.pending.length
     ? { agent: "bot", kind: "proposed", text: clip(ctx.pending[0].summary.replace(/\n/g, " · "), 180), bubble: "Tasdiqlaysizmi? ⏳", source }
@@ -415,13 +417,16 @@ const handleQuestion = async (db, { chatId, replyTo, text, context = "", source 
   return { reply, pending: ctx.pending, files: ctx.files.map((f) => f.filename) };
 };
 
-const register = (app, db, hr = null) => {
+const register = (app, db, hr = null, groups = null) => {
   const configured = Boolean(BOT_TOKEN && ANTHROPIC_API_KEY && ALLOWED_CHATS.size > 0);
   if (!configured) {
     console.log("Hisobchi bot: TELEGRAM_BOT_TOKEN / ANTHROPIC_API_KEY / ASSISTANT_CHAT_IDS not all set — not enabled.");
     return { start: () => {} };
   }
   const mainChat = [...ALLOWED_CHATS][0];
+  const isWorkChat = async (id) => ALLOWED_CHATS.has(String(id)) || (groups ? await groups.isWorkChat(id) : false);
+  let botUsername = "";
+  let botUserId = null;
 
   app.post("/webhooks/telegram", async (req, res) => {
     if (req.get("X-Telegram-Bot-Api-Secret-Token") !== WEBHOOK_SECRET) return res.sendStatus(401);
@@ -429,7 +434,7 @@ const register = (app, db, hr = null) => {
 
     if (req.body?.callback_query) {
       try {
-        await handleCallback(db, telegram, req.body.callback_query, ALLOWED_CHATS);
+        await handleCallback(db, telegram, req.body.callback_query, isWorkChat);
       } catch (err) {
         console.error("Hisobchi callback failed", err);
       }
@@ -442,14 +447,37 @@ const register = (app, db, hr = null) => {
       if (hr && text) await hr.handlePrivateMessage(msg).catch((err) => console.error("HR private message failed", err));
       return;
     }
-    if (!msg || !text || msg.from?.is_bot || !ALLOWED_CHATS.has(String(msg.chat?.id))) return;
+    if (!msg || !text || msg.from?.is_bot) return;
+    // Linking a work group: "/ulash CODE" from any group (the code is the lock).
+    if (groups && /^\/ulash\b/i.test(text)) {
+      await groups.handleLinkCommand(msg).catch((err) => console.error("Group link failed", err));
+      return;
+    }
+    if (!(await isWorkChat(msg.chat?.id))) return;
+    // In the work group the Hisobchi answers everything in its own topic,
+    // elsewhere only when addressed (@mention or a reply to it) — people
+    // talk to each other in the other topics.
+    if (groups && (await groups.isGroup(msg.chat.id))) {
+      const inBotTopic = msg.message_thread_id && msg.message_thread_id === (await groups.botTopic());
+      const mentioned = botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
+      const repliedToBot = msg.reply_to_message?.from?.id && msg.reply_to_message.from.id === botUserId;
+      if (!inBotTopic && !mentioned && !repliedToBot) return;
+    }
+    const clean = botUsername ? text.replace(new RegExp(`@${botUsername}`, "ig"), "").trim() : text;
 
     try {
-      await handleQuestion(db, { chatId: msg.chat.id, replyTo: msg.message_id, text, context: msg.reply_to_message?.text || "" });
+      await handleQuestion(db, {
+        chatId: msg.chat.id,
+        threadId: msg.is_topic_message ? msg.message_thread_id : null,
+        replyTo: msg.message_id,
+        text: clean || text,
+        context: msg.reply_to_message?.text || "",
+      });
     } catch (err) {
       console.error("Hisobchi failed", err);
       await telegram("sendMessage", {
         chat_id: msg.chat.id,
+        ...(msg.is_topic_message ? { message_thread_id: msg.message_thread_id } : {}),
         text: "Kechirasiz, hozir javob bera olmadim. Birozdan keyin qayta so'rang.",
         reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true },
       });
@@ -480,9 +508,11 @@ const register = (app, db, hr = null) => {
     if (!text) return res.status(400).json({ error: "Buyruq bo'sh" });
     if (tooFast(who.email)) return res.status(429).json({ error: "Juda ko'p so'rov — bir daqiqa kuting" });
     try {
-      const posted = await telegram("sendMessage", { chat_id: mainChat, text: `🌐 Saytdan · ${who.name}:\n${text}` });
+      // The Hisobchi topic of the work group, or the channel before linking.
+      const target = groups ? await groups.route("bot") : { chat_id: mainChat };
+      const posted = await telegram("sendMessage", { ...target, text: `🌐 Saytdan · ${who.name}:\n${text}` });
       const replyTo = posted?.result?.message_id;
-      const out = await handleQuestion(db, { chatId: mainChat, replyTo, text, source: "web" });
+      const out = await handleQuestion(db, { chatId: target.chat_id, threadId: target.message_thread_id || null, replyTo, text, source: "web" });
       res.json({ reply: out.reply, pending: out.pending.map((p) => ({ id: p.id, summary: p.summary })) });
     } catch (err) {
       console.error("Hisobchi web failed", err);
@@ -505,6 +535,9 @@ const register = (app, db, hr = null) => {
   });
 
   const start = async () => {
+    const me = await telegram("getMe", {});
+    botUsername = me?.result?.username || "";
+    botUserId = me?.result?.id || null;
     const url = `${PUBLIC_BASE}/webhooks/telegram`;
     const data = await telegram("setWebhook", {
       url,

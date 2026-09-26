@@ -140,3 +140,19 @@ tiers, specs, contacts, 30-day validity — never cost or supplier data)
 with pdfkit and the bundled DejaVu fonts (Latin + Cyrillic), and the bot
 posts it to the channel as a document. An optional quantity adds a
 "N dona uchun jami" box.
+
+## Work group with Topics (`groups.js`)
+
+Instead of one channel, agents post to their own topic in a Telegram
+group with Topics enabled. Linking (Sozlamalar → Telegram guruh) gives an
+admin a one-time `/ulash CODE` (30 min); posted in the group, the bot
+checks Topics are on and it is an admin with "Manage topics", creates the
+topics (Hisobchi, IT, Sotuv, Moliya, Ishlab chiqarish, Ombor / Ta'minot,
+HR / Davomat) and saves `telegram_config/main`. Adding the bot to any
+other group does nothing without a code.
+
+After linking: daily reports go to their agent's topic, HR messages and
+check-in/out selfies to HR / Davomat, website questions to Hisobchi. The
+Hisobchi answers everything in its own topic and elsewhere only when
+@mentioned or replied to, answering in the same topic. Before linking
+everything keeps going to the channel.

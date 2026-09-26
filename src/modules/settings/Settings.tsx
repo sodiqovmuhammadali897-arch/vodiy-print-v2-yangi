@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Building2, Users, Target, CalendarDays, Shirt, ShieldCheck, Clock, Gauge } from "lucide-react";
+import { Building2, Users, Target, CalendarDays, Shirt, ShieldCheck, Clock, Gauge, Send } from "lucide-react";
 import CompanySettingsPanel from "./CompanySettingsPanel";
 import ManagersPanel from "./ManagersPanel";
 import MonthlyPlanPanel from "./MonthlyPlanPanel";
@@ -9,6 +9,7 @@ import StaffPermissionsPanel from "./StaffPermissionsPanel";
 import WorkSchedulePanel from "./WorkSchedulePanel";
 import KpiWeightsPanel from "./KpiWeightsPanel";
 import SeedPanel from "./SeedPanel";
+import TelegramGroupPanel from "./TelegramGroupPanel";
 
 type Tab =
   | "company"
@@ -18,7 +19,8 @@ type Tab =
   | "textile"
   | "staff"
   | "workSchedule"
-  | "kpiWeights";
+  | "kpiWeights"
+  | "telegram";
 
 const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "company", label: "Kompaniya ma'lumotlari", icon: <Building2 className="h-4 w-4" /> },
@@ -29,6 +31,7 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "staff", label: "Xodimlar va ruxsatlar", icon: <ShieldCheck className="h-4 w-4" /> },
   { key: "workSchedule", label: "Ish jadvali", icon: <Clock className="h-4 w-4" /> },
   { key: "kpiWeights", label: "KPI og'irliklari", icon: <Gauge className="h-4 w-4" /> },
+  { key: "telegram", label: "Telegram guruh", icon: <Send className="h-4 w-4" /> },
 ];
 
 export default function Settings() {
@@ -75,6 +78,7 @@ export default function Settings() {
       {tab === "staff" && <StaffPermissionsPanel />}
       {tab === "workSchedule" && <WorkSchedulePanel />}
       {tab === "kpiWeights" && <KpiWeightsPanel />}
+      {tab === "telegram" && <TelegramGroupPanel />}
     </div>
   );
 }

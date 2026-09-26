@@ -53,11 +53,13 @@ app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 // HR agent (attendance reminders / late notices) — see hr.js — and the
 // Telegram "Hisobchi" Q&A bot — see assistant.js. Both use the same bot.
-const hr = process.env.TELEGRAM_BOT_TOKEN
-  ? require("./hr").create(db, { channelId: (process.env.ASSISTANT_CHAT_IDS || "").split(",")[0].trim() })
-  : null;
+// Work group with Topics — see groups.js — routes every agent to its own topic.
+const reportChannel = (process.env.ASSISTANT_CHAT_IDS || "").split(",")[0].trim();
+const groups = process.env.TELEGRAM_BOT_TOKEN ? require("./groups").create(db, { fallbackChatId: reportChannel }) : null;
+if (groups) groups.register(app);
+const hr = groups ? require("./hr").create(db, { route: groups.route }) : null;
 if (hr) hr.register(app);
-const assistant = require("./assistant").register(app, db, hr);
+const assistant = require("./assistant").register(app, db, hr, groups);
 
 const slugify = (s) =>
   s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");

@@ -1,4 +1,5 @@
 import { logger } from "firebase-functions/v2";
+import { db } from "../admin";
 
 const parseDataUrl = (dataUrl: string): { ext: string; buffer: Buffer } => {
   const match = /^data:image\/(jpeg|jpg|png|webp);base64,(.+)$/.exec(dataUrl);
@@ -19,7 +20,21 @@ export const sendTelegramAttendancePhoto = async (
   photoDataUrl: string,
 ): Promise<void> => {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  let chatId = process.env.TELEGRAM_CHAT_ID;
+  let threadId: number | null = null;
+  // Once the work group is linked (Sozlamalar → Telegram guruh), photos go
+  // to its "HR / Davomat" topic instead of the old attendance chat.
+  try {
+    const cfg = (await db.collection("telegram_config").doc("main").get()).data() as
+      | { group_chat_id?: number | string; topics?: Record<string, number> }
+      | undefined;
+    if (cfg?.group_chat_id) {
+      chatId = String(cfg.group_chat_id);
+      threadId = cfg.topics?.hr ?? null;
+    }
+  } catch (err) {
+    logger.warn("telegram_config read failed, using TELEGRAM_CHAT_ID", { error: err });
+  }
   if (!token || !chatId) {
     logger.warn("Telegram bot not configured (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID missing), skipping notification");
     return;
@@ -29,6 +44,7 @@ export const sendTelegramAttendancePhoto = async (
     const { ext, buffer } = parseDataUrl(photoDataUrl);
     const form = new FormData();
     form.append("chat_id", chatId);
+    if (threadId) form.append("message_thread_id", String(threadId));
     form.append("caption", caption);
     form.append("photo", new Blob([buffer], { type: `image/${ext}` }), `attendance.${ext}`);
 

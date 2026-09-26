@@ -13,10 +13,11 @@ const telegram = async (method, body) => {
 };
 
 // Sends a file (e.g. a generated PDF) with an optional caption / reply.
-const sendDocument = async ({ chatId, buffer, filename, caption = "", replyTo = null }) => {
+const sendDocument = async ({ chatId, threadId = null, buffer, filename, caption = "", replyTo = null }) => {
   const fd = new FormData();
   fd.append("chat_id", String(chatId));
   fd.append("document", new Blob([buffer], { type: "application/pdf" }), filename);
+  if (threadId) fd.append("message_thread_id", String(threadId));
   if (caption) fd.append("caption", caption.slice(0, 1000));
   if (replyTo) fd.append("reply_parameters", JSON.stringify({ message_id: replyTo, allow_sending_without_reply: true }));
   const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, { method: "POST", body: fd });

@@ -75,7 +75,7 @@ const sendSms = async (phone, text) => {
   return data;
 };
 
-const create = (db, { channelId }) => {
+const create = (db, { route }) => {
   let botUsername = "";
   let schedule = { ...DEFAULT_SCHEDULE };
   let scheduleAt = 0;
@@ -134,7 +134,8 @@ const create = (db, { channelId }) => {
     return snap.docs.map((d) => ({ email: d.id, ...d.data() })).filter((s) => s.attendance_notify !== false);
   };
 
-  const channelPost = (text) => (channelId ? telegram("sendMessage", { chat_id: channelId, text }) : null);
+  // HR / Davomat topic of the work group (or the channel before linking).
+  const channelPost = async (text) => telegram("sendMessage", { ...(await route("hr")), text });
 
   // ── 09:05 reminder ─────────────────────────────────────────
   const maybeRemind = async () => {

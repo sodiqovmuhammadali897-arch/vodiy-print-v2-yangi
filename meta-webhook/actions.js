@@ -335,10 +335,11 @@ const execute = async (db, action, actor) => {
   throw new Error(`Noma'lum amal: ${action.kind}`);
 };
 
-const sendConfirmations = async (db, telegram, chatId, replyTo, pending) => {
+const sendConfirmations = async (db, telegram, chatId, replyTo, pending, threadId = null) => {
   for (const a of pending) {
     const sent = await telegram("sendMessage", {
       chat_id: chatId,
+      ...(threadId ? { message_thread_id: threadId } : {}),
       text: `${a.summary}\n\nTasdiqlaysizmi?`,
       reply_parameters: { message_id: replyTo, allow_sending_without_reply: true },
       reply_markup: {
@@ -429,11 +430,12 @@ const decideAction = async (db, telegram, id, ok, actor, extra = {}) => {
   }
 };
 
-const handleCallback = async (db, telegram, cq, allowedChats) => {
+// isWorkChat: the report channel or the linked work group.
+const handleCallback = async (db, telegram, cq, isWorkChat) => {
   const answer = (text, alert = false) => telegram("answerCallbackQuery", { callback_query_id: cq.id, text, show_alert: alert });
   const chatId = cq.message && cq.message.chat && cq.message.chat.id;
   const m = /^(ok|no):([A-Za-z0-9]+)$/.exec(cq.data || "");
-  if (!m || !chatId || !allowedChats.has(String(chatId))) return answer("Ruxsat yo'q");
+  if (!m || !chatId || !(await isWorkChat(chatId))) return answer("Ruxsat yo'q");
   if (!(await isChatAdmin(telegram, chatId, cq.from.id))) return answer("Faqat kanal adminlari tasdiqlay oladi", true);
   const actor = [cq.from.first_name, cq.from.last_name].filter(Boolean).join(" ") || cq.from.username || String(cq.from.id);
   const res = await decideAction(db, telegram, m[2], m[1] === "ok", actor, { chatId, tgUserId: cq.from.id, via: "telegram", message: { chat_id: chatId, message_id: cq.message.message_id } });
