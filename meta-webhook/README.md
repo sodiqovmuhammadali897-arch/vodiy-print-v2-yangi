@@ -131,9 +131,9 @@ texts matching templates approved in its cabinet — submit these two:
     Hurmatli %w, ish kuni soat %w da boshlandi. Siz hali ishga kelganingizni belgilamadingiz. Vodiy Print
     Hurmatli %w, bugun ishga %w kech qoldingiz (kelgan vaqtingiz %w). Iltimos, vaqtida keling. Vodiy Print
 
-### Price sheet PDFs (`pdf.js`)
+### Price sheets: PDF, PNG or text (`pdf.js`, `png.js`)
 
-"Paket 45 narxini PDF qilib tashla" → the `product_price_pdf` tool finds
+"Paket 45 narxini PDF / rasm / matn qilib ber" → the `product_price_sheet` tool finds
 the product (by code, e.g. `45`, or name), renders the customer-facing
 price sheet (same content as the website's mijoz narx varag'i: price
 tiers, specs, contacts, 30-day validity — never cost or supplier data)
@@ -156,3 +156,5 @@ check-in/out selfies to HR / Davomat, website questions to Hisobchi. The
 Hisobchi answers everything in its own topic and elsewhere only when
 @mentioned or replied to, answering in the same topic. Before linking
 everything keeps going to the channel.
+The format follows the request: `pdf` (document), `png` (drawn with
+@napi-rs/canvas at 2x, sent as a photo) or `text` (written into the reply).

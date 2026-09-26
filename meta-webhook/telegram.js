@@ -12,17 +12,20 @@ const telegram = async (method, body) => {
   return data;
 };
 
-// Sends a file (e.g. a generated PDF) with an optional caption / reply.
+// Sends a generated file: a PDF as a document, a PNG as a photo (so it
+// previews inline in the chat), with an optional caption / reply.
 const sendDocument = async ({ chatId, threadId = null, buffer, filename, caption = "", replyTo = null }) => {
+  const isPng = /\.png$/i.test(filename);
+  const method = isPng ? "sendPhoto" : "sendDocument";
   const fd = new FormData();
   fd.append("chat_id", String(chatId));
-  fd.append("document", new Blob([buffer], { type: "application/pdf" }), filename);
+  fd.append(isPng ? "photo" : "document", new Blob([buffer], { type: isPng ? "image/png" : "application/pdf" }), filename);
   if (threadId) fd.append("message_thread_id", String(threadId));
   if (caption) fd.append("caption", caption.slice(0, 1000));
   if (replyTo) fd.append("reply_parameters", JSON.stringify({ message_id: replyTo, allow_sending_without_reply: true }));
-  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, { method: "POST", body: fd });
+  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, { method: "POST", body: fd });
   const data = await res.json().catch(() => ({}));
-  if (!data.ok) console.error("Telegram sendDocument failed:", JSON.stringify(data));
+  if (!data.ok) console.error(`Telegram ${method} failed:`, JSON.stringify(data));
   return data;
 };
 

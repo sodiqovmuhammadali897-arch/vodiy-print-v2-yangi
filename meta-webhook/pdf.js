@@ -165,4 +165,32 @@ const buildPriceSheet = async ({ product, company = {}, quantity = 0 }) => {
   return done;
 };
 
-module.exports = { buildPriceSheet, unitPriceFor };
+// Plain-text version for answering right in the chat.
+const priceSheetText = ({ product, company = {}, quantity = 0 }) => {
+  const unit = product.unit || "dona";
+  const tiers = sortTiers(product.price_tiers);
+  const now = new Date(Date.now() + 5 * 3600 * 1000);
+  const until = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+  const specs = [
+    ["O'lcham", product.size_spec], ["Material", product.material], ["Bosma turi", product.print_type],
+    ["Qog'oz qalinligi", product.paper_weight], ["Laminatsiya", product.lamination], ["Qadoqlash", product.packaging],
+  ].filter(([, v]) => v);
+  const lines = [`📦 ${product.name}`];
+  if (product.description) lines.push(product.description);
+  if (Number(product.min_order_qty) > 0) lines.push(`Minimal tiraj: ${product.min_order_qty} ${unit}`);
+  if (Number(product.lead_time_days) > 0) lines.push(`Tayyor bo'lish muddati: ${product.lead_time_days} ish kuni`);
+  if (specs.length) lines.push("", ...specs.map(([k, v]) => `• ${k}: ${v}`));
+  lines.push("", "💰 Narxlar:");
+  if (!tiers.length) lines.push("Narxlar kiritilmagan");
+  for (const t of tiers) lines.push(`• ${t.min_qty}+ ${unit} — ${money(t.price)} / dona (jami ${money(t.price * t.min_qty)})`);
+  if (quantity > 0 && tiers.length) {
+    const price = unitPriceFor(tiers, quantity);
+    lines.push("", `🧮 ${quantity} ${unit} uchun: ${money(price)} × ${quantity} = ${money(price * quantity)}`);
+  }
+  lines.push("", `Narxlar ${ddmmyyyy(until)} gacha amal qiladi.`);
+  const contacts = [company.phone, company.telegram].filter(Boolean);
+  if (contacts.length) lines.push(`📞 ${contacts.join(" · ")}`);
+  return lines.join("\n");
+};
+
+module.exports = { buildPriceSheet, priceSheetText, unitPriceFor, sortTiers, money, ddmmyyyy, loadImage };

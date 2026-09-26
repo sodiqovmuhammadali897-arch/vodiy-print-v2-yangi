@@ -35,7 +35,8 @@ const {
 } = require("./shared");
 const { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback, decideAction } = require("./actions");
 const { telegram, sendDocument, BOT_TOKEN } = require("./telegram");
-const { buildPriceSheet } = require("./pdf");
+const { buildPriceSheet, priceSheetText } = require("./pdf");
+const { buildPriceSheetPng } = require("./png");
 const { staffFromRequest } = require("./auth");
 
 const TOOLS = [
@@ -279,14 +280,15 @@ const createTools = (db) => {
 // Tools that produce a file for the channel instead of data for Claude.
 const FILE_TOOLS = [
   {
-    name: "product_price_pdf",
+    name: "product_price_sheet",
     description:
-      "Mahsulotning MIJOZGA ko'rsatiladigan narxlar varag'ini PDF qilib kanalga yuboradi (tannarxsiz: tiraj bo'yicha narxlar, xususiyatlar, kompaniya kontaktlari). Mahsulot nomi yoki kodi bo'yicha topadi.",
+      "Mahsulotning MIJOZGA ko'rsatiladigan narxlar varag'i (tannarxsiz: tiraj bo'yicha narxlar, xususiyatlar, kompaniya kontaktlari). format: pdf — PDF fayl, png — rasm, text — chatga matn. Mahsulot nomi yoki kodi bo'yicha topadi.",
     input_schema: {
       type: "object",
       properties: {
         product: { type: "string", description: "Mahsulot nomi yoki kodi, masalan \"Paket 45\" yoki \"45\"" },
-        quantity: { type: "number", description: "Mijoz so'ragan tiraj bo'lsa — PDF'da shu miqdor uchun jami summa ham chiqadi" },
+        quantity: { type: "number", description: "Mijoz so'ragan tiraj bo'lsa — shu miqdor uchun jami summa ham chiqadi" },
+        format: { type: "string", enum: ["pdf", "png", "text"], description: "Foydalanuvchi so'ragan shakl; aytilmasa pdf" },
       },
       required: ["product"],
     },
@@ -296,7 +298,7 @@ const FILE_TOOLS = [
 const createFileTools = (db, ctx) => {
   const all = createReader(db);
   return {
-    async product_price_pdf({ product, quantity }) {
+    async product_price_sheet({ product, quantity, format = "pdf" }) {
       const products = (await all("products")).filter((p) => p.is_active !== false && !p.archived_at);
       const digits = String(product || "").replace(/\D/g, "").replace(/^0+/, "");
       const byCode = digits ? products.filter((p) => String(p.product_code || "").replace(/\D/g, "").replace(/^0+/, "") === digits) : [];
@@ -314,10 +316,20 @@ const createFileTools = (db, ctx) => {
       const p = found[0];
       const companySnap = await db.collection("company_settings").doc("main").get();
       const qty = Number(quantity) > 0 ? Math.round(Number(quantity)) : 0;
-      const buffer = await buildPriceSheet({ product: p, company: companySnap.exists ? companySnap.data() : {}, quantity: qty });
+      const company = companySnap.exists ? companySnap.data() : {};
+      if (format === "text") {
+        return { tayyor: true, format: "text", matn: priceSheetText({ product: p, company, quantity: qty }), eslatma: "matn maydonini javobingga o'zgartirmay qo'y" };
+      }
       const safe = String(p.name || "mahsulot").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 40) || "mahsulot";
-      ctx.files.push({ buffer, filename: `${safe}-narxlar.pdf`, caption: `📄 ${p.name} — narxlar (mijoz uchun)${qty ? ` · ${qty} ${p.unit || "dona"}` : ""}` });
-      return { tayyor: true, mahsulot: p.name, kod: p.product_code || undefined, tirajlar_soni: (p.price_tiers || []).length, eslatma: "PDF kanalga fayl bo'lib yuboriladi" };
+      const caption = `${p.name} — narxlar (mijoz uchun)${qty ? ` · ${qty} ${p.unit || "dona"}` : ""}`;
+      if (format === "png") {
+        const buffer = await buildPriceSheetPng({ product: p, company, quantity: qty });
+        ctx.files.push({ buffer, filename: `${safe}-narxlar.png`, caption: `🖼 ${caption}` });
+      } else {
+        const buffer = await buildPriceSheet({ product: p, company, quantity: qty });
+        ctx.files.push({ buffer, filename: `${safe}-narxlar.pdf`, caption: `📄 ${caption}` });
+      }
+      return { tayyor: true, format, mahsulot: p.name, kod: p.product_code || undefined, tirajlar_soni: (p.price_tiers || []).length, eslatma: "Fayl chatga o'zi yuboriladi" };
     },
   };
 };
@@ -340,7 +352,7 @@ const systemPrompt = () =>
     "- Summalar: \"2 mln\" = 2000000, \"500 ming\" = 500000, \"1,5 mln\" = 1500000. Sana aytilmasa bugun. To'lov turi aytilmasa Naqd.",
     "- Buyurtma raqami aytilmasa, avval orders_search bilan top; bitta aniq buyurtma topilmasa, variantlarni ko'rsatib so'ra.",
     "- Vosita xato yoki variantlar qaytarsa, buni foydalanuvchiga tushuntir va aniqlashtirishni so'ra.",
-    "Fayllar: mahsulot narxini PDF / mijozga narx varag'i so'ralsa product_price_pdf ni chaqir. PDF kanalga o'zi yuboriladi — javobda bir qisqa gap yoz (masalan \"PDF tayyor 👇\").",
+    "Mahsulot narxi / mijozga narx varag'i so'ralsa product_price_sheet ni chaqir va foydalanuvchi so'ragan shaklni tanla: PDF → format=pdf; rasm, PNG, JPG, surat → format=png; matn, yozib ber, shu yerga yoz → format=text; aytilmasa pdf. Fayl (pdf/png) chatga o'zi yuboriladi — javobda bir qisqa gap yoz (masalan \"Tayyor 👇\"). format=text bo'lsa, vosita qaytargan matn'ni javobingga o'zgartirmay qo'y.",
   ].join("\n");
 
 const callClaude = async (messages, tools) => {
@@ -389,7 +401,7 @@ const answer = async (db, question, context, ctx) => {
 
 // Which colleague the Hisobchi "walks to" on the AI Ofis page, by the
 // first data tool it used to answer.
-const TOOL_VISIT = { product_price_pdf: "sales", receivables: "fin", cash_flow: "fin", supplier_balances: "fin", orders_search: "prod", leads_summary: "sales", warehouse_stock: "wh" };
+const TOOL_VISIT = { product_price_sheet: "sales", receivables: "fin", cash_flow: "fin", supplier_balances: "fin", orders_search: "prod", leads_summary: "sales", warehouse_stock: "wh" };
 
 // One path for a question from the Telegram channel or from the website:
 // answer it in the channel (as a reply), post confirmation buttons for any
