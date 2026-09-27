@@ -20,6 +20,7 @@ const TOPIC_LABELS: Record<string, string> = {
   wh: "📦 Ombor / Ta'minot",
   hr: "🧑‍💼 HR / Davomat",
   ig: "📸 Instagram Direct",
+  mkt: "📣 Marketing",
 };
 
 // Links the Telegram work group (with Topics) that the agents post into.

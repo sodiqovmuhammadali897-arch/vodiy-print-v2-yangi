@@ -429,7 +429,7 @@ const handleQuestion = async (db, { chatId, threadId = null, replyTo, text, cont
   return { reply, pending: ctx.pending, files: ctx.files.map((f) => f.filename) };
 };
 
-const register = (app, db, hr = null, groups = null) => {
+const register = (app, db, hr = null, groups = null, marketing = null) => {
   const configured = Boolean(BOT_TOKEN && ANTHROPIC_API_KEY && ALLOWED_CHATS.size > 0);
   if (!configured) {
     console.log("Hisobchi bot: TELEGRAM_BOT_TOKEN / ANTHROPIC_API_KEY / ASSISTANT_CHAT_IDS not all set — not enabled.");
@@ -470,6 +470,21 @@ const register = (app, db, hr = null, groups = null) => {
     // elsewhere only when addressed (@mention or a reply to it) — people
     // talk to each other in the other topics.
     if (groups && (await groups.isGroup(msg.chat.id))) {
+      // The Marketing topic belongs to the Marketolog agent (marketing.js).
+      const mktTopic = marketing ? await groups.topicId("mkt") : null;
+      if (mktTopic && msg.message_thread_id === mktTopic) {
+        const q = botUsername ? text.replace(new RegExp(`@${botUsername}`, "ig"), "").trim() : text;
+        await marketing.handleMessage(msg, q || text).catch(async (err) => {
+          console.error("Marketolog failed", err);
+          await telegram("sendMessage", {
+            chat_id: msg.chat.id,
+            message_thread_id: msg.message_thread_id,
+            text: "Kechirasiz, hozir javob bera olmadim. Birozdan keyin qayta so'rang.",
+            reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true },
+          });
+        });
+        return;
+      }
       const inBotTopic = msg.message_thread_id && msg.message_thread_id === (await groups.botTopic());
       const mentioned = botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
       const repliedToBot = msg.reply_to_message?.from?.id && msg.reply_to_message.from.id === botUserId;

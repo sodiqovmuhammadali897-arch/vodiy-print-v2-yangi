@@ -4,7 +4,7 @@
 // bot to some other group never redirects company reports there.
 //
 // Config lives in telegram_config/main: { group_chat_id, group_title,
-// topics: { it, sales, fin, prod, wh, hr, ig, bot: <message_thread_id> } }.
+// topics: { it, sales, fin, prod, wh, hr, ig, mkt, bot: <message_thread_id> } }.
 const crypto = require("crypto");
 const { telegram } = require("./telegram");
 const { staffFromRequest } = require("./auth");
@@ -20,6 +20,7 @@ const TOPICS = [
   { key: "prod", name: "🏭 Ishlab chiqarish", color: 0xfb6f5f, intro: "Har kuni 08:00 da: kechikayotgan va bugun topshiriladigan buyurtmalar." },
   { key: "wh", name: "📦 Ombor / Ta'minot", color: 0x8eee98, intro: "Har kuni 08:00 da: tugayotgan materiallar, kirim-chiqim." },
   { key: "hr", name: "🧑‍💼 HR / Davomat", color: 0xff93b2, intro: "Davomat: ishga kelish/ketish rasmlari, 09:05 eslatmalari, kech qolganlar." },
+  { key: "mkt", name: "📣 Marketing", color: 0xffd67e, intro: "Marketolog: har dushanba 09:00 da haftalik tahlil, kontent-reja va qaytariladigan mijozlar. Shu yerda so'rang: «bu oy qaysi manba yaxshi ishladi?», «8-mart uchun 3 ta post yoz», «uxlab qolgan mijozlar». /hisobot — hisobotni hozir olish." },
   { key: "ig", name: "📸 Instagram Direct", color: 0xff93b2, intro: "Instagram Direct va izohlar: yangi murojaatlar, raqam qoldirganlar (Sotuv bo'limiga lid bo'lib tushadi)." },
 ];
 
@@ -58,6 +59,7 @@ const create = (db, { fallbackChatId }) => {
   };
 
   const botTopic = async () => (await config()).topics?.bot || null;
+  const topicId = async (key) => (await config()).topics?.[key] || null;
 
   const register = (app) => {
     app.post("/webhooks/tg-group/code", async (req, res) => {
@@ -152,7 +154,7 @@ const create = (db, { fallbackChatId }) => {
     return true;
   };
 
-  return { route, isWorkChat, isGroup, botTopic, register, handleLinkCommand, ensureTopics, config, TOPICS };
+  return { route, isWorkChat, isGroup, botTopic, topicId, register, handleLinkCommand, ensureTopics, config, TOPICS };
 };
 
 module.exports = { create, TOPICS };

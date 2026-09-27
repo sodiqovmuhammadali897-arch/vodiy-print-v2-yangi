@@ -190,3 +190,27 @@ linked to the Facebook Page, "Allow access to messages" turned on in the
 Instagram app, and a Page token with `instagram_basic`,
 `instagram_manage_messages`, `instagram_manage_comments`,
 `pages_manage_metadata` in `META_PAGE_ACCESS_TOKEN`.
+
+## Marketolog agent (`marketing.js`)
+
+Every Monday 09:00 (Tashkent) posts the weekly marketing report to the
+"📣 Marketing" topic (claimed once per week in `marketing_runs/{date}`,
+stored in `marketing_reports/{date}`):
+
+1. Numbers, computed in code: leads by source and how many reached the
+   advance stage / an order, lost reasons, median first response, orders
+   and revenue by customer source, new vs returning customers, top
+   products with margin (from `product_costs`), ad spend (expenses in the
+   "Reklama" category) → cost per lead and per new customer; vs last week.
+2. Meta ads per campaign (spend, CTR, leads, cost per lead, and the CRM's
+   leads/orders for the same campaign) — only with `META_ADS_TOKEN`
+   (a system-user token with `ads_read`) and `META_AD_ACCOUNT_ID`.
+3. Claude's recommendations and a six-post content plan tied to upcoming
+   holidays (fixed dates + the ERP's holidays) and the catalog.
+4. Customers with no order for 60+ days (largest buyers first) with a
+   ready personal message for each.
+
+Anything written in the Marketing topic is answered by the same agent
+with read-only tools (overview for a period, dormant customers, Meta ads,
+catalog, upcoming dates). `/hisobot` there — or `POST
+/webhooks/marketing/run` as an admin — sends the report right away.

@@ -44,6 +44,7 @@ const demoEvents = (): AgentEvent[] => {
     e("bot", "proposed", "VP-125: Ishlab chiqarishda → Tayyor", { bubble: "Tasdiqlaysizmi? ⏳" }),
     e("bot", "action", "Namuna: VP-125 Tayyor bo'ldi", { bubble: "Bajarildi ✅", visit: "prod" }),
     e("ig", "report", "Namuna: Instagram Direct'dan yangi lid — Aziz, +998 90 123 45 67", { bubble: "Yangi lid: Aziz 📞", visit: "sales" }),
+    e("mkt", "report", "Namuna: haftalik marketing — 42 lid, 18 buyurtma", { bubble: "Haftalik hisobot tayyor 📈" }),
     e("bot", "action", "Namuna: omborga kirim", { bubble: "Bajarildi ✅", visit: "wh", detail: { direction: "in", item: "dona", quantity: 500 } }),
   ];
 };

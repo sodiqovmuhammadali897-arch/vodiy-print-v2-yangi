@@ -59,7 +59,10 @@ const groups = process.env.TELEGRAM_BOT_TOKEN ? require("./groups").create(db, {
 if (groups) groups.register(app);
 const hr = groups ? require("./hr").create(db, { route: groups.route }) : null;
 if (hr) hr.register(app);
-const assistant = require("./assistant").register(app, db, hr, groups);
+// Marketolog agent — see marketing.js; answers in the Marketing topic.
+const marketing = groups ? require("./marketing").create(db, { route: groups.route }) : null;
+if (marketing) marketing.register(app);
+const assistant = require("./assistant").register(app, db, hr, groups, marketing);
 const { slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
 // same Meta callback below (object "instagram").
@@ -329,4 +332,5 @@ app.listen(PORT, () => {
   if (groups) groups.ensureTopics().catch((err) => console.error("Telegram topics check failed", err.message));
   if (hr) void hr.start();
   void instagram.start();
+  if (marketing) void marketing.start().catch((err) => console.error("Marketolog start failed", err));
 });

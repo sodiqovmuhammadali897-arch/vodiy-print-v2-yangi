@@ -1,11 +1,11 @@
 // The 3D open-plan office behind the AI Ofis page (approved mockup, ported).
-// Eight agents sit at their desks typing; `play(event)` turns one
+// Nine agents sit at their desks typing; `play(event)` turns one
 // agent_events record into visible movement — the Hisobchi robot walking
 // to a colleague, a report flying to the Telegram screen, the warehouse
 // agent carrying a box to the shelf. Plain three.js, no React inside.
 import * as THREE from "three";
 
-export type AgentId = "it" | "sales" | "fin" | "prod" | "wh" | "bot" | "hr" | "ig";
+export type AgentId = "it" | "sales" | "fin" | "prod" | "wh" | "bot" | "hr" | "ig" | "mkt";
 
 export type AgentEvent = {
   id: string;
@@ -28,11 +28,12 @@ export const AGENT_NAMES: Record<AgentId, string> = {
   bot: "Hisobchi",
   hr: "HR (Kadrlar)",
   ig: "Instagram Direct",
+  mkt: "Marketolog",
 };
 
 type AgentDef = {
   id: AgentId; x: number; z: number; shirt: string; skin: string; hair: string;
-  hat: "headset" | "tie" | "glasses" | "cap" | "robot" | "hardhat" | "bun" | "phone"; zone: string; zoneColor: string;
+  hat: "headset" | "tie" | "glasses" | "cap" | "robot" | "hardhat" | "bun" | "phone" | "beret"; zone: string; zoneColor: string;
   rug?: number; // zone rug width, narrower where desks sit close
 };
 
@@ -58,8 +59,9 @@ const AGENT_DEFS: AgentDef[] = [
   { id: "fin", x: 7.5, z: BACK, shirt: "#8e5bb5", skin: "#f5d0b0", hair: "#6b3b24", hat: "glasses", zone: "BUXGALTERIYA", zoneColor: "#4a3f7a" },
   { id: "prod", x: -6.5, z: FRONT, shirt: "#e07a3f", skin: "#d9a178", hair: "#1e1511", hat: "cap", zone: "ISHLAB CHIQARISH", zoneColor: "#8a4b2a" },
   { id: "ig", x: -2.85, z: FRONT, shirt: "#c13584", skin: "#f0c09a", hair: "#241812", hat: "phone", zone: "INSTAGRAM", zoneColor: "#a02c6f", rug: 2.6 },
-  { id: "bot", x: 0.8, z: FRONT, shirt: "#9fb3c1", skin: "#c7d5de", hair: "#c7d5de", hat: "robot", zone: "QABULXONA", zoneColor: "#1d6a7d" },
-  { id: "wh", x: 7, z: FRONT, shirt: "#5a8f3c", skin: "#eab893", hair: "#2e2019", hat: "hardhat", zone: "OMBOR", zoneColor: "#4b6a33" },
+  { id: "bot", x: 0.8, z: FRONT, shirt: "#9fb3c1", skin: "#c7d5de", hair: "#c7d5de", hat: "robot", zone: "QABULXONA", zoneColor: "#1d6a7d", rug: 3.4 },
+  { id: "mkt", x: 3.9, z: FRONT, shirt: "#e2b714", skin: "#eec39d", hair: "#2a1c14", hat: "beret", zone: "MARKETING", zoneColor: "#9a6b00", rug: 2.6 },
+  { id: "wh", x: 7, z: FRONT, shirt: "#5a8f3c", skin: "#eab893", hair: "#2e2019", hat: "hardhat", zone: "OMBOR", zoneColor: "#4b6a33", rug: 3.4 },
 ];
 
 const STATE_LABEL: Record<Agent["state"], [string, string]> = {
@@ -460,8 +462,8 @@ export class OfficeScene {
     this.mesh(new THREE.PlaneGeometry(5.1, 3.05), new THREE.MeshBasicMaterial({ map: screen.tex }), this.scene, 3.4, 2.0, -D / 2 + 0.16).castShadow = false;
   }
 
-  private floorLabel(text: string, x: number, z: number, color: string) {
-    const t = this.canvasTex(512, 96, (g, w, h) => {
+  private floorLabel(text: string, x: number, z: number, color: string, width = 3.4) {
+    const t = this.canvasTex(Math.round((512 * width) / 3.4), 96, (g, w, h) => {
       g.clearRect(0, 0, w, h);
       g.fillStyle = color;
       g.beginPath();
@@ -473,7 +475,7 @@ export class OfficeScene {
       g.textBaseline = "middle";
       g.fillText(text, w / 2, h / 2 + 3);
     });
-    const m = this.mesh(new THREE.PlaneGeometry(3.4, 0.64), new THREE.MeshBasicMaterial({ map: t.tex, transparent: true }), this.scene, x, 0.02, z);
+    const m = this.mesh(new THREE.PlaneGeometry(width, 0.64), new THREE.MeshBasicMaterial({ map: t.tex, transparent: true }), this.scene, x, 0.02, z);
     m.rotation.x = -Math.PI / 2;
     m.castShadow = false;
   }
@@ -564,6 +566,12 @@ export class OfficeScene {
         this.mesh(new THREE.SphereGeometry(0.31, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2.1), this.mat("#f2c230", { roughness: 0.4 }), head, 0, 0.04, 0);
         this.mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.03, 20), this.mat("#d9a916"), head, 0, 0.05, 0.02);
       }
+      if (a.hat === "beret") {
+        // marketer: a red beret
+        const beret = this.mesh(new THREE.SphereGeometry(0.33, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2.4), this.mat("#c0392b"), head, 0.04, 0.1, -0.02);
+        beret.scale.set(1.05, 0.55, 1.05);
+        this.mesh(new THREE.SphereGeometry(0.04, 8, 6), this.mat("#c0392b"), head, 0.04, 0.29, -0.02);
+      }
       if (a.hat === "phone") {
         // always on the phone: Direct messages
         this.box(0.13, 0.24, 0.025, "#1d1d1f", body, 0.2, 1.12, 0.36);
@@ -583,7 +591,7 @@ export class OfficeScene {
     for (const def of AGENT_DEFS) {
       const r = this.box(def.rug ?? 4.6, 0.02, 3.6, def.id === "bot" ? "#bfe0e6" : "#e8dcc6", this.scene, def.x, 0.012, def.z + 0.55);
       r.castShadow = false;
-      this.floorLabel(def.zone, def.x, def.z + (def.z === BACK ? 2.45 : 2.55), def.zoneColor);
+      this.floorLabel(def.zone, def.x, def.z + (def.z === BACK ? 2.45 : 2.55), def.zoneColor, Math.min(3.4, def.rug ?? 3.4));
       this.makeDesk(def.id, def.x, def.z, def.id === "bot" ? "#e9eef1" : "#c98b4f");
       const parts = this.buildPerson(def);
       const tagEl = document.createElement("div");
