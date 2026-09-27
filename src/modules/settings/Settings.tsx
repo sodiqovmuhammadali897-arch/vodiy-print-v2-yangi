@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Building2, Users, Target, CalendarDays, Shirt, ShieldCheck, Clock, Gauge, Send, Instagram } from "lucide-react";
+import { Building2, Users, Target, CalendarDays, Shirt, ShieldCheck, Clock, Gauge, Send, Instagram, FileSpreadsheet } from "lucide-react";
 import CompanySettingsPanel from "./CompanySettingsPanel";
 import ManagersPanel from "./ManagersPanel";
 import MonthlyPlanPanel from "./MonthlyPlanPanel";
@@ -11,6 +11,7 @@ import KpiWeightsPanel from "./KpiWeightsPanel";
 import SeedPanel from "./SeedPanel";
 import TelegramGroupPanel from "./TelegramGroupPanel";
 import InstagramPanel from "./InstagramPanel";
+import ImportPanel from "./ImportPanel";
 
 type Tab =
   | "company"
@@ -22,7 +23,8 @@ type Tab =
   | "workSchedule"
   | "kpiWeights"
   | "telegram"
-  | "instagram";
+  | "instagram"
+  | "import";
 
 const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "company", label: "Kompaniya ma'lumotlari", icon: <Building2 className="h-4 w-4" /> },
@@ -35,6 +37,7 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "kpiWeights", label: "KPI og'irliklari", icon: <Gauge className="h-4 w-4" /> },
   { key: "telegram", label: "Telegram guruh", icon: <Send className="h-4 w-4" /> },
   { key: "instagram", label: "Instagram Direct", icon: <Instagram className="h-4 w-4" /> },
+  { key: "import", label: "Excel import", icon: <FileSpreadsheet className="h-4 w-4" /> },
 ];
 
 export default function Settings() {
@@ -83,6 +86,7 @@ export default function Settings() {
       {tab === "kpiWeights" && <KpiWeightsPanel />}
       {tab === "telegram" && <TelegramGroupPanel />}
       {tab === "instagram" && <InstagramPanel />}
+      {tab === "import" && <ImportPanel />}
     </div>
   );
 }

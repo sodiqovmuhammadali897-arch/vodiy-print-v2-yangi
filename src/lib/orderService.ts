@@ -66,6 +66,11 @@ export type OrderPayload = {
   is_draft: boolean;
   is_historical: boolean;
   historical_ref: string;
+  // Excel import (importService.ts): which run created it, a stable key
+  // against importing the same rows twice, and the real entry date.
+  import_batch?: string;
+  import_key?: string;
+  created_at?: string;
 };
 
 const upsertChildren = async (
@@ -143,9 +148,12 @@ export const saveOrder = async (
     total_amount: totals.total,
     paid_amount: totals.paid,
     remaining_amount: totals.remaining,
+    // A backfilled order was finished on its own date, not today.
     completed_at:
       payload.status === "delivered" || payload.status === "closed"
-        ? new Date().toISOString()
+        ? payload.is_historical && payload.order_date
+          ? `${payload.order_date.slice(0, 10)}T12:00:00.000Z`
+          : new Date().toISOString()
         : null,
   };
 
