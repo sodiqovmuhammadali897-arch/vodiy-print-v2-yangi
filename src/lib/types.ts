@@ -325,6 +325,40 @@ export type CompanySettings = {
   updated_at: string;
 };
 
+// A competitor the Marketolog agent watches (Sozlamalar → Raqobatchilar).
+export type Competitor = {
+  id: string;
+  name: string;
+  city: string;
+  telegram: string;
+  website: string;
+  instagram: string;
+  maps_url: string;
+  note: string;
+  active: boolean;
+  created_at: string;
+};
+
+export type CompetitorResearch = {
+  id: string; // = competitor id
+  name: string;
+  summary: {
+    qisqacha?: string;
+    narxlar?: string[];
+    aksiyalar?: string[];
+    kuchli?: string[];
+    zaif?: string[];
+    sharhlar?: string;
+    ozgarishlar?: string;
+  };
+  sources: string[];
+  ad_library?: string;
+  telegram_subscribers?: string;
+  researched_at: string;
+  running_since?: string | null;
+  error?: string;
+};
+
 export type Holiday = {
   id: string;
   date: string;
@@ -626,6 +660,11 @@ export type Lead = {
   note: string;
   lost_reason: string;
   lost_comment: string;
+  // Set when lost_reason is "Raqobatchini tanladi" — who won the deal and
+  // at what price, for the Marketolog agent's competitor stats.
+  lost_competitor?: string;
+  lost_competitor_id?: string | null;
+  lost_competitor_price?: number;
   converted_customer_id: string | null;
   converted_order_id: string | null;
   created_at: string;

@@ -69,21 +69,28 @@ export const deleteLead = async (id: string): Promise<void> => {
   await deleteOne("leads", id);
 };
 
+export type LostCompetitor = { id: string | null; name: string; price: number };
+
 export const markLeadLost = async (
   lead: Lead,
   reason: string,
   comment: string,
   actor: LeadActor,
+  competitor: LostCompetitor | null = null,
 ): Promise<void> => {
   await updateOne("leads", lead.id, {
     status: "lost",
     lost_reason: reason,
     lost_comment: comment,
+    lost_competitor: competitor?.name || "",
+    lost_competitor_id: competitor?.id || null,
+    lost_competitor_price: competitor?.price || 0,
     updated_at: new Date().toISOString(),
   });
+  const who = competitor?.name ? ` → ${competitor.name}${competitor.price ? `, ${competitor.price.toLocaleString("ru-RU")} so'm aytgan` : ""}` : "";
   await logLeadActivity(
     lead.id,
-    `Yo'qotildi — sabab: ${reason}${comment ? ` (${comment})` : ""}`,
+    `Yo'qotildi — sabab: ${reason}${who}${comment ? ` (${comment})` : ""}`,
     actor.email,
     actor.name,
   );

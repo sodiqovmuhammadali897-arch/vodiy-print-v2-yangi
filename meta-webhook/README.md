@@ -214,3 +214,22 @@ Anything written in the Marketing topic is answered by the same agent
 with read-only tools (overview for a period, dormant customers, Meta ads,
 catalog, upcoming dates). `/hisobot` there — or `POST
 /webhooks/marketing/run` as an admin — sends the report right away.
+
+### Competitors
+
+`competitors` (Sozlamalar → Raqobatchilar; readable by sales staff, who
+pick one in the lost-lead form together with the competitor's price) are
+researched every Monday after the report, from the panel, or with
+`/raqobat` in the Marketing topic. For each: the public Telegram channel
+is read from `https://t.me/s/<name>` (last posts, views, subscribers),
+the site's text is fetched, and Claude adds web search results
+(`web_search_20260209` / `web_fetch_20260209`, Google Maps reviews,
+prices, news), compares with the previous run and returns prices,
+promotions, strengths, weaknesses and what changed → saved in
+`competitor_research/{id}`. The message also lists who we lost leads to
+in the last 30 days and how their price compared with ours
+(`lead.estimated_amount` vs `lost_competitor_price`), and ends with what
+it means for us. If web search is off for the API organisation, the agent
+falls back to what it read itself. Instagram isn't readable by bots, and
+Meta's Ad Library API doesn't cover commercial ads in Uzbekistan, so the
+message links each competitor's Ad Library search instead.

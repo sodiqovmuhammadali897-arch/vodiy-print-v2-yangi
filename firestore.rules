@@ -296,6 +296,13 @@ service cloud.firestore {
     // to them, never a colleague's — only admins see everything. A won
     // lead becomes a real customers/{id} doc via the client, which is
     // already covered by the customers rules below.
+    // Competitors the Marketolog agent watches. Sales staff pick one when a
+    // lead is lost to a competitor; only admins maintain the list.
+    match /competitors/{id} {
+      allow read: if isAdmin() || can('leads', 'view');
+      allow write: if isAdmin();
+    }
+
     match /leads/{id} {
       allow read: if isAdmin() || (can('leads', 'view') && resource.data.assigned_to_email == email());
       allow create: if can('leads', 'edit');

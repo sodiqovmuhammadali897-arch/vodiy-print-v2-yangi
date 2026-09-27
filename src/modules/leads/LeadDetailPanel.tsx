@@ -183,7 +183,11 @@ export default function LeadDetailPanel({ lead, order, onClose, onEdit, onAddTas
                   <Field label="Keyingi aloqa" value={lead.next_contact_at ? formatDateTime(lead.next_contact_at) : "-"} highlight={!!lead.next_contact_at} />
                   <Field label="Taxminiy summa" value={lead.estimated_amount ? formatMoney(lead.estimated_amount) : "-"} />
                   {lead.status === "lost" && (
-                    <Field label="Yo'qotilgan sababi" value={`${lead.lost_reason}${lead.lost_comment ? " — " + lead.lost_comment : ""}`} highlight />
+                    <Field
+                      label="Yo'qotilgan sababi"
+                      value={`${lead.lost_reason}${lead.lost_competitor ? ` → ${lead.lost_competitor}${lead.lost_competitor_price ? ` (${Number(lead.lost_competitor_price).toLocaleString("ru-RU")} so'm)` : ""}` : ""}${lead.lost_comment ? " — " + lead.lost_comment : ""}`}
+                      highlight
+                    />
                   )}
                   {lead.note && <div className="mt-3.5 rounded-xl bg-ink-50 p-3 text-xs leading-relaxed text-ink-600">"{lead.note}"</div>}
 

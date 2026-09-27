@@ -10,7 +10,11 @@
 //   3. what to do — recommendations and the week's content plan (Claude,
 //      from the numbers, the catalog and the upcoming holidays);
 //   4. customers to win back (60+ days without an order) with a ready
-//      personal message for each.
+//      personal message for each;
+//   5. competitors (Sozlamalar → Raqobatchilar): each one's public Telegram
+//      channel and site read directly, the rest found with Claude's web
+//      search, compared with last week — plus who we lost leads to and at
+//      what price, from the lost-lead form.
 const { telegram } = require("./telegram");
 const { staffFromRequest } = require("./auth");
 const { emitEvent, clip, money, todayCode, dayCodeOf, customerName, norm } = require("./shared");
@@ -78,7 +82,7 @@ const create = (db, { route = null } = {}) => {
   const read = async (col) => (await db.collection(col).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
 
   const load = async () => {
-    const [leads, orders, lines, customers, expenses, products, costs, holidays] = await Promise.all([
+    const [leads, orders, lines, customers, expenses, products, costs, holidays, competitors] = await Promise.all([
       read("leads"),
       read("orders"),
       read("order_products"),
@@ -87,9 +91,10 @@ const create = (db, { route = null } = {}) => {
       read("products"),
       read("product_costs").catch(() => []),
       read("holidays").catch(() => []),
+      read("competitors").catch(() => []),
     ]);
     const live = orders.filter((o) => o.status !== "cancelled" && !o.is_draft);
-    return { leads, orders: live, lines, customers, expenses, products, costs, holidays };
+    return { leads, orders: live, lines, customers, expenses, products, costs, holidays, competitors };
   };
 
   const orderDay = (o) => dayCodeOf(o.order_date || o.created_at);
@@ -185,6 +190,29 @@ const create = (db, { route = null } = {}) => {
       .filter((e) => e.category === AD_CATEGORY && inRange(dayCodeOf(e.date || e.created_at)))
       .reduce((s, e) => s + Number(e.amount || 0), 0);
 
+    // Deals lost to competitors, and their price against ours
+    // (lead.estimated_amount) where the manager wrote it down.
+    const lostComp = new Map();
+    for (const l of leads.filter((x) => x.status === "lost" && (x.lost_competitor || x.lost_reason === "Raqobatchini tanladi"))) {
+      const k = l.lost_competitor || "nomi yozilmagan";
+      const c = lostComp.get(k) || { raqobatchi: k, soni: 0, diffs: [] };
+      c.soni++;
+      const ours = Number(l.estimated_amount || 0);
+      const theirs = Number(l.lost_competitor_price || 0);
+      if (ours > 0 && theirs > 0) c.diffs.push((theirs - ours) / ours);
+      lostComp.set(k, c);
+    }
+    const toCompetitors = [...lostComp.values()]
+      .sort((a, b) => b.soni - a.soni)
+      .map((c) => {
+        const avg = c.diffs.length ? c.diffs.reduce((x, y) => x + y, 0) / c.diffs.length : null;
+        return {
+          raqobatchi: c.raqobatchi,
+          soni: c.soni,
+          narx_farqi: avg === null ? "narxi yozilmagan" : `o'rtacha ${Math.abs(Math.round(avg * 100))}% ${avg < 0 ? "arzon" : "qimmat"} (${c.diffs.length} ta lidda narx yozilgan)`,
+        };
+      });
+
     const avgResponse = median === null ? null : median < 1 ? `${Math.round(median * 60)} daqiqa` : `${Math.round(median * 10) / 10} soat`;
     return {
       davr: `${from} — ${to}`,
@@ -208,6 +236,7 @@ const create = (db, { route = null } = {}) => {
       reklama_raqam: adSpend,
       bir_lid_narxi: adSpend && leads.length ? money(adSpend / leads.length) : null,
       bir_mijoz_narxi: adSpend && newCustomers ? money(adSpend / newCustomers) : null,
+      raqobatchiga_ketgan: toCompetitors,
     };
   };
 
@@ -365,6 +394,175 @@ const create = (db, { route = null } = {}) => {
     return JSON.parse(json);
   };
 
+  // ── competitors ────────────────────────────────────────────────────
+  // Their public Telegram channel (t.me/s/<name> preview) and site are
+  // read here directly; Claude adds what web search finds (prices, Google
+  // Maps reviews, news) and compares with the previous research.
+  const tgHandle = (v) => {
+    const t = String(v || "").trim();
+    const m = /(?:t\.me\/|telegram\.me\/|^@)(?:s\/)?([A-Za-z0-9_]{4,})/i.exec(t);
+    return m ? m[1] : /^[A-Za-z][A-Za-z0-9_]{4,}$/.test(t) ? t : "";
+  };
+  const urlOf = (v) => (!v ? "" : /^https?:\/\//i.test(v) ? v : `https://${v}`);
+  const fetchText = async (url) => {
+    const res = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 (compatible; VodiyPrintBot/1.0)" }, signal: AbortSignal.timeout(15000) });
+    return res.ok ? res.text() : "";
+  };
+  const stripHtml = (html) =>
+    String(html || "")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&quot;/g, '"')
+      .replace(/&#0?39;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\s*\n\s*/g, "\n")
+      .trim();
+  const telegramPosts = async (handle) => {
+    const html = await fetchText(`https://t.me/s/${handle}`);
+    if (!html || !html.includes("tgme_widget_message")) return null;
+    const subs = /<span class="counter_value">([^<]+)<\/span>\s*<span class="counter_type">(?:subscribers|obunachi)/i.exec(html);
+    const posts = html
+      .split('class="tgme_widget_message_wrap')
+      .slice(1)
+      .map((p) => ({
+        sana: (/<time[^>]*datetime="([^"]+)"/.exec(p) || [])[1]?.slice(0, 10) || "",
+        korishlar: (/<span class="tgme_widget_message_views">([^<]*)<\/span>/.exec(p) || [])[1] || "",
+        matn: clip(stripHtml((/<div class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/.exec(p) || [])[1] || ""), 600),
+      }))
+      .filter((x) => x.matn)
+      .slice(-12);
+    return { kanal: `https://t.me/${handle}`, obunachilar: subs ? subs[1] : "", postlar: posts };
+  };
+
+  const WEB_TOOLS = (city) => [
+    { type: "web_search_20260209", name: "web_search", max_uses: 4, user_location: { type: "approximate", country: "UZ", city: city || "Namangan", timezone: "Asia/Tashkent" } },
+    { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3 },
+  ];
+
+  // Runs a server-tool conversation to the end (pause_turn = the server's
+  // search loop paused; send the turn back unchanged to let it continue).
+  const runWithWeb = async (system, content, tools, maxTokens = 4000) => {
+    const messages = [{ role: "user", content }];
+    const sources = [];
+    let reply;
+    for (let i = 0; i < 5; i++) {
+      reply = await callClaude(system, messages, tools, maxTokens);
+      for (const b of reply.content) {
+        // A failed search returns an error object instead of a result list.
+        if (b.type === "web_search_tool_result" && Array.isArray(b.content)) for (const r of b.content) if (r.url) sources.push(r.url);
+      }
+      if (reply.stop_reason !== "pause_turn") break;
+      messages.push({ role: "assistant", content: reply.content });
+    }
+    return { text: reply.content.filter((b) => b.type === "text").map((b) => b.text).join(""), sources };
+  };
+
+  const researchOne = async (c) => {
+    const ref = db.collection("competitor_research").doc(c.id);
+    const prevSnap = await ref.get().catch(() => null);
+    const previous = prevSnap && prevSnap.exists ? prevSnap.data() : null;
+    await ref.set({ name: c.name, running_since: new Date().toISOString() }, { merge: true });
+    const handle = tgHandle(c.telegram);
+    const [tg, site] = await Promise.all([
+      handle ? telegramPosts(handle).catch(() => null) : null,
+      c.website ? fetchText(urlOf(c.website)).then((h) => clip(stripHtml(h), 6000)).catch(() => "") : "",
+    ]);
+    const adLibrary = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=UZ&q=${encodeURIComponent(c.name)}&search_type=keyword_unordered`;
+    const system = [
+      PERSONA,
+      `Bugun: ${todayCode()}.`,
+      "Vazifa: raqobatchi kompaniyani tahlil qil. Berilgan Telegram postlari va sayt matni — asosiy manba.",
+      "web_search bilan qo'shimcha qidir (nomi + shahri): narxlar, Google Xaritadagi reyting va sharhlar, e'lonlar, yangiliklar. Kerak bo'lsa web_fetch bilan sahifani o'qi.",
+      "Faqat topilgan faktlarni yoz, taxmin qilma. Topilmasa — bo'sh qoldir. Narxni manbasi bilan yoz (masalan: «Vizitka 1000 dona — 180 000 so'm (Telegram, 20-sentabr)»).",
+      "Oxirida FAQAT JSON qaytar:",
+      `{"qisqacha": "2–3 gap: kim, nima bilan shug'ullanadi, qanchalik faol", "narxlar": ["..."], "aksiyalar": ["..."], "kuchli": ["..."], "zaif": ["..."], "sharhlar": "mijozlar nimani maqtaydi / nimadan shikoyat qiladi", "ozgarishlar": "oldingi tahlilga nisbatan nima yangi (oldingi berilmagan bo'lsa bo'sh)"}`,
+    ].join("\n");
+    const input = {
+      raqobatchi: { nomi: c.name, shahar: c.city || "", telegram: c.telegram || "", sayt: urlOf(c.website), instagram: c.instagram || "", google_xarita: c.maps_url || "", bizning_izoh: c.note || "" },
+      telegram_kanal: tg || (handle ? "kanal o'qilmadi (yopiq yoki mavjud emas)" : "ko'rsatilmagan"),
+      sayt_matni: site || (c.website ? "sayt o'qilmadi" : "ko'rsatilmagan"),
+      oldingi_tahlil: previous && previous.summary ? { sana: previous.researched_at, ...previous.summary } : null,
+    };
+    let result;
+    try {
+      result = await runWithWeb(system, JSON.stringify(input), WEB_TOOLS(c.city));
+    } catch (err) {
+      // Web search can be switched off for the API organisation — still
+      // analyse what we read ourselves.
+      console.error(`Competitor web research failed for ${c.name}: ${err.message}`);
+      result = await runWithWeb(system.replace(/web_search[^\n]*\n/, ""), JSON.stringify(input), undefined);
+    }
+    let summary;
+    try {
+      summary = JSON.parse(result.text.slice(result.text.indexOf("{"), result.text.lastIndexOf("}") + 1));
+    } catch {
+      summary = { qisqacha: clip(result.text, 600) };
+    }
+    const sources = [...new Set([tg && tg.kanal, c.website && urlOf(c.website), ...result.sources].filter(Boolean))].slice(0, 12);
+    const doc = { name: c.name, city: c.city || "", summary, sources, ad_library: adLibrary, telegram_subscribers: (tg && tg.obunachilar) || "", researched_at: new Date().toISOString(), running_since: null };
+    await ref.set(doc);
+    return { competitor: c, ...doc };
+  };
+
+  const competitorMessages = async (results, lostStats) => {
+    const M = [`🥊 Raqobatchilar · ${human(todayCode())}`];
+    if (lostStats.length) M.push("", "Oxirgi 30 kunda raqobatchiga ketgan lidlar: " + lostStats.map((c) => `${c.raqobatchi} — ${c.soni} ta, ${c.narx_farqi}`).join("; "));
+    for (const r of results) {
+      const s = r.summary || {};
+      M.push("", `• ${r.name}${r.city ? ` (${r.city})` : ""}${r.telegram_subscribers ? ` · Telegram: ${r.telegram_subscribers} obunachi` : ""}`);
+      if (s.qisqacha) M.push(`  ${s.qisqacha}`);
+      if (s.narxlar?.length) M.push(`  💰 ${s.narxlar.slice(0, 4).join("; ")}`);
+      if (s.aksiyalar?.length) M.push(`  🎯 ${s.aksiyalar.slice(0, 3).join("; ")}`);
+      if (s.ozgarishlar) M.push(`  🆕 ${s.ozgarishlar}`);
+      if (s.sharhlar) M.push(`  ⭐ ${s.sharhlar}`);
+      M.push(`  Reklamalari: ${r.ad_library}`);
+    }
+    // One overall "what this means for us" from all of it.
+    if (results.length && ANTHROPIC_API_KEY) {
+      try {
+        const data = await load();
+        const reply = await callClaude(
+          [PERSONA, "Raqobatchilar tahlili va bizning ma'lumotlar beriladi. 3–4 ta aniq xulosa/taklif yoz (har biri 1–2 gap): narx, mahsulot, xizmat yoki marketingda nimani qilishimiz kerak. Faqat \"•\" bilan boshlangan qatorlar."].join("\n"),
+          [{ role: "user", content: JSON.stringify({ raqobatchilar: results.map((r) => ({ nomi: r.name, ...r.summary })), raqobatchiga_ketgan: lostStats, bizning_katalog: catalog(data).slice(0, 30) }) }],
+          undefined,
+          1500,
+        );
+        const text = reply.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+        if (text) M.push("", "💡 Biz uchun xulosa", text);
+      } catch (err) {
+        console.error("Competitor conclusions failed", err.message);
+      }
+    }
+    return M.join("\n");
+  };
+
+  const runCompetitors = async (ids = null, { postToTelegram = true } = {}) => {
+    const data = await load();
+    const list = data.competitors.filter((c) => c.active !== false && (!ids || ids.includes(c.id))).slice(0, 10);
+    if (!list.length) return { results: [], message: "" };
+    const results = [];
+    for (const c of list) {
+      try {
+        results.push(await researchOne(c));
+      } catch (err) {
+        console.error(`Competitor research failed: ${c.name}`, err.message);
+        await db.collection("competitor_research").doc(c.id).set({ running_since: null, error: err.message }, { merge: true });
+      }
+    }
+    const lost = stats(data, shiftDay(todayCode(), -29), todayCode()).raqobatchiga_ketgan;
+    const message = await competitorMessages(results, lost);
+    if (postToTelegram) await post(message);
+    await emitEvent(db, { agent: "mkt", kind: "report", text: `Raqobatchilar tahlili: ${results.map((r) => r.name).join(", ")}`, bubble: `${results.length} ta raqobatchi tahlil qilindi 🥊`, source: "competitors" });
+    console.log(`Competitor research done: ${results.length}/${list.length}`);
+    return { results, message };
+  };
+
   // ── weekly report ──────────────────────────────────────────────────
   const post = async (text) => {
     if (!route) return;
@@ -398,6 +596,9 @@ const create = (db, { route = null } = {}) => {
     }
     if (Object.keys(week.yoqotish_sabablari).length) {
       L.push("", "Yo'qotish sabablari: " + Object.entries(week.yoqotish_sabablari).map(([k, v]) => `${k} (${v})`).join(", "));
+    }
+    if (week.raqobatchiga_ketgan.length) {
+      L.push("", "Raqobatchiga ketgan lidlar: " + week.raqobatchiga_ketgan.map((c) => `${c.raqobatchi} — ${c.soni} ta, ${c.narx_farqi}`).join("; "));
     }
     if (week.tushum_manba_boyicha.length) {
       L.push("", "Tushum manba bo'yicha:");
@@ -463,6 +664,16 @@ const create = (db, { route = null } = {}) => {
   const runWeekly = async (reason = "schedule") => {
     const r = await buildReport();
     for (const m of r.messages) await post(m);
+    const comp = await runCompetitors(null, { postToTelegram: false }).catch((err) => {
+      console.error("Weekly competitor research failed", err);
+      return { results: [], message: "" };
+    });
+    if (comp.message) {
+      await post(comp.message);
+      r.messages.push(comp.message);
+    } else {
+      await post("🥊 Raqobatchilar: ro'yxat bo'sh. Sozlamalar → Raqobatchilar bo'limida kuzatiladigan kompaniyalarni qo'shing.");
+    }
     await db.collection("marketing_reports").doc(todayCode()).set({
       created_at: new Date().toISOString(),
       reason,
@@ -524,6 +735,9 @@ const create = (db, { route = null } = {}) => {
     { name: "meta_ads", description: "Meta (Facebook/Instagram) reklama kampaniyalari: xarajat, ko'rishlar, CTR, lidlar, lid narxi va CRM'dagi natija.", input_schema: { type: "object", properties: DATE_PROPS, required: ["from", "to"] } },
     { name: "catalog", description: "Kompaniya mahsulotlari: nomi, turi, boshlang'ich narx, afzalliklar — post va takliflar uchun.", input_schema: { type: "object", properties: { query: { type: "string" } } } },
     { name: "upcoming_dates", description: "Yaqin bayram va mavsumiy sanalar (kontent-reja uchun).", input_schema: { type: "object", properties: { kun: { type: "number" } } } },
+    { name: "competitors", description: "Kuzatilayotgan raqobatchilar ro'yxati, har birining oxirgi saqlangan tahlili (narxlar, aksiyalar, kuchli/zaif tomonlar) va oxirgi 30 kunda kimga nechta lid yutqazganimiz va narx farqi.", input_schema: { type: "object", properties: {} } },
+    { name: "research_competitor", description: "Bitta raqobatchini hozir internetdan qayta tahlil qilish (1–2 daqiqa). Faqat foydalanuvchi yangi tahlil so'rasa yoki saqlangani eski bo'lsa.", input_schema: { type: "object", properties: { nomi: { type: "string" } }, required: ["nomi"] } },
+    { type: "web_search_20260209", name: "web_search", max_uses: 3, user_location: { type: "approximate", country: "UZ", timezone: "Asia/Tashkent" } },
   ];
 
   const answer = async (question, context) => {
@@ -539,6 +753,21 @@ const create = (db, { route = null } = {}) => {
       meta_ads: ({ from, to }) => metaAds(data, ...period(from, to)),
       catalog: ({ query }) => catalog(data, query),
       upcoming_dates: ({ kun }) => upcoming(data, Math.min(120, Number(kun) || 30)),
+      competitors: async () => {
+        const saved = new Map((await read("competitor_research").catch(() => [])).map((r) => [r.id, r]));
+        return {
+          raqobatchilar: data.competitors
+            .filter((c) => c.active !== false)
+            .map((c) => ({ nomi: c.name, shahar: c.city, telegram: c.telegram, sayt: c.website, izoh: c.note, oxirgi_tahlil: saved.get(c.id) ? { sana: saved.get(c.id).researched_at, ...saved.get(c.id).summary } : null })),
+          oxirgi_30_kunda_yutqazilgan: stats(data, shiftDay(todayCode(), -29), todayCode()).raqobatchiga_ketgan,
+        };
+      },
+      research_competitor: async ({ nomi }) => {
+        const c = data.competitors.find((x) => norm(x.name).includes(norm(nomi)) || norm(nomi).includes(norm(x.name)));
+        if (!c) return { xato: `«${nomi}» raqobatchilar ro'yxatida yo'q. Sozlamalar → Raqobatchilar'ga qo'shing yoki web_search bilan qidiring.` };
+        const r = await researchOne(c);
+        return { nomi: r.name, ...r.summary, manbalar: r.sources, reklamalari: r.ad_library };
+      },
     };
     const system = [
       PERSONA,
@@ -546,12 +775,31 @@ const create = (db, { route = null } = {}) => {
       "Rahbar yoki sotuv jamoasi Telegram'dagi «Marketing» mavzusida savol beradi yoki topshiriq beradi (tahlil, post matni, reklama g'oyasi, mijozlarga xabar, kontent-reja).",
       "Ma'lumot kerak bo'lsa vositalarni chaqir. Davr aytilmasa: \"bu hafta\" — oxirgi 7 kun, \"bu oy\" — oy boshidan; qaysi davrni olganingni ayt.",
       "Post yoki xabar so'ralsa — tayyor, ko'chirib ishlatsa bo'ladigan matn yoz. Tahlilda: avval asosiy xulosa, keyin 3–8 qator tafsilot va aniq tavsiya.",
+      "Raqobatchilar haqida: avval competitors vositasi (saqlangan tahlil). Ro'yxatda yo'q kompaniya yoki bozor narxlari so'ralsa web_search ishlat va manbasini ayt.",
     ].join("\n");
     const content = context ? `Oldingi xabar (kontekst):\n${context}\n\nSavol:\n${question}` : question;
     const messages = [{ role: "user", content }];
-    for (let step = 0; step < 6; step++) {
-      const reply = await callClaude(system, messages, TOOLS, 2500);
-      if (reply.stop_reason !== "tool_use") return reply.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+    let tools = TOOLS;
+    for (let step = 0; step < 8; step++) {
+      let reply;
+      try {
+        reply = await callClaude(system, messages, tools, 3000);
+      } catch (err) {
+        // Web search may be switched off for the API organisation.
+        if (tools === TOOLS && /web.?search/i.test(err.message)) {
+          console.error("Marketolog: web search unavailable —", err.message);
+          tools = TOOLS.filter((t) => !t.type);
+          step--;
+          continue;
+        }
+        throw err;
+      }
+      // pause_turn: the server-side web search paused — send it back as is.
+      if (reply.stop_reason === "pause_turn") {
+        messages.push({ role: "assistant", content: reply.content });
+        continue;
+      }
+      if (reply.stop_reason !== "tool_use") return reply.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
       messages.push({ role: "assistant", content: reply.content });
       const results = [];
       for (const b of reply.content.filter((x) => x.type === "tool_use")) {
@@ -584,6 +832,12 @@ const create = (db, { route = null } = {}) => {
       await runWeekly("command");
       return;
     }
+    if (/^\/raqobat/i.test(text)) {
+      await reply("⏳ Raqobatchilar internetdan tahlil qilinmoqda — har biriga 1–2 daqiqa…");
+      const r = await runCompetitors();
+      if (!r.results.length) await reply("Raqobatchilar ro'yxati bo'sh — Sozlamalar → Raqobatchilar bo'limida qo'shing.");
+      return;
+    }
     await emitEvent(db, { agent: "mkt", kind: "question", text: clip(text, 160), bubble: clip(text, 90), source: "telegram" });
     await telegram("sendChatAction", { chat_id: msg.chat.id, action: "typing", ...thread });
     const out = (await answer(text, msg.reply_to_message?.text || "")) || "Javob topilmadi.";
@@ -594,16 +848,23 @@ const create = (db, { route = null } = {}) => {
 
   const register = (app) => {
     // Sozlamalar / testing: send the weekly report now.
+    // Both take minutes, longer than the proxy waits: answer at once and
+    // let the result arrive in Telegram (and competitor_research).
     app.post("/webhooks/marketing/run", async (req, res) => {
       const who = await staffFromRequest(db, req);
       if (!who || who.role !== "admin") return res.status(403).json({ error: "Faqat admin" });
-      try {
-        const r = await runWeekly("web");
-        res.json({ ok: true, messages: r.messages.length });
-      } catch (err) {
-        console.error("Marketing run failed", err);
-        res.status(500).json({ error: err.message });
-      }
+      res.status(202).json({ started: true });
+      runWeekly("web").catch((err) => console.error("Marketing run failed", err));
+    });
+    app.post("/webhooks/marketing/competitors", async (req, res) => {
+      const who = await staffFromRequest(db, req);
+      if (!who || who.role !== "admin") return res.status(403).json({ error: "Faqat admin" });
+      const id = typeof req.body?.id === "string" && /^[A-Za-z0-9]{1,64}$/.test(req.body.id) ? req.body.id : null;
+      const data = await load();
+      const count = data.competitors.filter((c) => c.active !== false && (!id || c.id === id)).length;
+      if (!count) return res.status(400).json({ error: "Kuzatiladigan raqobatchi yo'q" });
+      res.status(202).json({ started: true, count });
+      runCompetitors(id ? [id] : null).catch((err) => console.error("Competitor research failed", err));
     });
   };
 
@@ -614,7 +875,7 @@ const create = (db, { route = null } = {}) => {
   };
   const stop = () => clearInterval(timer);
 
-  return { register, start, stop, handleMessage, runWeekly, buildReport, tick, _test: { stats, dormant, upcoming, catalog, load } };
+  return { register, start, stop, handleMessage, runWeekly, runCompetitors, buildReport, tick, _test: { stats, dormant, upcoming, catalog, load, tgHandle, telegramPosts, stripHtml } };
 };
 
 module.exports = { create, chunks, OCCASIONS };
