@@ -875,7 +875,7 @@ const create = (db, { route = null } = {}) => {
   };
   const stop = () => clearInterval(timer);
 
-  return { register, start, stop, handleMessage, runWeekly, runCompetitors, buildReport, tick, _test: { stats, dormant, upcoming, catalog, load, tgHandle, telegramPosts, stripHtml } };
+  return { register, start, stop, handleMessage, runWeekly, runCompetitors, buildReport, tick, analytics: { load, stats, dormant, catalog, upcoming }, _test: { stats, dormant, upcoming, catalog, load, tgHandle, telegramPosts, stripHtml } };
 };
 
 module.exports = { create, chunks, OCCASIONS };

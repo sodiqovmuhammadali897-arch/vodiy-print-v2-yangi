@@ -429,7 +429,7 @@ const handleQuestion = async (db, { chatId, threadId = null, replyTo, text, cont
   return { reply, pending: ctx.pending, files: ctx.files.map((f) => f.filename) };
 };
 
-const register = (app, db, hr = null, groups = null, marketing = null) => {
+const register = (app, db, hr = null, groups = null, marketing = null, chief = null) => {
   const configured = Boolean(BOT_TOKEN && ANTHROPIC_API_KEY && ALLOWED_CHATS.size > 0);
   if (!configured) {
     console.log("Hisobchi bot: TELEGRAM_BOT_TOKEN / ANTHROPIC_API_KEY / ASSISTANT_CHAT_IDS not all set — not enabled.");
@@ -446,7 +446,8 @@ const register = (app, db, hr = null, groups = null, marketing = null) => {
 
     if (req.body?.callback_query) {
       try {
-        await handleCallback(db, telegram, req.body.callback_query, isWorkChat);
+        if (chief && /^chief:/.test(req.body.callback_query.data || "")) await chief.handleCallback(req.body.callback_query, isWorkChat);
+        else await handleCallback(db, telegram, req.body.callback_query, isWorkChat);
       } catch (err) {
         console.error("Hisobchi callback failed", err);
       }
@@ -470,12 +471,20 @@ const register = (app, db, hr = null, groups = null, marketing = null) => {
     // elsewhere only when addressed (@mention or a reply to it) — people
     // talk to each other in the other topics.
     if (groups && (await groups.isGroup(msg.chat.id))) {
-      // The Marketing topic belongs to the Marketolog agent (marketing.js).
-      const mktTopic = marketing ? await groups.topicId("mkt") : null;
-      if (mktTopic && msg.message_thread_id === mktTopic) {
+      // The Marketing topic belongs to the Marketolog agent (marketing.js),
+      // the Bosh agent topic to chief.js.
+      const owners = [
+        ["mkt", marketing],
+        ["chief", chief],
+      ];
+      let owner = null;
+      for (const [key, agent] of owners) {
+        if (agent && msg.message_thread_id && msg.message_thread_id === (await groups.topicId(key))) owner = agent;
+      }
+      if (owner) {
         const q = botUsername ? text.replace(new RegExp(`@${botUsername}`, "ig"), "").trim() : text;
-        await marketing.handleMessage(msg, q || text).catch(async (err) => {
-          console.error("Marketolog failed", err);
+        await owner.handleMessage(msg, q || text).catch(async (err) => {
+          console.error("Topic agent failed", err);
           await telegram("sendMessage", {
             chat_id: msg.chat.id,
             message_thread_id: msg.message_thread_id,

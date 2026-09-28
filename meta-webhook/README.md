@@ -233,3 +233,34 @@ it means for us. If web search is off for the API organisation, the agent
 falls back to what it read itself. Instagram isn't readable by bots, and
 Meta's Ad Library API doesn't cover commercial ads in Uzbekistan, so the
 message links each competitor's Ad Library search instead.
+
+## Bosh agent (`chief.js`)
+
+The chief-of-staff agent. Monday–Saturday at 08:30 (claimed once per day
+in `chief_runs/{date}`) it posts to the "🧠 Bosh agent" topic:
+
+- where the month stands — plan progress, run-rate to month end and the
+  daily amount still needed (`monthly_plans`), 30-day cash in/out,
+  receivables with their age, what we owe suppliers, alerts (unanswered
+  leads, late orders, low stock) — all computed in code;
+- the model's read: the three biggest problems and opportunities, and up
+  to three proposals (plan, expected effect, ready posts, a message for a
+  customer segment, staff tasks, how it's measured) under ✅ / ❌.
+
+Model: `CHIEF_MODEL` (default `claude-opus-5`, adaptive thinking, effort
+high, streamed via `@anthropic-ai/sdk`, structured JSON output) with the
+server-side `fallbacks: "default"` for policy declines; if the account
+can't use the model it switches to `ASSISTANT_MODEL`.
+
+Only a chat admin's ✅ acts: it creates `tasks` for the staff who own the
+area (by module permission, else the approver), posts the ready posts to
+the Marketing topic and the customer list + message to the Sales topic,
+and stores a baseline. On `review_date` the next brief measures the same
+metric over the same number of days and reports the change. Everything is
+in `chief_proposals` and is fed back as memory: rejected ideas (and the
+reason, if you reply to the rejected message) aren't repeated, results
+steer the next proposals.
+
+In the topic: reply to a pending proposal to have it rewritten; any other
+message is a question answered from the same snapshot and memory; `/brif`
+(or `POST /webhooks/chief/run` as an admin) runs the brief now.

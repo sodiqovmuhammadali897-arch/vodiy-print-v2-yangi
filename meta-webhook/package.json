@@ -10,6 +10,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@napi-rs/canvas": "^0.1.65",
     "express": "^4.21.1",
     "firebase-admin": "^12.7.0",

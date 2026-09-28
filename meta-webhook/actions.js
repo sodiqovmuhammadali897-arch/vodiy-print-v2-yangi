@@ -442,4 +442,4 @@ const handleCallback = async (db, telegram, cq, isWorkChat) => {
   return answer(res.message, !["done", "cancelled"].includes(res.status));
 };
 
-module.exports = { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback, decideAction, findOrders, execute };
+module.exports = { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback, decideAction, findOrders, execute, isChatAdmin };

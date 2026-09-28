@@ -1,11 +1,11 @@
 // The 3D open-plan office behind the AI Ofis page (approved mockup, ported).
-// Nine agents sit at their desks typing; `play(event)` turns one
+// Ten agents sit at their desks typing; `play(event)` turns one
 // agent_events record into visible movement — the Hisobchi robot walking
 // to a colleague, a report flying to the Telegram screen, the warehouse
 // agent carrying a box to the shelf. Plain three.js, no React inside.
 import * as THREE from "three";
 
-export type AgentId = "it" | "sales" | "fin" | "prod" | "wh" | "bot" | "hr" | "ig" | "mkt";
+export type AgentId = "it" | "sales" | "fin" | "prod" | "wh" | "bot" | "hr" | "ig" | "mkt" | "chief";
 
 export type AgentEvent = {
   id: string;
@@ -29,11 +29,12 @@ export const AGENT_NAMES: Record<AgentId, string> = {
   hr: "HR (Kadrlar)",
   ig: "Instagram Direct",
   mkt: "Marketolog",
+  chief: "Bosh agent",
 };
 
 type AgentDef = {
   id: AgentId; x: number; z: number; shirt: string; skin: string; hair: string;
-  hat: "headset" | "tie" | "glasses" | "cap" | "robot" | "hardhat" | "bun" | "phone" | "beret"; zone: string; zoneColor: string;
+  hat: "headset" | "tie" | "glasses" | "cap" | "robot" | "hardhat" | "bun" | "phone" | "beret" | "crown"; zone: string; zoneColor: string;
   rug?: number; // zone rug width, narrower where desks sit close
 };
 
@@ -53,8 +54,9 @@ const D = 16;
 const FONT = '"Manrope", "Inter", system-ui, sans-serif';
 
 const AGENT_DEFS: AgentDef[] = [
-  { id: "it", x: -7.5, z: BACK, shirt: "#2a9d8f", skin: "#f1c7a0", hair: "#2b1d16", hat: "headset", zone: "SERVER XONASI", zoneColor: "#1d3b4f" },
-  { id: "sales", x: -1.2, z: BACK, shirt: "#3b6fb6", skin: "#e3ae84", hair: "#3b2a20", hat: "tie", zone: "SOTUV BO'LIMI", zoneColor: "#2b5c86" },
+  { id: "it", x: -7.5, z: BACK, shirt: "#2a9d8f", skin: "#f1c7a0", hair: "#2b1d16", hat: "headset", zone: "SERVER XONASI", zoneColor: "#1d3b4f", rug: 3.0 },
+  { id: "chief", x: -4.35, z: BACK, shirt: "#26323a", skin: "#e9bb93", hair: "#1b130e", hat: "crown", zone: "BOSH AGENT", zoneColor: "#1f2a44", rug: 2.6 },
+  { id: "sales", x: -1.2, z: BACK, shirt: "#3b6fb6", skin: "#e3ae84", hair: "#3b2a20", hat: "tie", zone: "SOTUV BO'LIMI", zoneColor: "#2b5c86", rug: 3.4 },
   { id: "hr", x: 3.4, z: BACK, shirt: "#d9577a", skin: "#f3c9a8", hair: "#3a2418", hat: "bun", zone: "KADRLAR BO'LIMI", zoneColor: "#8a3a5c", rug: 3.4 },
   { id: "fin", x: 7.5, z: BACK, shirt: "#8e5bb5", skin: "#f5d0b0", hair: "#6b3b24", hat: "glasses", zone: "BUXGALTERIYA", zoneColor: "#4a3f7a" },
   { id: "prod", x: -6.5, z: FRONT, shirt: "#e07a3f", skin: "#d9a178", hair: "#1e1511", hat: "cap", zone: "ISHLAB CHIQARISH", zoneColor: "#8a4b2a" },
@@ -565,6 +567,15 @@ export class OfficeScene {
       if (a.hat === "hardhat") {
         this.mesh(new THREE.SphereGeometry(0.31, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2.1), this.mat("#f2c230", { roughness: 0.4 }), head, 0, 0.04, 0);
         this.mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.03, 20), this.mat("#d9a916"), head, 0, 0.05, 0.02);
+      }
+      if (a.hat === "crown") {
+        // the chief: a small gold crown and a tie
+        this.mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.12, 12, 1, true), this.mat("#e2b714", { metalness: 0.6, roughness: 0.3 }), head, 0, 0.32, 0);
+        for (let k = 0; k < 5; k++) {
+          const ang = (k / 5) * Math.PI * 2;
+          this.mesh(new THREE.ConeGeometry(0.035, 0.09, 4), this.mat("#e2b714", { metalness: 0.6, roughness: 0.3 }), head, Math.sin(ang) * 0.2, 0.42, Math.cos(ang) * 0.2);
+        }
+        this.box(0.07, 0.34, 0.02, "#c9a227", body, 0, 1.06, 0.33);
       }
       if (a.hat === "beret") {
         // marketer: a red beret

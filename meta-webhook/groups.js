@@ -4,7 +4,7 @@
 // bot to some other group never redirects company reports there.
 //
 // Config lives in telegram_config/main: { group_chat_id, group_title,
-// topics: { it, sales, fin, prod, wh, hr, ig, mkt, bot: <message_thread_id> } }.
+// topics: { it, sales, fin, prod, wh, hr, ig, mkt, chief, bot: <message_thread_id> } }.
 const crypto = require("crypto");
 const { telegram } = require("./telegram");
 const { staffFromRequest } = require("./auth");
@@ -20,6 +20,7 @@ const TOPICS = [
   { key: "prod", name: "🏭 Ishlab chiqarish", color: 0xfb6f5f, intro: "Har kuni 08:00 da: kechikayotgan va bugun topshiriladigan buyurtmalar." },
   { key: "wh", name: "📦 Ombor / Ta'minot", color: 0x8eee98, intro: "Har kuni 08:00 da: tugayotgan materiallar, kirim-chiqim." },
   { key: "hr", name: "🧑‍💼 HR / Davomat", color: 0xff93b2, intro: "Davomat: ishga kelish/ketish rasmlari, 09:05 eslatmalari, kech qolganlar." },
+  { key: "chief", name: "🧠 Bosh agent", color: 0x6fb9f0, intro: "Bosh agent: har kuni 08:30 da (dush–shan) kompaniya holati, 3 ta muammo, 3 ta imkoniyat va ✅/❌ tugmali takliflar. ✅ bosilsa — vazifalar, postlar va mijozlar ro'yxati tayyorlanadi, natija keyin o'lchanadi. Taklifga javob yozsangiz — qayta ishlaydi. /brif — hozir tahlil." },
   { key: "mkt", name: "📣 Marketing", color: 0xffd67e, intro: "Marketolog: har dushanba 09:00 da haftalik tahlil, kontent-reja va qaytariladigan mijozlar. Shu yerda so'rang: «bu oy qaysi manba yaxshi ishladi?», «8-mart uchun 3 ta post yoz», «uxlab qolgan mijozlar». /hisobot — hisobotni hozir olish, /raqobat — raqobatchilarni hozir tahlil qilish." },
   { key: "ig", name: "📸 Instagram Direct", color: 0xff93b2, intro: "Instagram Direct va izohlar: yangi murojaatlar, raqam qoldirganlar (Sotuv bo'limiga lid bo'lib tushadi)." },
 ];

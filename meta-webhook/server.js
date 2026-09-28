@@ -62,7 +62,10 @@ if (hr) hr.register(app);
 // Marketolog agent — see marketing.js; answers in the Marketing topic.
 const marketing = groups ? require("./marketing").create(db, { route: groups.route }) : null;
 if (marketing) marketing.register(app);
-const assistant = require("./assistant").register(app, db, hr, groups, marketing);
+// Bosh agent — see chief.js; daily brief and proposals in its own topic.
+const chief = marketing ? require("./chief").create(db, { route: groups.route, analytics: marketing.analytics }) : null;
+if (chief) chief.register(app);
+const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief);
 const { slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
 // same Meta callback below (object "instagram").
@@ -333,4 +336,5 @@ app.listen(PORT, () => {
   if (hr) void hr.start();
   void instagram.start();
   if (marketing) void marketing.start().catch((err) => console.error("Marketolog start failed", err));
+  if (chief) void chief.start().catch((err) => console.error("Bosh agent start failed", err));
 });
