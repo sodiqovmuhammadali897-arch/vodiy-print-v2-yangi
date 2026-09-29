@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Target, TrendingUp, TrendingDown, Wallet, PackageOpen, ClipboardList, CircleCheck as CheckCircle2, Hourglass, Info } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
 import { computeWorkdayStats, monthRange, startOfDay } from "../../lib/workdays";
 import { useAuth } from "../../lib/AuthContext";
-import type { Expense, Holiday, MonthlyPlan, Order, OrderPayment } from "../../lib/types";
+import type { Expense, Holiday, Manager, MonthlyPlan, Order, OrderPayment } from "../../lib/types";
 import StatCard from "../../components/ui/StatCard";
 import DashboardHero from "./DashboardHero";
 import WorkdaysPanel from "./WorkdaysPanel";
@@ -38,7 +38,7 @@ const emptyStats: Stats = {
 const planId = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
 
 export default function Dashboard() {
-  const { can, isAdmin } = useAuth();
+  const { can, isAdmin, staff } = useAuth();
   // Orders/finance data is permission-gated in Firestore rules (see
   // firestore.rules); a staff member can have dashboard.view without
   // orders.view or finance.view (e.g. attendance-only accounts). Querying
@@ -48,84 +48,35 @@ export default function Dashboard() {
   const canOrders = isAdmin || can("orders", "view");
   const canFinance = isAdmin || can("finance", "view");
 
-  const [stats, setStats] = useState<Stats>(emptyStats);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [payments, setPayments] = useState<OrderPayment[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [companyPlan, setCompanyPlan] = useState(0);
+  const [managers, setManagers] = useState<Manager[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [picked, setPicked] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       const today = new Date();
-      const { start, end } = monthRange(today);
-      const dayStart = startOfDay(today).toISOString();
-
-      const [allOrders, planRow, holidaysData, payments, expenses] = await Promise.all([
+      const [allOrders, planRow, holidaysData, paymentRows, expenseRows, managerRows] = await Promise.all([
         canOrders ? listAll<Order>("orders", { orderBy: ["created_at", "desc"] }) : Promise.resolve([]),
-        getOne<MonthlyPlan>(
-          "monthly_plans",
-          planId(today.getFullYear(), today.getMonth() + 1),
-        ),
+        getOne<MonthlyPlan>("monthly_plans", planId(today.getFullYear(), today.getMonth() + 1)),
         listAll<Holiday>("holidays"),
         canOrders ? listAll<OrderPayment>("order_payments") : Promise.resolve([]),
         canFinance ? listAll<Expense>("expenses") : Promise.resolve([]),
+        canOrders ? listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }).catch(() => []) : Promise.resolve([]),
       ]);
-
       if (cancelled) return;
-
-      const todayDateStr = dayStart.slice(0, 10);
-      const todayIncome = payments
-        .filter((p) => p.payment_date === todayDateStr)
-        .reduce((s, p) => s + Number(p.amount || 0), 0);
-      const todayExpense = expenses
-        .filter((e) => e.date === todayDateStr)
-        .reduce((s, e) => s + Number(e.amount || 0), 0);
-      const unfinishedCount = allOrders.filter(
-        (o) => o.status !== "delivered" && o.status !== "closed" && o.status !== "cancelled",
-      ).length;
-
-      const monthOrders = allOrders.filter(
-        (o) => o.created_at >= start && o.created_at < end && o.status !== "cancelled",
-      );
-      const plan = planRow?.plan_amount ?? 0;
-      const revenue = monthOrders.reduce(
-        (s, o) => s + Number(o.total_amount || 0),
-        0,
-      );
-      const debt = monthOrders.reduce(
-        (s, o) =>
-          s +
-          Math.max(0, Number(o.total_amount || 0) - Number(o.paid_amount || 0)),
-        0,
-      );
-      const activeCount = monthOrders.filter(
-        (o) =>
-          o.status !== "delivered" &&
-          o.status !== "closed" &&
-          o.status !== "cancelled",
-      ).length;
-      const todayCount = allOrders.filter((o) => o.created_at >= dayStart).length;
-      const doneCount = allOrders.filter(
-        (o) =>
-          (o.status === "delivered" || o.status === "closed") &&
-          !!o.completed_at &&
-          o.completed_at >= dayStart,
-      ).length;
-
-      setStats({
-        plan,
-        revenue,
-        debt,
-        activeCount,
-        todayCount,
-        doneCount,
-        todayIncome,
-        todayExpense,
-        unfinishedCount,
-      });
+      setOrders(allOrders);
+      setCompanyPlan(planRow?.plan_amount ?? 0);
       setHolidays(holidaysData);
-      setRecentOrders(allOrders.slice(0, 6));
+      setPayments(paymentRows);
+      setExpenses(expenseRows);
+      setManagers(managerRows);
       setLoading(false);
     };
     void load();
@@ -134,6 +85,54 @@ export default function Dashboard() {
     };
   }, [canOrders, canFinance]);
 
+  // Same rule as Hisobot: a staff member linked to a Managerlar record
+  // (Sozlamalar > Xodimlar) sees only their own numbers, whatever their
+  // role. Everyone else sees the company and may pick one manager.
+  const myManager = useMemo(
+    () => (staff?.report_manager_id ? managers.find((m) => m.id === staff.report_manager_id) || null : null),
+    [managers, staff],
+  );
+  const manager = myManager || managers.find((m) => m.id === picked) || null;
+  // One person's numbers: company-wide cards (expenses) are hidden.
+  const scopedView = !!manager || !!staff?.report_manager_id;
+
+  const { stats, recentOrders } = useMemo(() => {
+    const today = new Date();
+    const { start, end } = monthRange(today);
+    const dayStart = startOfDay(today).toISOString();
+    const todayDateStr = dayStart.slice(0, 10);
+    const name = manager ? manager.name.trim().toLowerCase() : "";
+    // A linked account whose manager record is gone sees nothing rather than the company.
+    const scoped = manager
+      ? orders.filter((o) => (o.manager_name || "").trim().toLowerCase() === name)
+      : staff?.report_manager_id
+        ? []
+        : orders;
+    const scopedIds = new Set(scoped.map((o) => o.id));
+
+    const todayIncome = payments
+      .filter((p) => p.payment_date === todayDateStr && (!manager || scopedIds.has(p.order_id)))
+      .reduce((s, p) => s + Number(p.amount || 0), 0);
+    const todayExpense = expenses.filter((e) => e.date === todayDateStr).reduce((s, e) => s + Number(e.amount || 0), 0);
+    const open = (o: Order) => o.status !== "delivered" && o.status !== "closed" && o.status !== "cancelled";
+    const monthOrders = scoped.filter((o) => o.created_at >= start && o.created_at < end && o.status !== "cancelled");
+
+    const next: Stats = {
+      plan: manager ? Number(manager.monthly_plan) || 0 : companyPlan,
+      revenue: monthOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0),
+      debt: monthOrders.reduce((s, o) => s + Math.max(0, Number(o.total_amount || 0) - Number(o.paid_amount || 0)), 0),
+      activeCount: monthOrders.filter(open).length,
+      todayCount: scoped.filter((o) => o.created_at >= dayStart).length,
+      doneCount: scoped.filter(
+        (o) => (o.status === "delivered" || o.status === "closed") && !!o.completed_at && o.completed_at >= dayStart,
+      ).length,
+      todayIncome,
+      todayExpense,
+      unfinishedCount: scoped.filter(open).length,
+    };
+    return { stats: loading ? emptyStats : next, recentOrders: scoped.slice(0, 6) };
+  }, [orders, payments, expenses, companyPlan, manager, staff, loading]);
+
   const workday = computeWorkdayStats(new Date(), holidays);
   const planProgress = stats.plan > 0 ? (stats.revenue / stats.plan) * 100 : 0;
 
@@ -141,14 +140,37 @@ export default function Dashboard() {
     <div className="space-y-6">
       <DashboardHero />
 
-      {(canOrders || canFinance) && (
+      {canOrders && (staff?.report_manager_id || managers.length > 0) && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-bold text-ink-900">
+              {myManager || staff?.report_manager_id ? "Mening ko'rsatkichlarim" : manager ? manager.name : "Kompaniya bo'yicha"}
+            </h2>
+            <p className="text-xs text-ink-500">
+              {manager ? `${manager.name} — shaxsiy reja, sotuv va buyurtmalar` : "Barcha menejerlarning umumiy ko'rsatkichlari"}
+            </p>
+          </div>
+          {!staff?.report_manager_id && (
+            <select className="input w-auto" value={picked} onChange={(e) => setPicked(e.target.value)} aria-label="Kimning ko'rsatkichlari">
+              <option value="">Umumiy (kompaniya)</option>
+              {managers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
+      {(canOrders || (canFinance && !scopedView)) && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {canOrders && (
             <>
               <StatCard
                 title="Bu oy rejasi"
                 value={formatMoneyShort(stats.plan)}
-                hint={<>Reja: {formatMoney(stats.plan)}</>}
+                hint={stats.plan > 0 ? <>Reja: {formatMoney(stats.plan)}</> : "Reja belgilanmagan"}
                 tone="brand"
                 icon={<Target className="h-5 w-5" />}
                 progress={planProgress}
@@ -166,7 +188,7 @@ export default function Dashboard() {
               <StatCard
                 title="Bu oy qarzdorlik"
                 value={formatMoneyShort(stats.debt)}
-                hint={<>Umumiy qarz: {formatMoney(stats.debt)}</>}
+                hint={<>{manager ? "Qarz" : "Umumiy qarz"}: {formatMoney(stats.debt)}</>}
                 tone="rose"
                 icon={<Wallet className="h-5 w-5" />}
               />
@@ -207,7 +229,7 @@ export default function Dashboard() {
               />
             </>
           )}
-          {canFinance && (
+          {canFinance && !scopedView && (
             <StatCard
               title="Bugungi chiqim"
               value={formatMoneyShort(stats.todayExpense)}
@@ -221,7 +243,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <WorkdaysPanel stats={workday} />
-        {canOrders && (
+        {canOrders && !staff?.report_manager_id && (
           <div className="xl:col-span-2">
             <ManagerStatsPanel />
           </div>
