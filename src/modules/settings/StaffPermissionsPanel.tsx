@@ -97,7 +97,7 @@ export default function StaffPermissionsPanel() {
                   <th className="table-th">Email</th>
                   <th className="table-th">Ism</th>
                   <th className="table-th">Rol</th>
-                  <th className="table-th">Shaxsiy hisobot</th>
+                  <th className="table-th">Buyurtmalar</th>
                   <th className="table-th">Davomat xabari</th>
                   <th className="table-th text-right">Amallar</th>
                 </tr>
@@ -124,9 +124,10 @@ export default function StaffPermissionsPanel() {
                       {s.report_manager_id ? (
                         <span className="chip bg-brand-50 text-brand-700">
                           {managers.find((m) => m.id === s.report_manager_id)?.name || "Manager"}
+                          {s.orders_scope === "all" ? " · hammasi" : " · faqat o'ziniki"}
                         </span>
                       ) : (
-                        <span className="text-ink-400">To'liq hisobot</span>
+                        <span className="text-ink-400">Hammasi</span>
                       )}
                     </td>
                     <td className="table-td whitespace-nowrap text-xs">
@@ -189,6 +190,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
   const [role, setRole] = useState<StaffRole>("staff");
   const [permissions, setPermissions] = useState(emptyPermissions());
   const [reportManagerId, setReportManagerId] = useState("");
+  const [ordersScope, setOrdersScope] = useState<"own" | "all">("own");
   const [phone, setPhone] = useState("");
   const [notify, setNotify] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -204,6 +206,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       // they simply default to "no access" until explicitly granted.
       setPermissions({ ...emptyPermissions(), ...(staff.permissions || {}) });
       setReportManagerId(staff.report_manager_id || "");
+      setOrdersScope(staff.orders_scope === "all" ? "all" : "own");
       setPhone(staff.phone || "");
       setNotify(staff.attendance_notify !== false);
     } else {
@@ -212,6 +215,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       setRole("staff");
       setPermissions(emptyPermissions());
       setReportManagerId("");
+      setOrdersScope("own");
       setPhone("");
       setNotify(true);
     }
@@ -246,6 +250,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
         role,
         permissions: role === "admin" ? fullPermissions() : permissions,
         report_manager_id: reportManagerId || null,
+        orders_scope: ordersScope,
         phone: phone.trim(),
         attendance_notify: notify,
       });
@@ -336,13 +341,13 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
           </select>
         </div>
         <div>
-          <label className="label">Shaxsiy hisobot (Manager profili)</label>
+          <label className="label">Manager profili</label>
           <select
             className="input"
             value={reportManagerId}
             onChange={(e) => setReportManagerId(e.target.value)}
           >
-            <option value="">To'liq hisobotni ko'rsin</option>
+            <option value="">Manager emas</option>
             {managers.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
@@ -350,10 +355,25 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
             ))}
           </select>
           <p className="mt-1 text-xs text-ink-500">
-            Tanlansa, bu xodim Hisobot bo'limida — rolidan qat'i nazar —
-            faqat shu managerning o'z buyurtmalari, rejasi va qarzdorligini
-            ko'radi, kompaniya bo'yicha to'liq ma'lumotni emas.
+            Bu xodim qaysi managerning buyurtmalariga javobgar ekanini bildiradi.
           </p>
+          {reportManagerId && (
+            <div className="mt-2 space-y-1.5 rounded-xl bg-ink-50 p-3">
+              <div className="text-xs font-semibold text-ink-700">Buyurtmalar, Bosh sahifa va Hisobotda ko'rsin:</div>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="radio" className="mt-1" checked={ordersScope === "own"} onChange={() => setOrdersScope("own")} />
+                <span>
+                  <b>Faqat o'ziniki</b> — o'z buyurtmalari, rejasi va qarzdorligi
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="radio" className="mt-1" checked={ordersScope === "all"} onChange={() => setOrdersScope("all")} />
+                <span>
+                  <b>Hammasini</b> — kompaniyaning barcha buyurtmalari
+                </span>
+              </label>
+            </div>
+          )}
         </div>
       </div>
 

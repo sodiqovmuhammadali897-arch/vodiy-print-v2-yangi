@@ -54,6 +54,7 @@ import { ORDER_STATUSES } from "../../lib/orderConstants";
 import { changeOrderStatus } from "../../lib/orderStatus";
 import { maybePromoteCustomer } from "../../lib/orderService";
 import { useAuth } from "../../lib/AuthContext";
+import { useOrderScope } from "../../lib/orderScope";
 import RequireCustomerModal from "./RequireCustomerModal";
 import OrderPaymentModal from "./OrderPaymentModal";
 import LinkedTasksCard from "../tasks/LinkedTasksCard";
@@ -63,6 +64,7 @@ export default function OrderDetail() {
   const navigate = useNavigate();
   const { user, staff, can } = useAuth();
   const canEdit = can("orders", "edit");
+  const scope = useOrderScope();
   const [statusSaving, setStatusSaving] = useState(false);
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [requireCustomerOpen, setRequireCustomerOpen] = useState(false);
@@ -277,10 +279,10 @@ export default function OrderDetail() {
     }
   };
 
-  if (loading) {
+  if (loading || !scope.ready) {
     return <div className="py-16 text-center text-ink-500">Yuklanmoqda...</div>;
   }
-  if (!order) {
+  if (!order || !scope.canSee(order)) {
     return (
       <div className="card p-8 text-center">
         <p className="text-ink-600">Buyurtma topilmadi</p>

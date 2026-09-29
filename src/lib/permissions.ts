@@ -39,6 +39,10 @@ export type Staff = {
   // which broke in practice (accounts are often created with role
   // "admin" for convenience, and names can be entered inconsistently).
   report_manager_id?: string | null;
+  // With report_manager_id: "own" (default) — Buyurtmalar, Bosh sahifa and
+  // Hisobot show only that manager's orders; "all" — the whole company's
+  // (see lib/orderScope.ts).
+  orders_scope?: "own" | "all";
   // HR agent (meta-webhook/hr.js): where attendance reminders and late
   // notices go. Telegram when linked (free), otherwise SMS to `phone`.
   phone?: string;

@@ -4,6 +4,7 @@ import { getOne, listAll } from "../../lib/firestoreDb";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
 import { computeWorkdayStats, monthRange, startOfDay } from "../../lib/workdays";
 import { useAuth } from "../../lib/AuthContext";
+import { ownOrdersOnly } from "../../lib/orderScope";
 import type { Expense, Holiday, Manager, MonthlyPlan, Order, OrderPayment } from "../../lib/types";
 import StatCard from "../../components/ui/StatCard";
 import DashboardHero from "./DashboardHero";
@@ -85,16 +86,17 @@ export default function Dashboard() {
     };
   }, [canOrders, canFinance]);
 
-  // Same rule as Hisobot: a staff member linked to a Managerlar record
-  // (Sozlamalar > Xodimlar) sees only their own numbers, whatever their
-  // role. Everyone else sees the company and may pick one manager.
+  // Same rule as Buyurtmalar and Hisobot (lib/orderScope.ts): a staff
+  // member set to "faqat o'ziniki" sees only their own numbers, whatever
+  // their role. Everyone else sees the company and may pick one manager.
+  const ownOnly = ownOrdersOnly(staff);
   const myManager = useMemo(
-    () => (staff?.report_manager_id ? managers.find((m) => m.id === staff.report_manager_id) || null : null),
+    () => (ownOnly ? managers.find((m) => m.id === staff?.report_manager_id) || null : null),
     [managers, staff],
   );
   const manager = myManager || managers.find((m) => m.id === picked) || null;
   // One person's numbers: company-wide cards (expenses) are hidden.
-  const scopedView = !!manager || !!staff?.report_manager_id;
+  const scopedView = !!manager || ownOnly;
 
   const { stats, recentOrders } = useMemo(() => {
     const today = new Date();
@@ -105,7 +107,7 @@ export default function Dashboard() {
     // A linked account whose manager record is gone sees nothing rather than the company.
     const scoped = manager
       ? orders.filter((o) => (o.manager_name || "").trim().toLowerCase() === name)
-      : staff?.report_manager_id
+      : ownOnly
         ? []
         : orders;
     const scopedIds = new Set(scoped.map((o) => o.id));
@@ -131,7 +133,7 @@ export default function Dashboard() {
       unfinishedCount: scoped.filter(open).length,
     };
     return { stats: loading ? emptyStats : next, recentOrders: scoped.slice(0, 6) };
-  }, [orders, payments, expenses, companyPlan, manager, staff, loading]);
+  }, [orders, payments, expenses, companyPlan, manager, ownOnly, loading]);
 
   const workday = computeWorkdayStats(new Date(), holidays);
   const planProgress = stats.plan > 0 ? (stats.revenue / stats.plan) * 100 : 0;
@@ -140,17 +142,17 @@ export default function Dashboard() {
     <div className="space-y-6">
       <DashboardHero />
 
-      {canOrders && (staff?.report_manager_id || managers.length > 0) && (
+      {canOrders && (ownOnly || managers.length > 0) && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-display text-lg font-bold text-ink-900">
-              {myManager || staff?.report_manager_id ? "Mening ko'rsatkichlarim" : manager ? manager.name : "Kompaniya bo'yicha"}
+              {ownOnly ? "Mening ko'rsatkichlarim" : manager ? manager.name : "Kompaniya bo'yicha"}
             </h2>
             <p className="text-xs text-ink-500">
               {manager ? `${manager.name} — shaxsiy reja, sotuv va buyurtmalar` : "Barcha menejerlarning umumiy ko'rsatkichlari"}
             </p>
           </div>
-          {!staff?.report_manager_id && (
+          {!ownOnly && (
             <select className="input w-auto" value={picked} onChange={(e) => setPicked(e.target.value)} aria-label="Kimning ko'rsatkichlari">
               <option value="">Umumiy (kompaniya)</option>
               {managers.map((m) => (
@@ -243,7 +245,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <WorkdaysPanel stats={workday} />
-        {canOrders && !staff?.report_manager_id && (
+        {canOrders && !ownOnly && (
           <div className="xl:col-span-2">
             <ManagerStatsPanel />
           </div>

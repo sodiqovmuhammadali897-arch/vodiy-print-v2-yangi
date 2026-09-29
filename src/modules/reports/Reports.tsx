@@ -46,6 +46,7 @@ import { exportCsv } from "../../lib/exportCsv";
 import { exportNodeToPdf } from "../../lib/exportPdf";
 import { useAuth } from "../../lib/AuthContext";
 import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
+import { ownOrdersOnly } from "../../lib/orderScope";
 import {
   computeAttendanceKpi,
   dateCodeOf,
@@ -161,8 +162,8 @@ export default function Reports() {
   // them full module access — and independent of full_name matching,
   // which is unreliable with inconsistent name spelling/scripts.
   const myManager = useMemo(() => {
-    if (!staff?.report_manager_id) return null;
-    return managers.find((m) => m.id === staff.report_manager_id) || null;
+    if (!ownOrdersOnly(staff)) return null;
+    return managers.find((m) => m.id === staff?.report_manager_id) || null;
   }, [managers, staff]);
   const isManagerMode = !!myManager;
 

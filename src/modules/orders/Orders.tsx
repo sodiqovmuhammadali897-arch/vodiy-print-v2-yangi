@@ -42,6 +42,7 @@ import OrdersSidePanel from "./OrdersSidePanel";
 import { formatDate, formatMoneyShort, initialsOf } from "../../lib/format";
 import { remainingTimeLabel } from "../../lib/remainingTime";
 import { useAuth } from "../../lib/AuthContext";
+import { useOrderScope } from "../../lib/orderScope";
 
 // A quick at-a-glance production indicator for managers who don't have
 // access to Ishlab chiqarish/Pechatnik — the "worst" (least progressed)
@@ -81,6 +82,7 @@ export default function Orders() {
   const { user, staff, can } = useAuth();
   const canEdit = can("orders", "edit");
   const canDelete = can("orders", "delete");
+  const scope = useOrderScope();
   const [orders, setOrders] = useState<Order[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -186,7 +188,7 @@ export default function Orders() {
     const brandsMap = new Map(brands.map((x) => [x.id, x]));
     const customersMap = new Map(customers.map((x) => [x.id, x]));
 
-    return orders.map((ord) => {
+    return scope.visible(orders).map((ord) => {
       const items = productsByOrder.get(ord.id) || [];
       const preview = items
         .slice(0, 2)
@@ -202,7 +204,8 @@ export default function Orders() {
         productionDot: productionDotFor(ord, items),
       };
     });
-  }, [orders, brands, customers, productsByOrder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, brands, customers, productsByOrder, scope.own, scope.manager]);
 
   const managers = useMemo(
     () => Array.from(new Set(orders.map((o) => o.manager_name).filter(Boolean))).sort(),
@@ -420,7 +423,9 @@ export default function Orders() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink-900">Buyurtmalar</h1>
-          <p className="text-sm text-ink-500">Barcha buyurtmalar ro'yxati va holati</p>
+          <p className="text-sm text-ink-500">
+            {scope.own ? `Faqat sizning buyurtmalaringiz${scope.manager ? ` (${scope.manager.name})` : ""}` : "Barcha buyurtmalar ro'yxati va holati"}
+          </p>
         </div>
         {canEdit && (
           <button className="btn-primary" onClick={() => navigate("/orders/new")}>
@@ -458,7 +463,7 @@ export default function Orders() {
             </option>
           ))}
         </select>
-        {managers.length > 0 && (
+        {!scope.own && managers.length > 0 && (
           <select className="input w-auto" value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)}>
             <option value="">Barcha manager</option>
             {managers.map((m) => (
@@ -489,7 +494,7 @@ export default function Orders() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="card flex-1 overflow-hidden">
           <AsyncState
-            loading={loading}
+            loading={loading || !scope.ready}
             empty={filtered.length === 0}
             emptyLabel="Buyurtmalar mavjud emas"
             emptyIcon={<Package className="h-5 w-5" />}
