@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Trash2, GripVertical, Grid3x3, Pencil, X, Plus, ExternalLink, Paperclip } from "lucide-react";
+import { Trash2, GripVertical, Grid3x3, Pencil, X, Plus, ExternalLink, Paperclip, RotateCcw } from "lucide-react";
 import type { WizardFileLink, WizardProduct } from "../../../lib/orderService";
-import type { SizeBreakdownEntry } from "../../../lib/types";
+import type { PriceTier, Product, SizeBreakdownEntry } from "../../../lib/types";
+import { sortTiers, tierPriceFor } from "../../../lib/priceTiers";
 import {
-  CATEGORY_PRODUCTS,
   FILE_LINK_TYPES,
   PRODUCT_CATEGORIES,
   PRODUCTION_COMPANIES,
@@ -17,22 +17,41 @@ import TextileSizeMatrixModal from "./TextileSizeMatrixModal";
 type Props = {
   index: number;
   product: WizardProduct;
+  catalog: Product[];
   onChange: (patch: Partial<WizardProduct>) => void;
   onRemove: () => void;
   historyPrice?: number | null;
 };
 
+const normName = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[ʻʼ'`‘’]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// The tier a quantity falls in, and the next one up (to suggest "a bit
+// more and it's cheaper").
+const tierInfo = (tiers: PriceTier[], qty: number) => {
+  const sorted = sortTiers(tiers);
+  const current = [...sorted].reverse().find((t) => qty >= t.min_qty) || null;
+  const next = sorted.find((t) => t.min_qty > qty) || null;
+  return { sorted, current, next, belowMin: sorted.length > 0 && qty > 0 && qty < sorted[0].min_qty };
+};
+
 export default function ProductLineItem({
   index,
   product,
+  catalog,
   onChange,
   onRemove,
   historyPrice,
 }: Props) {
   const total = computeProductTotal(product);
-  const suggestions = CATEGORY_PRODUCTS[product.category] || [];
   const isTextile = product.category === "Textil";
   const [matrixOpen, setMatrixOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
   const hasBreakdown = product.size_breakdown.length > 0;
 
   const patchAndRecalc = (patch: Partial<WizardProduct>) => {
@@ -41,9 +60,46 @@ export default function ProductLineItem({
     onChange({ ...patch, total: newTotal });
   };
 
+  // ── catalog link ────────────────────────────────────────────────
+  const linked = product.catalog_product_id ? catalog.find((p) => p.id === product.catalog_product_id) || null : null;
+  const tiers = linked?.price_tiers || [];
+  const catalogPriceFor = (qty: number) => (tiers.length ? tierPriceFor(tiers, qty || sortTiers(tiers)[0].min_qty) : 0);
+  const catalogPrice = linked && tiers.length ? catalogPriceFor(product.quantity) : null;
+  const info = tierInfo(tiers, product.quantity);
+
+  const inCategory = product.category ? catalog.filter((p) => p.category === product.category) : catalog;
+  const pool = inCategory.length ? inCategory : catalog;
+  const query = normName(product.product_name);
+  const matches = (linked && normName(linked.name) === query ? pool : pool.filter((p) => !query || normName(p.name).includes(query))).slice(0, 40);
+
+  const pickProduct = (p: Product) => {
+    const t = p.price_tiers || [];
+    patchAndRecalc({
+      product_name: p.name,
+      catalog_product_id: p.id,
+      category: p.category || product.category,
+      size: product.size || p.size_spec || "",
+      material: product.material || p.material || "",
+      unit_price: t.length ? tierPriceFor(t, product.quantity || sortTiers(t)[0].min_qty) : product.unit_price,
+      price_manual: false,
+    });
+    setPickerOpen(false);
+  };
+
+  const onNameChange = (text: string) => {
+    const exact = catalog.find((p) => normName(p.name) === normName(text));
+    patchAndRecalc({ product_name: text, catalog_product_id: exact ? exact.id : null });
+    setPickerOpen(true);
+    setHighlight(0);
+  };
+
+  // Quantity drives the price while the manager hasn't set their own.
+  const priceForQty = (qty: number): Partial<WizardProduct> =>
+    linked && tiers.length && !product.price_manual ? { unit_price: catalogPriceFor(qty) } : {};
+
   const applyBreakdown = (breakdown: SizeBreakdownEntry[]) => {
     const qty = breakdown.reduce((s, e) => s + e.qty, 0);
-    patchAndRecalc({ size_breakdown: breakdown, quantity: qty, color: "", size: "" });
+    patchAndRecalc({ size_breakdown: breakdown, quantity: qty, color: "", size: "", ...priceForQty(qty) });
   };
 
   const clearBreakdown = () =>
@@ -99,17 +155,61 @@ export default function ProductLineItem({
         </div>
         <div className="col-span-12 md:col-span-4">
           <label className="label">Mahsulot nomi</label>
-          <input
-            className="input"
-            list={`products-${index}`}
-            value={product.product_name}
-            onChange={(e) => patchAndRecalc({ product_name: e.target.value })}
-          />
-          <datalist id={`products-${index}`}>
-            {suggestions.map((s) => (
-              <option key={s} value={s} />
-            ))}
-          </datalist>
+          <div className="relative">
+            <input
+              className="input"
+              value={product.product_name}
+              placeholder={catalog.length ? "Katalogdan tanlang yoki yozing" : ""}
+              onFocus={() => setPickerOpen(true)}
+              onBlur={() => setTimeout(() => setPickerOpen(false), 150)}
+              onChange={(e) => onNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (!pickerOpen || !matches.length) return;
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setHighlight((h) => Math.min(matches.length - 1, h + 1));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setHighlight((h) => Math.max(0, h - 1));
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  pickProduct(matches[Math.min(highlight, matches.length - 1)]);
+                } else if (e.key === "Escape") setPickerOpen(false);
+              }}
+            />
+            {pickerOpen && catalog.length > 0 && (
+              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-auto rounded-xl border border-ink-100 bg-surface py-1 shadow-lg">
+                {matches.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-ink-500">Katalogda topilmadi — shu nom bilan davom etishingiz mumkin</div>
+                ) : (
+                  matches.map((p, i) => {
+                    const t = sortTiers(p.price_tiers || []);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseEnter={() => setHighlight(i)}
+                        onClick={() => pickProduct(p)}
+                        className={`block w-full px-3 py-2 text-left text-sm ${i === highlight ? "bg-brand-50" : "hover:bg-ink-50"}`}
+                      >
+                        <span className="block font-semibold text-ink-900">{p.name}</span>
+                        <span className="block text-[11px] tabular-nums text-ink-500">
+                          {!product.category && p.category ? `${p.category} · ` : ""}
+                          {t.length === 0
+                            ? "narx kiritilmagan"
+                            : t.length > 1
+                              ? `${t[0].min_qty}+ ta: ${formatMoney(t[0].price)} → ${t[t.length - 1].min_qty}+ ta: ${formatMoney(t[t.length - 1].price)}`
+                              : `${t[0].min_qty}+ ta: ${formatMoney(t[0].price)}`}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+          {linked && <div className="mt-1 text-[11px] font-semibold text-emerald-700">✓ Katalogdan — narx tirajga qarab qo'yiladi</div>}
         </div>
         <div className="col-span-6 md:col-span-2">
           <label className="label">Variant</label>
@@ -241,9 +341,10 @@ export default function ProductLineItem({
             className="input"
             value={product.quantity || ""}
             disabled={hasBreakdown}
-            onChange={(e) =>
-              patchAndRecalc({ quantity: Number(e.target.value) || 0 })
-            }
+            onChange={(e) => {
+              const qty = Number(e.target.value) || 0;
+              patchAndRecalc({ quantity: qty, ...priceForQty(qty) });
+            }}
           />
           {hasBreakdown && (
             <div className="mt-1 text-[11px] text-ink-500">Jadvaldan hisoblanadi</div>
@@ -255,10 +356,40 @@ export default function ProductLineItem({
             type="number"
             className="input"
             value={product.unit_price || ""}
-            onChange={(e) =>
-              patchAndRecalc({ unit_price: Number(e.target.value) || 0 })
-            }
+            onChange={(e) => {
+              const v = Number(e.target.value) || 0;
+              // Once the manager writes their own price, quantity changes
+              // no longer overwrite it.
+              patchAndRecalc({ unit_price: v, ...(linked ? { price_manual: v !== catalogPrice } : {}) });
+            }}
           />
+          {linked && info.sorted.length > 0 && (
+            <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
+              {info.belowMin ? (
+                <div className="font-semibold text-amber-700">Minimal tiraj — {info.sorted[0].min_qty} ta</div>
+              ) : info.current ? (
+                <div className="text-ink-500">
+                  Katalog: {info.current.min_qty}+ — {formatMoney(info.current.price)}
+                </div>
+              ) : null}
+              {product.price_manual && catalogPrice !== null && product.unit_price !== catalogPrice && (
+                <button
+                  type="button"
+                  className="block text-left font-semibold text-brand-700 hover:underline"
+                  onClick={() => patchAndRecalc({ unit_price: catalogPrice, price_manual: false })}
+                >
+                  <RotateCcw className="mr-1 inline h-3 w-3 align-[-2px]" />
+                  Katalog narxi: {formatMoney(catalogPrice)}
+                  {catalogPrice > 0 && ` (siz ${product.unit_price < catalogPrice ? "−" : "+"}${Math.abs(Math.round(((product.unit_price - catalogPrice) / catalogPrice) * 100))}%)`}
+                </button>
+              )}
+              {info.next && product.quantity > 0 && !info.belowMin && (
+                <div className="text-emerald-700">
+                  Yana {info.next.min_qty - product.quantity} ta → {formatMoney(info.next.price)}
+                </div>
+              )}
+            </div>
+          )}
           {historyPrice != null && historyPrice > 0 && (
             <div className="mt-1 text-[11px] text-ink-500">
               Oldingi narx: {formatMoney(historyPrice)}

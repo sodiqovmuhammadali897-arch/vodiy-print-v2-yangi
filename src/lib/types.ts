@@ -151,6 +151,11 @@ export type OrderProduct = {
   assigned_printer_name: string;
   production_accepted_at: string | null;
   production_completed_at: string | null;
+  // Set when the line was picked from the Mahsulotlar catalog: the unit
+  // price then follows the product's price tiers as the quantity changes,
+  // until a manager types their own price (price_manual).
+  catalog_product_id?: string | null;
+  price_manual?: boolean;
 };
 
 // A saved color/size quantity distribution an employee can reuse on a

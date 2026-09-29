@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
-import type { TextileCompany } from "../../../lib/types";
+import type { Product, TextileCompany } from "../../../lib/types";
+import { listAll } from "../../../lib/firestoreDb";
 import { DESIGNER_STATUSES, DELIVERY_TYPES, PAYMENT_TYPES } from "../../../lib/orderConstants";
 import ProductLineItem from "./ProductLineItem";
 
@@ -34,6 +36,14 @@ export default function ProductionStep({
   payload, onPayloadChange, products, setProducts, payments, setPayments,
   textileCompanies, managerNames, historyPrices,
 }: Props) {
+  // The Mahsulotlar catalog, for the product picker and tier prices.
+  const [catalog, setCatalog] = useState<Product[]>([]);
+  useEffect(() => {
+    void listAll<Product>("products", { orderBy: ["name", "asc"] })
+      .then((rows) => setCatalog(rows.filter((p) => p.is_active !== false && !p.archived_at)))
+      .catch(() => setCatalog([]));
+  }, []);
+
   const addProduct = () => setProducts((p) => [...p, { ...emptyProduct, position: p.length }]);
   const updateProduct = (i: number, patch: Partial<WizardProduct>) =>
     setProducts((p) => p.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
@@ -56,7 +66,7 @@ export default function ProductionStep({
         )}
         <div className="space-y-3">
           {products.map((p, i) => (
-            <ProductLineItem key={i} index={i} product={p} onChange={(patch) => updateProduct(i, patch)} onRemove={() => removeProduct(i)} historyPrice={historyPrices[p.product_name] ?? null} />
+            <ProductLineItem key={i} index={i} product={p} catalog={catalog} onChange={(patch) => updateProduct(i, patch)} onRemove={() => removeProduct(i)} historyPrice={historyPrices[p.product_name] ?? null} />
           ))}
         </div>
       </div>
