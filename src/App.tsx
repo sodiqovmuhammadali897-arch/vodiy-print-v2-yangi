@@ -79,7 +79,6 @@ export default function App() {
 
           <Route element={<PermissionRoute module="reports" />}>
             <Route path="/reports" element={<Reports />} />
-            <Route path="/ai-office" element={<AiOffice />} />
           </Route>
 
           <Route element={<PermissionRoute module="production" />}>
@@ -99,6 +98,7 @@ export default function App() {
 
           <Route element={<AdminRoute />}>
             <Route path="/settings" element={<Settings />} />
+            <Route path="/ai-office" element={<AiOffice />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

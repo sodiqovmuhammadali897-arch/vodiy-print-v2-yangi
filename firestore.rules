@@ -186,11 +186,11 @@ service cloud.firestore {
     // AI Ofis feed: written only by the server (daily agents, Hisobchi
     // bot) through the Admin SDK; any staff member may watch it.
     match /agent_events/{id} {
-      allow read: if isStaff();
+      allow read: if isAdmin(); // AI Ofis is admin-only
       allow write: if false;
     }
     match /agent_status/{id} {
-      allow read: if isStaff();
+      allow read: if isAdmin(); // AI Ofis is admin-only
       allow write: if false;
     }
 
