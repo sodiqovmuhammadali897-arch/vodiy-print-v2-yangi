@@ -110,11 +110,14 @@ channel too, and a confirmation made on either side updates the other.
 ## HR agent (`hr.js`)
 
 Runs inside this service (same bot token):
-- at work start + 5 min (from `work_schedules/default`, 09:05 by default)
-  every staff member with `attendance_notify !== false` and a phone or a
-  linked Telegram who hasn't checked in gets a reminder (skips the weekly
-  day off, `holidays` and approved `leave_requests`; claimed once per day
-  in `hr_runs/{date}` so restarts never double-send);
+- at work start + 5 min, every staff member with
+  `attendance_notify !== false` and a phone or a linked Telegram who
+  hasn't checked in gets a reminder. The start time comes from their own
+  `work_schedules/{email}` (`workStart`, `workEnd`, `offDays` 0 = Sunday)
+  or the general `work_schedules/default` (09:05 by default). It skips
+  their days off, `holidays` and approved `leave_requests`. Each start
+  time is claimed once per day in `hr_runs/{date}_{HHMM}`, so restarts
+  never double-send;
 - a fresh late check-in (`attendance.lateMinutes > 0`) gets one notice,
   claimed via `attendance.lateNotifiedAt`.
 

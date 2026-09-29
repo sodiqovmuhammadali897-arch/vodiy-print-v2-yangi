@@ -5,6 +5,11 @@ export type WorkSchedule = {
   breakEnd: string;
   breakMinutes: number;
   weeklyOffDay: number; // 0 = Sunday
+  // Days off (0 = Sunday … 6 = Saturday). Set on a personal schedule;
+  // when absent the general weeklyOffDay applies.
+  offDays?: number[];
+  // Minutes after workStart that still count as on time.
+  graceMinutes?: number;
   officeLat: number;
   officeLng: number;
   officeRadiusMeters: number;
@@ -19,6 +24,7 @@ export const DEFAULT_WORK_SCHEDULE: WorkSchedule = {
   breakEnd: "14:00",
   breakMinutes: 60,
   weeklyOffDay: 0,
+  graceMinutes: 5,
   officeLat: 0,
   officeLng: 0,
   officeRadiusMeters: 150,

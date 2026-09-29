@@ -9,7 +9,7 @@ import {
   getWorkSchedule,
   listMonthAttendance,
 } from "../../services/attendanceService";
-import { attendancePercent, dateCodeOf, formatMinutes, workingDaysSoFar } from "../../utils/attendanceCalculations";
+import { attendancePercent, dateCodeOf, formatMinutes, offDaysOf, WEEKDAY_SHORT, workingDaysSoFar } from "../../utils/attendanceCalculations";
 import CheckInButton from "./CheckInButton";
 import CheckOutButton from "./CheckOutButton";
 
@@ -28,7 +28,7 @@ export default function EmployeeAttendanceCard() {
     setLoading(true);
     setError(null);
     try {
-      const sched = await getWorkSchedule();
+      const sched = await getWorkSchedule(email);
       setSchedule(sched);
       const [t, m] = await Promise.all([
         getTodayAttendance(email),
@@ -103,6 +103,11 @@ export default function EmployeeAttendanceCard() {
             <div className="text-[11px] font-semibold uppercase text-ink-500">Bugun ishlagan</div>
             <div className="mt-1 font-bold text-ink-900">{formatMinutes(liveWorkedMinutes)}</div>
           </div>
+        </div>
+
+        <div className="mt-3 text-center text-xs text-ink-500">
+          Ish vaqtingiz: {schedule.workStart}–{schedule.workEnd}
+          {offDaysOf(schedule).length > 0 && ` · dam olish: ${offDaysOf(schedule).map((d) => WEEKDAY_SHORT[d]).join(", ")}`}
         </div>
 
         {today?.lateMinutes ? (

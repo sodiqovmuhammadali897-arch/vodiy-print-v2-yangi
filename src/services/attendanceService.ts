@@ -1,9 +1,9 @@
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../lib/firebase";
-import { getOne, listWhere } from "../lib/firestoreDb";
-import type { AttendanceRecord, WorkSchedule } from "../lib/types";
+import { getOne, listAll, listWhere } from "../lib/firestoreDb";
+import type { AttendanceRecord, PersonalSchedule, WorkSchedule } from "../lib/types";
 import { getCurrentPosition, GeolocationDeniedError } from "../utils/locationUtils";
-import { dateCodeOf } from "../utils/attendanceCalculations";
+import { dateCodeOf, mergeSchedule } from "../utils/attendanceCalculations";
 
 const DEFAULT_SCHEDULE: WorkSchedule = {
   id: "default",
@@ -13,15 +13,28 @@ const DEFAULT_SCHEDULE: WorkSchedule = {
   breakEnd: "14:00",
   breakMinutes: 60,
   weeklyOffDay: 0,
+  graceMinutes: 5,
   officeLat: 0,
   officeLng: 0,
   officeRadiusMeters: 150,
   gpsCheckEnabled: false,
 };
 
-export const getWorkSchedule = async (): Promise<WorkSchedule> => {
-  const doc = await getOne<WorkSchedule>("work_schedules", "default");
-  return doc ? { ...DEFAULT_SCHEDULE, ...doc, id: "default" } : DEFAULT_SCHEDULE;
+// The general schedule, or — given an email — that employee's own
+// (their hours and days off on top of the general one).
+export const getWorkSchedule = async (email?: string): Promise<WorkSchedule> => {
+  const [doc, own] = await Promise.all([
+    getOne<WorkSchedule>("work_schedules", "default"),
+    email ? getOne<PersonalSchedule>("work_schedules", email.toLowerCase()) : Promise.resolve(null),
+  ]);
+  const general = doc ? { ...DEFAULT_SCHEDULE, ...doc, id: "default" } : DEFAULT_SCHEDULE;
+  return mergeSchedule(general, own);
+};
+
+// Every employee's own schedule, by email.
+export const listPersonalSchedules = async (): Promise<Map<string, PersonalSchedule>> => {
+  const rows = await listAll<PersonalSchedule>("work_schedules");
+  return new Map(rows.filter((r) => r.id !== "default" && r.employee_email).map((r) => [r.id, r]));
 };
 
 export const getTodayAttendance = async (email: string): Promise<AttendanceRecord | null> => {

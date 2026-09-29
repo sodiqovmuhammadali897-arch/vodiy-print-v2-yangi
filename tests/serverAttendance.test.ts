@@ -69,3 +69,18 @@ describe("computeCheckOutStats", () => {
     expect(stats.workedMinutes).toBe(0);
   });
 });
+
+describe("grace minutes", () => {
+  const graced = { ...schedule, graceMinutes: 5 };
+  it("counts up to the grace period as on time", () => {
+    expect(computeCheckInStatus(at("04:05"), graced)).toEqual({ status: "Vaqtida keldi", lateMinutes: 0 });
+  });
+  it("counts every minute from the start once past it", () => {
+    expect(computeCheckInStatus(at("04:06"), graced)).toEqual({ status: "Kechikdi", lateMinutes: 6 });
+  });
+  it("follows a personal start time", () => {
+    const own = { ...graced, workStart: "10:00" };
+    expect(computeCheckInStatus(at("05:03"), own).lateMinutes).toBe(0);
+    expect(computeCheckInStatus(at("05:20"), own).lateMinutes).toBe(20);
+  });
+});

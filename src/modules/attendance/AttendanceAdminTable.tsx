@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { MapPin, Users } from "lucide-react";
 import { listAll, subscribeWhere } from "../../lib/firestoreDb";
-import type { AttendanceRecord, WorkSchedule } from "../../lib/types";
+import type { AttendanceRecord, PersonalSchedule, WorkSchedule } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
-import { getWorkSchedule } from "../../services/attendanceService";
-import { deriveDisplayStatus, dateCodeOf, formatMinutes } from "../../utils/attendanceCalculations";
+import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
+import { deriveDisplayStatus, dateCodeOf, formatMinutes, mergeSchedule } from "../../utils/attendanceCalculations";
 import AsyncState from "../../components/ui/AsyncState";
 
 const STATUS_TONE: Record<string, string> = {
@@ -23,19 +23,22 @@ export default function AttendanceAdminTable() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [today, setToday] = useState<AttendanceRecord[]>([]);
   const [schedule, setSchedule] = useState<WorkSchedule | null>(null);
+  const [personal, setPersonal] = useState<Map<string, PersonalSchedule>>(new Map());
   const [loading, setLoading] = useState(true);
   const dateCode = dateCodeOf(new Date());
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [staffData, sched] = await Promise.all([
+      const [staffData, sched, own] = await Promise.all([
         listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }),
         getWorkSchedule(),
+        listPersonalSchedules().catch(() => new Map<string, PersonalSchedule>()),
       ]);
       if (cancelled) return;
       setStaff(staffData);
       setSchedule(sched);
+      setPersonal(own);
     })();
 
     const unsub = subscribeWhere<AttendanceRecord>("attendance", "dateCode", dateCode, (rows) => {
@@ -55,13 +58,16 @@ export default function AttendanceAdminTable() {
     const byEmail = new Map(today.map((r) => [r.employeeId, r]));
     return staff.map((s) => {
       const record = byEmail.get(s.email) || null;
+      const own = mergeSchedule(schedule, personal.get(s.email.toLowerCase()));
       return {
         staff: s,
         record,
-        status: deriveDisplayStatus(record, schedule, null, dateCode),
+        hours: `${own.workStart}–${own.workEnd}`,
+        personal: personal.has(s.email.toLowerCase()),
+        status: deriveDisplayStatus(record, own, null, dateCode),
       };
     });
-  }, [staff, today, schedule, dateCode]);
+  }, [staff, today, schedule, personal, dateCode]);
 
   const summary = useMemo(() => {
     const present = rows.filter((r) => r.record?.checkInTime).length;
@@ -103,9 +109,12 @@ export default function AttendanceAdminTable() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
-                {rows.map(({ staff: s, record, status }) => (
+                {rows.map(({ staff: s, record, status, hours, personal: own }) => (
                   <tr key={s.email} className="hover:bg-ink-50/50">
-                    <td className="table-td font-medium text-ink-800">{s.full_name || s.email}</td>
+                    <td className="table-td">
+                      <div className="font-medium text-ink-800">{s.full_name || s.email}</div>
+                      <div className={`text-[11px] ${own ? "font-semibold text-brand-600" : "text-ink-400"}`}>{hours}</div>
+                    </td>
                     <td className="table-td">{record?.checkInTime || "-"}</td>
                     <td className="table-td">{record?.checkOutTime || "-"}</td>
                     <td className="table-td">

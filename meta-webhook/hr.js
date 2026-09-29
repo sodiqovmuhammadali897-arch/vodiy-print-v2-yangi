@@ -1,6 +1,7 @@
 // "HR agent" — watches attendance and nudges people:
 // - at work start + 5 min (09:05 by default) everyone expected at work who
-//   hasn't checked in gets a reminder;
+//   hasn't checked in gets a reminder — each employee at their own start
+//   time and not on their own days off (work_schedules/{email});
 // - whoever checks in late gets "N daqiqa kech qoldingiz".
 // Each message goes to the employee's Telegram (free) when they linked the
 // bot, otherwise by SMS through Eskiz.uz. Skips the weekly day off,
@@ -23,6 +24,10 @@ const REMINDER_WINDOW_MIN = 90;
 const LATE_NOTICE_MAX_AGE_MS = 30 * 60 * 1000;
 const LINK_CODE_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_SCHEDULE = { workStart: "09:00", weeklyOffDay: 0 };
+const toMin = (hm) => {
+  const [h, m] = String(hm || "09:00").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
 
 const tashkent = () => new Date(Date.now() + TZ_OFFSET_MS);
 const dayCode = (d = tashkent()) => d.toISOString().slice(0, 10);
@@ -78,25 +83,32 @@ const sendSms = async (phone, text) => {
 const create = (db, { route }) => {
   let botUsername = "";
   let schedule = { ...DEFAULT_SCHEDULE };
+  let personal = new Map();
   let scheduleAt = 0;
   let watchedDay = null;
   let unwatch = null;
   let timer = null;
 
+  // The general schedule and everyone's own (hours, days off).
   const loadSchedule = async () => {
-    if (Date.now() - scheduleAt < 10 * 60 * 1000) return schedule;
-    const snap = await db.collection("work_schedules").doc("default").get();
-    schedule = { ...DEFAULT_SCHEDULE, ...(snap.exists ? snap.data() : {}) };
+    if (Date.now() - scheduleAt < 2 * 60 * 1000) return schedule;
+    const snap = await db.collection("work_schedules").get();
+    const docs = new Map(snap.docs.map((d) => [d.id, d.data()]));
+    schedule = { ...DEFAULT_SCHEDULE, ...(docs.get("default") || {}) };
+    docs.delete("default");
+    personal = docs;
     scheduleAt = Date.now();
     return schedule;
   };
 
-  const isWorkDay = async (code) => {
-    const sched = await loadSchedule();
-    if (new Date(`${code}T00:00:00Z`).getUTCDay() === Number(sched.weeklyOffDay)) return false;
-    const hol = await db.collection("holidays").where("date", "==", code).get();
-    return hol.empty;
+  // One employee's start time and days off (0 = Sunday).
+  const scheduleOf = (email) => {
+    const own = personal.get(String(email).toLowerCase());
+    const offDays = own && Array.isArray(own.offDays) ? own.offDays : Array.isArray(schedule.offDays) ? schedule.offDays : [Number(schedule.weeklyOffDay)];
+    return { workStart: (own && own.workStart) || schedule.workStart || "09:00", offDays: offDays.map(Number) };
   };
+
+  const isHoliday = async (code) => !(await db.collection("holidays").where("date", "==", code).get()).empty;
 
   const onLeave = async (code) => {
     const snap = await db.collection("leave_requests").where("status", "==", "approved").get();
@@ -137,41 +149,55 @@ const create = (db, { route }) => {
   // HR / Davomat topic of the work group (or the channel before linking).
   const channelPost = async (text) => telegram("sendMessage", { ...(await route("hr")), text });
 
-  // ── 09:05 reminder ─────────────────────────────────────────
+  // ── start + 5 min reminder, per start time ─────────────────
+  // Employees are grouped by their start time; each group is checked once
+  // a day, 5 minutes after it starts (claimed in hr_runs/{day}_{HHMM}).
   const maybeRemind = async () => {
     const now = tashkent();
     const code = dayCode(now);
-    const sched = await loadSchedule();
-    const [h, m] = String(sched.workStart || "09:00").split(":").map(Number);
-    const startMin = h * 60 + m;
+    await loadSchedule();
     const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
-    if (nowMin < startMin + REMINDER_AFTER_MIN || nowMin > startMin + REMINDER_WINDOW_MIN) return;
-    if (!(await isWorkDay(code))) return;
-    // Claim today's run once, even across restarts.
-    const run = db.collection("hr_runs").doc(code);
+    const weekday = new Date(`${code}T00:00:00Z`).getUTCDay();
+    const staffAll = await staffList();
+    const groups = new Map();
+    for (const s of staffAll) {
+      const own = scheduleOf(s.email);
+      if (own.offDays.includes(weekday)) continue;
+      const startMin = toMin(own.workStart);
+      if (nowMin < startMin + REMINDER_AFTER_MIN || nowMin > startMin + REMINDER_WINDOW_MIN) continue;
+      if (!groups.has(own.workStart)) groups.set(own.workStart, []);
+      groups.get(own.workStart).push(s);
+    }
+    if (!groups.size || (await isHoliday(code))) return;
+    for (const [workStart, group] of groups) await remindGroup(code, workStart, group);
+  };
+
+  const remindGroup = async (code, workStart, group) => {
+    // Claim this start time's run once, even across restarts.
+    const run = db.collection("hr_runs").doc(`${code}_${workStart.replace(":", "")}`);
     try {
-      await run.create({ started_at: new Date().toISOString() });
+      await run.create({ started_at: new Date().toISOString(), work_start: workStart });
     } catch {
       return;
     }
-    const [staff, att, leave] = await Promise.all([staffList(), db.collection("attendance").where("dateCode", "==", code).get(), onLeave(code)]);
+    const [att, leave] = await Promise.all([db.collection("attendance").where("dateCode", "==", code).get(), onLeave(code)]);
     const arrived = new Set(att.docs.map((d) => d.data()).filter((r) => r.checkInTime).map((r) => String(r.employeeId).toLowerCase()));
-    const missing = staff.filter((s) => !arrived.has(s.email) && !leave.has(s.email) && (s.telegram_chat_id || s.phone));
+    const missing = group.filter((s) => !arrived.has(s.email) && !leave.has(s.email) && (s.telegram_chat_id || s.phone));
     const results = [];
-    for (const s of missing) results.push({ s, channel: await notify(s, reminderText(s, sched.workStart), "reminder") });
+    for (const s of missing) results.push({ s, channel: await notify(s, reminderText(s, workStart), "reminder") });
     await run.update({ missing: missing.map((s) => s.email), sent: results.filter((r) => r.channel).length });
     if (missing.length === 0) {
-      await emitEvent(db, { agent: "hr", kind: "report", text: `${sched.workStart}: hamma o'z vaqtida keldi`, bubble: "Hamma vaqtida keldi ✅", source: "schedule" });
+      await emitEvent(db, { agent: "hr", kind: "report", text: `${workStart}: hamma o'z vaqtida keldi`, bubble: "Hamma vaqtida keldi ✅", source: "schedule" });
       return;
     }
     const line = results.map((r) => `${r.s.full_name || r.s.email} (${r.channel === "sms" ? "SMS" : r.channel === "telegram" ? "Telegram" : "yuborilmadi"})`).join(", ");
-    await channelPost(`🧑‍💼 HR · ${hhmm(new Date().toISOString())}\nHali ishga kelmaganlar (${missing.length}): ${line}`);
+    await channelPost(`🧑‍💼 HR · ${hhmm(new Date().toISOString())} (ish ${workStart} da boshlangan)\nHali ishga kelmaganlar (${missing.length}): ${line}`);
     await emitEvent(db, {
       agent: "hr", kind: "alert", source: "schedule",
       text: `${missing.length} kishi hali kelmadi: ${missing.map((s) => firstName(s)).join(", ")} — eslatma yuborildi`,
       bubble: `${missing.length} kishiga eslatma yubordim`,
     });
-    console.log(`HR reminder ${code}: ${missing.length} missing`);
+    console.log(`HR reminder ${code} ${workStart}: ${missing.length} missing`);
   };
 
   // ── late check-in notices ──────────────────────────────────
@@ -277,7 +303,7 @@ const create = (db, { route }) => {
     watchedDay = null;
   };
 
-  return { register, start, stop, handlePrivateMessage, tick, _test: { reminderText, lateText, normalizePhone } };
+  return { register, start, stop, handlePrivateMessage, tick, _test: { reminderText, lateText, normalizePhone, maybeRemind, loadSchedule, scheduleOf } };
 };
 
 module.exports = { create, normalizePhone, reminderText, lateText };

@@ -52,7 +52,9 @@ export const computeCheckInStatus = (
   now: Date,
   schedule: WorkSchedule,
 ): { status: string; lateMinutes: number } => {
-  const lateMinutes = clampNonNegative(minutesOfDay(now) - parseHM(schedule.workStart));
+  // Within the grace period counts as on time; past it, all minutes count.
+  const late = clampNonNegative(minutesOfDay(now) - parseHM(schedule.workStart));
+  const lateMinutes = late > (schedule.graceMinutes ?? 0) ? late : 0;
   return {
     status: lateMinutes > 0 ? "Kechikdi" : "Vaqtida keldi",
     lateMinutes,

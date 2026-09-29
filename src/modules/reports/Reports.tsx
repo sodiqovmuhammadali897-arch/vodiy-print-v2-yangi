@@ -26,7 +26,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
-import type { AttendanceRecord, Brand, Customer, Expense, KpiSettings, Manager, Order, OrderProduct, WorkSchedule } from "../../lib/types";
+import type { AttendanceRecord, Brand, Customer, Expense, KpiSettings, Manager, Order, OrderProduct, PersonalSchedule, WorkSchedule } from "../../lib/types";
 import { DEFAULT_KPI_WEIGHTS } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { formatDate, formatMoney, formatMoneyShort, monthNameUz } from "../../lib/format";
@@ -45,12 +45,14 @@ import { segmentCustomersByFirstOrder } from "../../lib/customerSegments";
 import { exportCsv } from "../../lib/exportCsv";
 import { exportNodeToPdf } from "../../lib/exportPdf";
 import { useAuth } from "../../lib/AuthContext";
-import { getWorkSchedule } from "../../services/attendanceService";
+import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
 import {
   computeAttendanceKpi,
   dateCodeOf,
   formatMinutes,
   workingDaysSoFar,
+  mergeSchedule,
+  dailyWorkMinutes,
 } from "../../utils/attendanceCalculations";
 import StatCard from "../../components/ui/StatCard";
 import DateRangeFilter from "../../components/ui/DateRangeFilter";
@@ -99,6 +101,7 @@ export default function Reports() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [workSchedule, setWorkSchedule] = useState<WorkSchedule | null>(null);
+  const [personalSchedules, setPersonalSchedules] = useState<Map<string, PersonalSchedule>>(new Map());
   const [kpiWeights, setKpiWeights] = useState(DEFAULT_KPI_WEIGHTS);
 
   useEffect(() => {
@@ -126,12 +129,14 @@ export default function Reports() {
       // reports viewer without attendance.view would get a Firestore
       // permission error fetching the whole `attendance` collection.
       if (canAttendance) {
-        const [staffData, attendanceData, schedule, kpiSettings] = await Promise.all([
+        const [staffData, attendanceData, schedule, kpiSettings, own] = await Promise.all([
           listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }),
           listAll<AttendanceRecord>("attendance"),
           getWorkSchedule(),
           getOne<KpiSettings>("kpi_settings", "default"),
+          listPersonalSchedules().catch(() => new Map<string, PersonalSchedule>()),
         ]);
+        setPersonalSchedules(own);
         setStaffList(staffData);
         setAttendanceRecords(attendanceData);
         setWorkSchedule(schedule);
@@ -405,7 +410,6 @@ export default function Reports() {
     if (!canAttendance || !workSchedule || staffList.length === 0) return [];
     const todayCode = dateCodeOf(new Date());
     const monthPrefix = todayCode.slice(0, 7);
-    const workingDays = workingDaysSoFar(todayCode, workSchedule);
     const byEmployee = new Map<string, AttendanceRecord[]>();
     for (const r of attendanceRecords) {
       if (!r.dateCode.startsWith(monthPrefix)) continue;
@@ -417,15 +421,17 @@ export default function Reports() {
     return staffList
       .map((s) => {
         const records = byEmployee.get(s.email) || [];
+        // Each employee against their own hours and days off.
+        const own = mergeSchedule(workSchedule, personalSchedules.get(s.email.toLowerCase()));
         return {
           staff: s,
-          ...computeAttendanceKpi(records, workingDays, kpiWeights),
+          ...computeAttendanceKpi(records, workingDaysSoFar(todayCode, own), kpiWeights, undefined, dailyWorkMinutes(own)),
           totalLateMinutes: records.reduce((sum, r) => sum + (r.lateMinutes || 0), 0),
           revenue: revenueByManager.get(s.full_name) ?? null,
         };
       })
       .sort((a, b) => b.score - a.score);
-  }, [canAttendance, workSchedule, staffList, attendanceRecords, kpiWeights, managerRows]);
+  }, [canAttendance, workSchedule, personalSchedules, staffList, attendanceRecords, kpiWeights, managerRows]);
 
   const attendanceDonut: DonutSlice[] = useMemo(() => {
     if (employeeStats.length === 0) return [];

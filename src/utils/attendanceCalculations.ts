@@ -1,4 +1,4 @@
-import type { AttendanceRecord, KpiWeights, LeaveRequest, WorkSchedule } from "../lib/types";
+import type { AttendanceRecord, KpiWeights, LeaveRequest, PersonalSchedule, WorkSchedule } from "../lib/types";
 
 export const formatMinutes = (total: number): string => {
   const m = Math.max(0, Math.round(total || 0));
@@ -23,10 +23,38 @@ export const dateCodeOf = (date: Date): string => {
 
 const DAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
-export const isWeeklyOff = (date: Date, schedule: Pick<WorkSchedule, "weeklyOffDay">): boolean => {
+// 0 = Sunday, as Date.getDay().
+export const WEEKDAY_SHORT = ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"];
+
+type OffDays = Pick<WorkSchedule, "weeklyOffDay" | "offDays">;
+
+export const offDaysOf = (schedule: OffDays): number[] =>
+  Array.isArray(schedule.offDays) ? schedule.offDays : [schedule.weeklyOffDay];
+
+export const isWeeklyOff = (date: Date, schedule: OffDays): boolean => {
   const dayName = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" }).format(date);
-  return DAY_INDEX[dayName] === schedule.weeklyOffDay;
+  return offDaysOf(schedule).includes(DAY_INDEX[dayName]);
 };
+
+// The general schedule with an employee's own hours and days off on top.
+export const mergeSchedule = (general: WorkSchedule, own?: PersonalSchedule | null): WorkSchedule =>
+  own
+    ? {
+        ...general,
+        workStart: own.workStart || general.workStart,
+        workEnd: own.workEnd || general.workEnd,
+        offDays: Array.isArray(own.offDays) ? own.offDays : general.offDays,
+      }
+    : general;
+
+const hmToMin = (hm: string): number => {
+  const [h, m] = String(hm || "0:0").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
+// Minutes a normal day of this schedule asks for (end − start − break).
+export const dailyWorkMinutes = (schedule: Pick<WorkSchedule, "workStart" | "workEnd" | "breakMinutes">): number =>
+  Math.max(0, hmToMin(schedule.workEnd) - hmToMin(schedule.workStart) - (schedule.breakMinutes || 0));
 
 // Live "what would the admin table show right now" status for a
 // employee+date pair that may not have an attendance doc yet (not
@@ -94,7 +122,7 @@ export const attendancePercent = (
 // yet — an employee can't have been absent on a day that hasn't happened.
 export const workingDaysSoFar = (
   todayCode: string,
-  schedule: Pick<WorkSchedule, "weeklyOffDay">,
+  schedule: OffDays,
 ): number => {
   const [year, month] = todayCode.split("-").map(Number);
   let count = 0;
@@ -116,11 +144,12 @@ export const computeAttendanceKpi = (
   workingDays: number,
   weights: Pick<KpiWeights, "attendance" | "punctuality" | "hoursWorked" | "tasksCompleted">,
   tasks?: { total: number; done: number },
+  dailyMinutes = 8 * 60,
 ) => {
   const present = records.filter((r) => r.checkInTime).length;
   const onTime = records.filter((r) => r.checkInTime && !(r.lateMinutes > 0)).length;
   const totalWorkedMinutes = records.reduce((sum, r) => sum + (r.workedMinutes || 0), 0);
-  const expectedMinutes = workingDays * 8 * 60;
+  const expectedMinutes = workingDays * dailyMinutes;
 
   const attendanceScore = (attendancePercent(present, workingDays) / 100) * weights.attendance;
   const punctualityScore = present > 0 ? (onTime / present) * weights.punctuality : 0;

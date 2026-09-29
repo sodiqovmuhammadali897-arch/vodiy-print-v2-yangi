@@ -58,7 +58,7 @@ export const attendanceCheckIn = onCall(async (request) => {
       throw new HttpsError("already-exists", "Siz bugun allaqachon ishni boshlagansiz.");
     }
 
-    const schedule = await getWorkSchedule();
+    const schedule = await getWorkSchedule(email);
     const { status, lateMinutes } = computeCheckInStatus(now, schedule);
     const fullName = await staffFullName(email);
     const nowIso = now.toISOString();
@@ -128,7 +128,7 @@ export const attendanceCheckOut = onCall(async (request) => {
       throw new HttpsError("already-exists", "Siz bugun allaqachon ishni tugatgansiz.");
     }
 
-    const schedule = await getWorkSchedule();
+    const schedule = await getWorkSchedule(email);
     const checkIn = new Date(data.checkInTimestamp as string);
     const { workedMinutes, earlyLeaveMinutes, overtimeMinutes, status } = computeCheckOutStats(
       checkIn,

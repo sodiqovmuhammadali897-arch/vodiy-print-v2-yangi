@@ -487,10 +487,27 @@ export type WorkSchedule = {
   breakEnd: string;
   breakMinutes: number;
   weeklyOffDay: number; // 0 = Sunday
+  // Days off, 0 = Sunday … 6 = Saturday (a personal schedule's; otherwise
+  // the general weeklyOffDay applies).
+  offDays?: number[];
+  // Minutes after workStart that still count as on time.
+  graceMinutes?: number;
   officeLat: number;
   officeLng: number;
   officeRadiusMeters: number;
   gpsCheckEnabled: boolean;
+  updatedAt?: string;
+};
+
+// An employee's own hours (work_schedules/{email}); anything not set
+// comes from the general schedule.
+export type PersonalSchedule = {
+  id: string;
+  employee_email: string;
+  employee_name?: string;
+  workStart: string;
+  workEnd: string;
+  offDays: number[];
   updatedAt?: string;
 };
 

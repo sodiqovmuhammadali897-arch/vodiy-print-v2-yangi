@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   attendancePercent,
   computeAttendanceKpi,
+  dailyWorkMinutes,
   formatMinutes,
+  mergeSchedule,
   workingDaysSoFar,
 } from "../src/utils/attendanceCalculations";
 import { DEFAULT_KPI_WEIGHTS } from "../src/lib/types";
@@ -97,5 +99,35 @@ describe("computeAttendanceKpi", () => {
     const kpi = computeAttendanceKpi([], 0, DEFAULT_KPI_WEIGHTS);
     expect(kpi.score).toBe(0);
     expect(Number.isNaN(kpi.punctualityScore)).toBe(false);
+  });
+});
+
+describe("personal schedules", () => {
+  const general = {
+    id: "default", workStart: "09:00", workEnd: "18:00", breakStart: "13:00", breakEnd: "14:00", breakMinutes: 60,
+    weeklyOffDay: 0, officeLat: 0, officeLng: 0, officeRadiusMeters: 150, gpsCheckEnabled: false,
+  };
+  const own = { id: "a@x.uz", employee_email: "a@x.uz", workStart: "10:00", workEnd: "16:00", offDays: [0, 6] };
+
+  it("keeps the general schedule for employees without their own", () => {
+    expect(mergeSchedule(general, null)).toBe(general);
+    expect(workingDaysSoFar("2026-09-30", general)).toBe(26);
+  });
+
+  it("uses the employee's hours and days off", () => {
+    const merged = mergeSchedule(general, own);
+    expect(merged.workStart).toBe("10:00");
+    expect(dailyWorkMinutes(merged)).toBe(300); // 6 h minus the 1 h break
+    // September 2026 has 4 Sundays and 4 Saturdays
+    expect(workingDaysSoFar("2026-09-30", merged)).toBe(22);
+  });
+
+  it("an empty list of days off means working every day", () => {
+    expect(workingDaysSoFar("2026-09-30", mergeSchedule(general, { ...own, offDays: [] }))).toBe(30);
+  });
+
+  it("scores hours against the employee's own day length", () => {
+    const records = [{ checkInTime: "10:00", lateMinutes: 0, workedMinutes: 300 }];
+    expect(computeAttendanceKpi(records, 1, DEFAULT_KPI_WEIGHTS, undefined, 300).hoursScore).toBe(DEFAULT_KPI_WEIGHTS.hoursWorked);
   });
 });

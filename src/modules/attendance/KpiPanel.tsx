@@ -4,7 +4,7 @@ import { useAuth } from "../../lib/AuthContext";
 import { getOne, listWhere } from "../../lib/firestoreDb";
 import { DEFAULT_KPI_WEIGHTS, type AttendanceRecord, type KpiSettings, type Task, type WorkSchedule } from "../../lib/types";
 import { getWorkSchedule, listMonthAttendance } from "../../services/attendanceService";
-import { computeAttendanceKpi, dateCodeOf, workingDaysSoFar } from "../../utils/attendanceCalculations";
+import { computeAttendanceKpi, dailyWorkMinutes, dateCodeOf, workingDaysSoFar } from "../../utils/attendanceCalculations";
 
 export default function KpiPanel() {
   const { user } = useAuth();
@@ -24,7 +24,7 @@ export default function KpiPanel() {
       try {
         const monthPrefix = dateCodeOf(new Date()).slice(0, 7);
         const [sched, rows, settings, myTasks] = await Promise.all([
-          getWorkSchedule(),
+          getWorkSchedule(email),
           listMonthAttendance(email, monthPrefix),
           getOne<KpiSettings>("kpi_settings", "default"),
           listWhere<Task>("tasks", "assigned_to_email", email),
@@ -45,7 +45,7 @@ export default function KpiPanel() {
     if (!schedule) return null;
     const workingDays = workingDaysSoFar(dateCodeOf(new Date()), schedule);
     const doneTasks = tasks.filter((t) => t.status === "done").length;
-    const kpi = computeAttendanceKpi(records, workingDays, weights, { total: tasks.length, done: doneTasks });
+    const kpi = computeAttendanceKpi(records, workingDays, weights, { total: tasks.length, done: doneTasks }, dailyWorkMinutes(schedule));
     return {
       ...kpi,
       taskCount: tasks.length,

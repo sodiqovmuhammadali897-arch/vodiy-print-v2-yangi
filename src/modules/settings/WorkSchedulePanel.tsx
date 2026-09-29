@@ -3,6 +3,7 @@ import { Clock, MapPin, Save } from "lucide-react";
 import { getOne, upsertOne } from "../../lib/firestoreDb";
 import type { WorkSchedule } from "../../lib/types";
 import { getCurrentPosition } from "../../utils/locationUtils";
+import PersonalSchedulesPanel from "./PersonalSchedulesPanel";
 
 const SINGLETON_ID = "default";
 
@@ -24,6 +25,7 @@ const emptySchedule = (): WorkSchedule => ({
   breakEnd: "14:00",
   breakMinutes: 60,
   weeklyOffDay: 0,
+  graceMinutes: 5,
   officeLat: 0,
   officeLng: 0,
   officeRadiusMeters: 150,
@@ -111,7 +113,7 @@ export default function WorkSchedulePanel() {
             />
           </div>
           <div>
-            <label className="label">Dam olish kuni</label>
+            <label className="label">Umumiy dam olish kuni</label>
             <select
               className="input"
               value={schedule.weeklyOffDay}
@@ -124,7 +126,21 @@ export default function WorkSchedulePanel() {
               ))}
             </select>
           </div>
+          <div>
+            <label className="label">Kechikishga ruxsat (daqiqa)</label>
+            <input
+              type="number"
+              min={0}
+              className="input"
+              value={schedule.graceMinutes ?? 0}
+              onChange={(e) => patch({ graceMinutes: Math.max(0, Number(e.target.value) || 0) })}
+            />
+          </div>
         </div>
+        <p className="mt-2 text-xs text-ink-500">
+          Shu vaqt hammaga tegishli, alohida vaqt berilgan xodimlardan tashqari. {schedule.graceMinutes || 0} daqiqagacha kech kelish kechikish hisoblanmaydi,
+          undan oshsa — boshlanish vaqtidan beri hammasi hisoblanadi.
+        </p>
       </div>
 
       <div className="card p-5">
@@ -183,6 +199,8 @@ export default function WorkSchedulePanel() {
       <button className="btn-primary" onClick={save} disabled={saving}>
         <Save className="h-4 w-4" /> {saving ? "Saqlanmoqda..." : "Saqlash"}
       </button>
+
+      <PersonalSchedulesPanel general={schedule} />
     </div>
   );
 }
