@@ -460,6 +460,14 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
     const msg = req.body?.channel_post || req.body?.message;
     const text = msg?.text?.trim();
     if (msg?.chat?.type === "private") {
+      // Task replies / proof photos first (tasks.js), then attendance (hr.js).
+      if (tasks && !msg.from?.is_bot) {
+        const handled = await tasks.handlePrivateMessage(msg).catch((err) => {
+          console.error("Task private message failed", err);
+          return false;
+        });
+        if (handled) return;
+      }
       if (hr && text) await hr.handlePrivateMessage(msg).catch((err) => console.error("HR private message failed", err));
       return;
     }

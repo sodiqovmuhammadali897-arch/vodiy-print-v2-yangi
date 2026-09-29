@@ -56,6 +56,7 @@ import { maybePromoteCustomer } from "../../lib/orderService";
 import { useAuth } from "../../lib/AuthContext";
 import RequireCustomerModal from "./RequireCustomerModal";
 import OrderPaymentModal from "./OrderPaymentModal";
+import LinkedTasksCard from "../tasks/LinkedTasksCard";
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -796,6 +797,16 @@ export default function OrderDetail() {
           </ul>
         </div>
       )}
+
+      <LinkedTasksCard
+        field="order_id"
+        preset={{
+          order_id: order.id,
+          order_number: order.order_number || "",
+          customer_id: order.customer_id,
+          customer_name: customer ? [customer.first_name, customer.last_name].filter(Boolean).join(" ") || customer.company : "",
+        }}
+      />
 
       <div className="text-xs text-ink-400">
         Yaratildi: {formatDateTime(order.created_at)}

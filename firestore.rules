@@ -296,6 +296,29 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isStaff() && resource.data.assigned_by_email == email());
     }
 
+    // Comments and proof files live under their task, so access follows
+    // the task: whoever can see it may read them and add their own.
+    function canSeeTask(taskId) {
+      let t = get(/databases/$(database)/documents/tasks/$(taskId)).data;
+      return isAdmin() || (isStaff() && (t.assigned_to_email == email() || t.assigned_by_email == email()));
+    }
+    match /tasks/{taskId}/comments/{id} {
+      allow read: if canSeeTask(taskId);
+      allow create: if canSeeTask(taskId) && request.resource.data.by_email == email();
+      allow delete: if isAdmin() || (isStaff() && resource.data.by_email == email());
+    }
+    match /tasks/{taskId}/files/{id} {
+      allow read: if canSeeTask(taskId);
+      allow create: if canSeeTask(taskId) && request.resource.data.by_email == email();
+      allow delete: if isAdmin() || (isStaff() && resource.data.by_email == email());
+    }
+    // Recurring task templates: the person who set them up, and admins.
+    match /task_templates/{id} {
+      allow read: if isAdmin() || (isStaff() && (resource.data.assigned_by_email == email() || resource.data.assigned_to_email == email()));
+      allow create: if isStaff() && request.resource.data.assigned_by_email == email();
+      allow update, delete: if isAdmin() || (isStaff() && resource.data.assigned_by_email == email());
+    }
+
     // ── Sotuv bo'limi (lead pipeline) ────────────────────────────────
     // Deliberately stricter than can('leads','view') alone would give:
     // even a staff member with view/edit rights only sees leads assigned

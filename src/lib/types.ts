@@ -588,6 +588,62 @@ export type Task = {
   // What the employee wrote when finishing (optional).
   result_note?: string;
   history?: TaskHistoryEntry[];
+  priority?: TaskPriority;
+  // Optional link to an order and/or customer.
+  order_id?: string | null;
+  order_number?: string;
+  customer_id?: string | null;
+  customer_name?: string;
+  // Kept up to date by the server (meta-webhook/tasks.js).
+  comment_count?: number;
+  file_count?: number;
+  template_id?: string | null;
+  created_at: string;
+};
+
+export type TaskPriority = "high" | "normal" | "low";
+
+// tasks/{id}/comments
+export type TaskComment = {
+  id: string;
+  task_id: string;
+  text: string;
+  by_email: string;
+  by_name: string;
+  via?: "web" | "telegram";
+  created_at: string;
+};
+
+// A proof photo or file for a task (tasks/{id}/files). Stored inline,
+// compressed below ~700 KB, because the project doesn't use Firebase Storage.
+export type TaskFile = {
+  id: string;
+  task_id: string;
+  name: string;
+  mime: string;
+  data: string; // data: URL
+  size: number;
+  by_email: string;
+  by_name: string;
+  created_at: string;
+};
+
+export type TaskRepeat = { type: "daily" | "weekly" | "monthly"; weekday?: number; day?: number };
+
+// A recurring task: the server creates a Task from it on each matching day.
+export type TaskTemplate = {
+  id: string;
+  title: string;
+  description: string;
+  assigned_to_email: string;
+  assigned_to_name: string;
+  assigned_by_email: string;
+  assigned_by_name: string;
+  priority: TaskPriority;
+  repeat: TaskRepeat;
+  due_in_days: number;
+  active: boolean;
+  last_created_date: string | null;
   created_at: string;
 };
 

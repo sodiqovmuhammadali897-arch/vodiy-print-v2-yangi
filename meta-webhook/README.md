@@ -282,3 +282,29 @@ Each notice is claimed once in the task (`assign_notified_at`,
 `done_notified_at`), and only tasks touched in the last 24 hours are
 notified. Firestore rules let the assignee change the status fields of
 their own task even without tasks.edit.
+
+Also:
+
+- `priority` (high / normal / low), links to an order (`order_id`,
+  `order_number`) and a customer (`customer_id`, `customer_name`); the
+  order and customer pages show their tasks.
+- Comments (`tasks/{id}/comments`) reach the assignee and the giver,
+  except the author (`notified_at` on the comment). Any bot message about
+  a task is remembered in `tg_task_msgs/{chat}_{message}`, so replying to
+  it in Telegram adds a comment.
+- Proof files (`tasks/{id}/files`, data URLs up to ~650 KB): attached on
+  the site when finishing. After ✅ in Telegram the bot waits 15 minutes
+  (`tg_task_pending/{chat}`) for a note (→ `result_note`) or a
+  photo/document (→ a file). The done notice sends up to 3 files, and
+  proof added later is forwarded too. `comment_count` / `file_count` are
+  kept on the task.
+- Recurring tasks: `task_templates` (`repeat`: daily except Sunday /
+  weekly `weekday` 1–7 / monthly `day`, `due_in_days`, `active`). From
+  07:00 each due template makes one task (`last_created_date`, in a
+  transaction).
+- 09:00 Mon–Sat: each linked employee gets their open tasks (overdue,
+  due today, due tomorrow, the rest). The giver of each newly overdue
+  task is told once (`overdue_notified_at`).
+- Daily jobs are claimed in `task_runs/{date}_{job}`.
+- The Reyting tab on the site (admins) scores each employee per month:
+  share done on time, minus half a point per open overdue task.

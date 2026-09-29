@@ -29,6 +29,7 @@ import { exportNodeToPdf } from "../../lib/exportPdf";
 import BrandFormModal from "../brands/BrandFormModal";
 import CustomerFormModal from "./CustomerFormModal";
 import HistoricalOrderModal from "./HistoricalOrderModal";
+import LinkedTasksCard from "../tasks/LinkedTasksCard";
 import { useAuth } from "../../lib/AuthContext";
 
 export default function CustomerDetail() {
@@ -422,6 +423,11 @@ export default function CustomerDetail() {
           setBrandModal(false);
           void load();
         }}
+      />
+
+      <LinkedTasksCard
+        field="customer_id"
+        preset={{ customer_id: customer.id, customer_name: [customer.first_name, customer.last_name].filter(Boolean).join(" ") || customer.company }}
       />
 
       <CustomerFormModal
