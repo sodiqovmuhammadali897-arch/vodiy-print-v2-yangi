@@ -281,18 +281,19 @@ service cloud.firestore {
 
     // Admin/managers assign tasks; the assignee may only ever touch their
     // own (to mark it done), never someone else's or the task details.
+    // Any staff member can give a task. A task is visible to the person
+    // it's given to and the person who gave it; admins see all. The
+    // assignee moves its status along; the giver may edit or delete it.
     match /tasks/{id} {
-      allow read: if isAdmin() || can('tasks', 'view') ||
-        (isStaff() && resource.data.assigned_to_email == email());
-      allow create: if can('tasks', 'edit');
-      // The assignee may always move their own task along (Ishga oldim /
-      // Bajardim) — status fields only — even without tasks.edit.
+      allow read: if isAdmin() ||
+        (isStaff() && (resource.data.assigned_to_email == email() || resource.data.assigned_by_email == email()));
+      allow create: if isStaff() && request.resource.data.assigned_by_email == email();
       allow update: if isAdmin() ||
-        (can('tasks', 'edit') && resource.data.assigned_to_email == email()) ||
+        (isStaff() && resource.data.assigned_by_email == email() && request.resource.data.assigned_by_email == email()) ||
         (isStaff() && resource.data.assigned_to_email == email() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'started_at', 'completed_at', 'result_note', 'history', 'updated_at']));
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (isStaff() && resource.data.assigned_by_email == email());
     }
 
     // ── Sotuv bo'limi (lead pipeline) ────────────────────────────────

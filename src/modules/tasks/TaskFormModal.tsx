@@ -59,7 +59,7 @@ export default function TaskFormModal({ open, onClose, task, staff, onSaved }: P
           description: description.trim(),
           assigned_to_email: assignedToEmail,
           assigned_to_name: assignee?.full_name || assignedToEmail,
-          assigned_by_email: user?.email || "",
+          assigned_by_email: (user?.email || "").toLowerCase(),
           assigned_by_name: currentStaff?.full_name || user?.email || "",
           due_date: dueDate || null,
           status: "new",

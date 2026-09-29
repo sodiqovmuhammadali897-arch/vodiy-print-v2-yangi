@@ -94,9 +94,8 @@ export default function App() {
             <Route path="/attendance" element={<AttendancePage />} />
           </Route>
 
-          <Route element={<PermissionRoute module="tasks" />}>
-            <Route path="/tasks" element={<Tasks />} />
-          </Route>
+          {/* Every staff member has tasks (given to them or by them). */}
+          <Route path="/tasks" element={<Tasks />} />
 
           <Route element={<AdminRoute />}>
             <Route path="/settings" element={<Settings />} />

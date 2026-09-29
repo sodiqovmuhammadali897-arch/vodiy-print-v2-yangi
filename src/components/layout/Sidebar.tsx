@@ -18,7 +18,7 @@ const navItems = [
   { to: "/reports", label: "Hisobot", icon: BarChart3, module: "reports" as ModuleKey },
   { to: "/ai-office", label: "AI Ofis", icon: Bot, module: "reports" as ModuleKey },
   { to: "/attendance", label: "Davomat va KPI", icon: Fingerprint, module: "attendance" as ModuleKey },
-  { to: "/tasks", label: "Vazifalar", icon: ClipboardList, module: "tasks" as ModuleKey },
+  { to: "/tasks", label: "Vazifalar", icon: ClipboardList, module: "tasks" as ModuleKey, everyone: true },
 ];
 
 type Props = {
@@ -29,7 +29,7 @@ type Props = {
 export default function Sidebar({ mobileOpen, onCloseMobile }: Props) {
   const { isAdmin, can } = useAuth();
   const visibleItems = navItems.filter(
-    (item) => isAdmin || can(item.module, "view"),
+    (item) => isAdmin || ("everyone" in item && item.everyone) || can(item.module, "view"),
   );
 
   return (
