@@ -264,3 +264,21 @@ steer the next proposals.
 In the topic: reply to a pending proposal to have it rewritten; any other
 message is a question answered from the same snapshot and memory; `/brif`
 (or `POST /webhooks/chief/run` as an admin) runs the brief now.
+
+## Task notifications (`tasks.js`)
+
+Tasks go Yangi → Ishga olindi → Bajarildi (`status`: new / in_progress /
+done, with `started_at`, `completed_at`, `result_note` and a `history`
+of who moved it when). A Firestore listener on `tasks`:
+
+- a new task → its assignee's private chat (the one linked for
+  attendance) gets it with [▶️ Ishga oldim] [✅ Bajardim] buttons
+  (`task:start:<id>` / `task:done:<id>`, only the assignee can press);
+- a task reaching Bajarildi — on the site or by button — → whoever gave
+  it gets "✅ Vazifa bajarildi" with the note and a late warning; tasks
+  from an agent go to the admins who linked Telegram.
+
+Each notice is claimed once in the task (`assign_notified_at`,
+`done_notified_at`), and only tasks touched in the last 24 hours are
+notified. Firestore rules let the assignee change the status fields of
+their own task even without tasks.edit.

@@ -65,7 +65,9 @@ if (marketing) marketing.register(app);
 // Bosh agent — see chief.js; daily brief and proposals in its own topic.
 const chief = marketing ? require("./chief").create(db, { route: groups.route, analytics: marketing.analytics }) : null;
 if (chief) chief.register(app);
-const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief);
+// Task notifications in employees' private chats — see tasks.js.
+const tasks = process.env.TELEGRAM_BOT_TOKEN ? require("./tasks").create(db) : null;
+const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks);
 const { slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
 // same Meta callback below (object "instagram").
@@ -337,4 +339,5 @@ app.listen(PORT, () => {
   void instagram.start();
   if (marketing) void marketing.start().catch((err) => console.error("Marketolog start failed", err));
   if (chief) void chief.start().catch((err) => console.error("Bosh agent start failed", err));
+  if (tasks) tasks.start();
 });

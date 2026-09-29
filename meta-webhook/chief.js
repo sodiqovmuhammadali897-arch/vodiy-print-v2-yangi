@@ -480,7 +480,9 @@ const create = (db, { route = null, analytics } = {}) => {
         assigned_by_name: "Bosh agent",
         due_date: shiftDay(today, Math.min(30, Math.max(1, Number(v.muddat_kun) || 3))),
         status: "new",
+        started_at: null,
         completed_at: null,
+        history: [{ status: "new", at: new Date().toISOString(), by_name: "Bosh agent", by_email: "bosh-agent" }],
         created_at: new Date().toISOString(),
         chief_proposal_id: id,
       });

@@ -63,7 +63,16 @@ export default function TaskFormModal({ open, onClose, task, staff, onSaved }: P
           assigned_by_name: currentStaff?.full_name || user?.email || "",
           due_date: dueDate || null,
           status: "new",
+          started_at: null,
           completed_at: null,
+          history: [
+            {
+              status: "new",
+              at: new Date().toISOString(),
+              by_name: currentStaff?.full_name || user?.email || "",
+              by_email: user?.email || "",
+            },
+          ],
         });
       }
       setSaving(false);

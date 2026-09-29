@@ -560,7 +560,18 @@ export type AttendanceAuditEntry = {
 
 // ── Vazifalar (Tasks) ───────────────────────────────────────────────
 
-export type TaskStatus = "new" | "done";
+// Yangi → Ishga olindi → Bajarildi. The employee moves it along (on the
+// site or with the Telegram buttons, meta-webhook/tasks.js), and whoever
+// gave the task gets a Telegram message when it's done.
+export type TaskStatus = "new" | "in_progress" | "done";
+
+export type TaskHistoryEntry = {
+  status: TaskStatus;
+  at: string;
+  by_name: string;
+  by_email: string;
+  note?: string;
+};
 
 export type Task = {
   id: string;
@@ -572,7 +583,11 @@ export type Task = {
   assigned_by_name: string;
   due_date: string | null;
   status: TaskStatus;
+  started_at?: string | null;
   completed_at: string | null;
+  // What the employee wrote when finishing (optional).
+  result_note?: string;
+  history?: TaskHistoryEntry[];
   created_at: string;
 };
 

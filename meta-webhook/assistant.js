@@ -429,7 +429,7 @@ const handleQuestion = async (db, { chatId, threadId = null, replyTo, text, cont
   return { reply, pending: ctx.pending, files: ctx.files.map((f) => f.filename) };
 };
 
-const register = (app, db, hr = null, groups = null, marketing = null, chief = null) => {
+const register = (app, db, hr = null, groups = null, marketing = null, chief = null, tasks = null) => {
   const configured = Boolean(BOT_TOKEN && ANTHROPIC_API_KEY && ALLOWED_CHATS.size > 0);
   if (!configured) {
     console.log("Hisobchi bot: TELEGRAM_BOT_TOKEN / ANTHROPIC_API_KEY / ASSISTANT_CHAT_IDS not all set — not enabled.");
@@ -446,7 +446,10 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
 
     if (req.body?.callback_query) {
       try {
-        if (chief && /^chief:/.test(req.body.callback_query.data || "")) await chief.handleCallback(req.body.callback_query, isWorkChat);
+        const data = req.body.callback_query.data || "";
+        // Task buttons live in employees' private chats (tasks.js).
+        if (tasks && /^task:/.test(data)) await tasks.handleCallback(req.body.callback_query);
+        else if (chief && /^chief:/.test(data)) await chief.handleCallback(req.body.callback_query, isWorkChat);
         else await handleCallback(db, telegram, req.body.callback_query, isWorkChat);
       } catch (err) {
         console.error("Hisobchi callback failed", err);
