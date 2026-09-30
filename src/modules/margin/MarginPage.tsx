@@ -1,13 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, Coins, Download, Lock, Percent, Search, TrendingUp, Wallet, Wand2 } from "lucide-react";
-import { deleteOne, listAll, upsertOne } from "../../lib/firestoreDb";
+import { deleteOne, insertOne, listAll, listWhere, updateOne, upsertOne } from "../../lib/firestoreDb";
+import { PAYMENT_TYPES } from "../../lib/orderConstants";
 import { useAuth } from "../../lib/AuthContext";
 import { canViewMargin } from "../../lib/rolePermissions";
 import { exportCsv } from "../../lib/exportCsv";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
-import { buildMarginRows, catalogCostLookup, findDuplicateLines, isSaleOrder, lineCostKey, summarize, totalMismatch, type MarginRow } from "../../lib/margin";
-import type { Customer, Order, OrderCost, OrderProduct, Product, ProductCost } from "../../lib/types";
+import {
+  buildMarginRows,
+  catalogCostLookup,
+  findDuplicateLines,
+  isSaleOrder,
+  largeDiscountOrders,
+  lineCostKey,
+  summarize,
+  totalMismatch,
+  type MarginRow,
+} from "../../lib/margin";
+import type { Customer, Order, OrderCost, OrderPayment, OrderProduct, Product, ProductCost } from "../../lib/types";
 import StatCard from "../../components/ui/StatCard";
 import AsyncState from "../../components/ui/AsyncState";
 
@@ -204,6 +215,57 @@ export default function MarginPage() {
     }
   };
 
+  // Large discounts in this month's orders: usually a paid amount typed
+  // into the discount box. Remove it, turn it into a payment, or confirm it.
+  const bigDiscounts = useMemo(
+    () => largeDiscountOrders(orders.filter((o) => monthOrderIds.has(o.id)), lines).filter((x) => !duplicates.orders.has(x.order.id)),
+    [orders, lines, monthOrderIds, duplicates],
+  );
+  const [fixing, setFixing] = useState<string | null>(null);
+  const [payType, setPayType] = useState<string>("Naqd");
+
+  const fixDiscount = async (x: (typeof bigDiscounts)[number], mode: "remove" | "payment" | "ok") => {
+    setFixing(x.order.id);
+    setError(null);
+    try {
+      if (mode === "ok") {
+        await updateOne("orders", x.order.id, { discount_confirmed: true });
+      } else {
+        for (const l of x.lines) {
+          if (Number(l.discount || 0) > 0) await updateOne("order_products", l.id, { discount: 0, total: Number(l.quantity || 0) * Number(l.unit_price || 0) });
+        }
+        const pays = await listWhere<OrderPayment>("order_payments", "order_id", x.order.id);
+        let paid = pays.reduce((s, p) => s + Number(p.amount || 0), 0);
+        if (mode === "payment" && x.total > 0) {
+          await insertOne("order_payments", {
+            order_id: x.order.id,
+            amount: Math.round(x.total),
+            payment_type: payType,
+            payment_date: String(x.order.order_date || x.order.created_at || "").slice(0, 10),
+            received_by: auth.staff?.full_name || auth.user?.email || "",
+            note: "Chegirma katagidan to'lovga o'tkazildi (Marja)",
+          });
+          paid += Math.round(x.total);
+        }
+        const subtotal = x.gross;
+        await updateOne("orders", x.order.id, {
+          discount_amount: 0,
+          subtotal,
+          total_amount: subtotal,
+          paid_amount: paid,
+          remaining_amount: Math.max(0, subtotal - paid),
+        });
+      }
+      const [o2, l2] = await Promise.all([listAll<Order>("orders"), listAll<OrderProduct>("order_products")]);
+      setOrders(o2.filter(isSaleOrder));
+      setLines(l2);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Tuzatib bo'lmadi");
+    } finally {
+      setFixing(null);
+    }
+  };
+
   const fillFromCatalog = async () => {
     setFilling(true);
     for (const r of fillable) await save(r, (r.suggestion || 0) * r.quantity, "catalog");
@@ -360,6 +422,72 @@ export default function MarginPage() {
           <button className="btn-primary" onClick={cleanDuplicates} disabled={cleaning}>
             {cleaning ? "Tozalanmoqda…" : `Takror qatorlarni o'chirish (${duplicates.ids.length})`}
           </button>
+        </div>
+      )}
+
+      {bigDiscounts.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span>
+              💸 <b>{bigDiscounts.length} ta buyurtmada</b> chegirma juda katta (summaning 30%+). Ko'pincha mijoz to'lagan pul chegirma katagiga yozib
+              yuborilgan bo'ladi — shu sabab buyurtma summasi kamaygan.
+            </span>
+            <label className="flex items-center gap-2 text-xs">
+              To'lov turi:
+              <select className="input w-auto py-1 text-xs" value={payType} onChange={(e) => setPayType(e.target.value)}>
+                {PAYMENT_TYPES.filter((t) => t !== "To'lov qilinmagan").map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-amber-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-amber-50/60">
+                <tr>
+                  <th className="table-th">Buyurtma</th>
+                  <th className="table-th text-right">Mahsulotlar</th>
+                  <th className="table-th text-right">Chegirma</th>
+                  <th className="table-th text-right">Hozirgi summa</th>
+                  <th className="table-th text-right">Tuzatish</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {bigDiscounts.map((x) => (
+                  <tr key={x.order.id} className="border-t border-amber-100">
+                    <td className="table-td">
+                      <Link to={`/orders/${x.order.id}`} className="font-semibold text-brand-700 hover:underline">
+                        {x.order.order_number || "Buyurtma"}
+                      </Link>
+                      <div className="text-[11px] text-ink-500">{customerOf(x.order) || x.order.title}</div>
+                    </td>
+                    <td className="table-td text-right">{num(Math.round(x.gross))}</td>
+                    <td className="table-td text-right font-semibold text-amber-800">
+                      {num(Math.round(x.total))} <span className="text-[11px]">({x.percent.toFixed(0)}%)</span>
+                    </td>
+                    <td className="table-td text-right">{num(Math.round(Number(x.order.total_amount || 0)))}</td>
+                    <td className="table-td">
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <button className="btn-primary px-2.5 py-1 text-xs" disabled={fixing === x.order.id} onClick={() => fixDiscount(x, "payment")} title={`Chegirma o'chadi, ${num(Math.round(x.total))} so'm ${payType} to'lov sifatida yoziladi`}>
+                          To'lovga o'tkazish
+                        </button>
+                        <button className="btn-secondary px-2.5 py-1 text-xs" disabled={fixing === x.order.id} onClick={() => fixDiscount(x, "remove")} title="Chegirma o'chadi, summa asl holiga qaytadi">
+                          Chegirmani o'chirish
+                        </button>
+                        <button className="btn-ghost px-2.5 py-1 text-xs" disabled={fixing === x.order.id} onClick={() => fixDiscount(x, "ok")} title="Chegirma haqiqatan berilgan — ro'yxatdan olib tashlash">
+                          To'g'ri
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-amber-800">
+            "To'lovga o'tkazish" — chegirma o'chadi va shu summa buyurtma sanasi bilan to'lov bo'lib yoziladi. "Chegirmani o'chirish" — faqat chegirma o'chadi.
+            "To'g'ri" — chegirma haqiqatan berilgan bo'lsa.
+          </p>
         </div>
       )}
 

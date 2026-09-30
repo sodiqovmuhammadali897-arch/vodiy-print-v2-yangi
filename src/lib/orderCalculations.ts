@@ -9,6 +9,20 @@ export const computeProductTotal = (p: {
   return Math.max(0, gross - Number(p.discount || 0));
 };
 
+// How much of the order's list price (quantity × price) is given away as
+// discounts — per line and on the whole order. Above LARGE_DISCOUNT it is
+// most likely a paid amount or a total typed into a discount box.
+export const LARGE_DISCOUNT = 30;
+export const discountShare = (
+  products: Pick<OrderProduct, "quantity" | "unit_price" | "discount">[],
+  orderDiscount: number,
+) => {
+  const gross = products.reduce((s, p) => s + Number(p.quantity || 0) * Number(p.unit_price || 0), 0);
+  const total = products.reduce((s, p) => s + Number(p.discount || 0), 0) + Number(orderDiscount || 0);
+  const percent = gross > 0 ? (total / gross) * 100 : total > 0 ? 100 : 0;
+  return { gross, total, percent, large: total > 0 && percent >= LARGE_DISCOUNT };
+};
+
 export const sumProducts = (products: Pick<OrderProduct, "total">[]) =>
   products.reduce((s, p) => s + Number(p.total || 0), 0);
 

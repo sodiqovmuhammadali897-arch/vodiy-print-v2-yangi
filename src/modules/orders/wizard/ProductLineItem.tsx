@@ -48,6 +48,8 @@ export default function ProductLineItem({
   historyPrice,
 }: Props) {
   const total = computeProductTotal(product);
+  const lineGross = Number(product.quantity || 0) * Number(product.unit_price || 0);
+  const lineDiscountLarge = Number(product.discount || 0) > 0 && Number(product.discount) >= lineGross * 0.3;
   const isTextile = product.category === "Textil";
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -397,15 +399,22 @@ export default function ProductLineItem({
           )}
         </div>
         <div className="col-span-4 md:col-span-2">
-          <label className="label">Chegirma</label>
+          <label className="label">Chegirma (so'm)</label>
           <input
             type="number"
-            className="input"
+            min={0}
+            placeholder="0"
+            className={`input ${lineDiscountLarge ? "border-amber-400 bg-amber-50" : ""}`}
             value={product.discount || ""}
             onChange={(e) =>
-              patchAndRecalc({ discount: Number(e.target.value) || 0 })
+              patchAndRecalc({ discount: Math.max(0, Number(e.target.value) || 0) })
             }
           />
+          {lineDiscountLarge && (
+            <div className="mt-1 text-[11px] font-semibold leading-tight text-amber-700">
+              ⚠️ Summaning {Math.round((Number(product.discount) / (product.quantity * product.unit_price || 1)) * 100)}%i. Bu yerga faqat chegirma yoziladi.
+            </div>
+          )}
         </div>
         <div className="col-span-12">
           <label className="label">Izoh</label>

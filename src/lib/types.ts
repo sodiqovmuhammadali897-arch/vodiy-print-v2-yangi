@@ -98,6 +98,8 @@ export type Order = {
   logistics_note: string;
   private_note: string;
   client_request_note: string;
+  // Set on the Marja page when a large discount is meant (not a typo).
+  discount_confirmed?: boolean;
   is_draft: boolean;
   order_date: string | null;
   deadline: string | null;

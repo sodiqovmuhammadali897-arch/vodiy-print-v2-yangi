@@ -15,7 +15,7 @@ import type { Brand, Customer, Manager, Order, OrderFile, OrderProduct, OrderPay
 import { ORDER_STATUSES } from "../../../lib/orderConstants";
 import { saveOrder } from "../../../lib/orderService";
 import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
-import { computeOrderTotals } from "../../../lib/orderCalculations";
+import { computeOrderTotals, discountShare } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
 import { useAuth } from "../../../lib/AuthContext";
 import CustomerStep from "./CustomerStep";
@@ -85,6 +85,7 @@ export default function OrderWizard() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const [discountOkFor, setDiscountOkFor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [initialStatus, setInitialStatus] = useState<string | null>(null);
 
@@ -262,6 +263,15 @@ export default function OrderWizard() {
     // A second click before the first save finishes would save twice.
     if (savingRef.current) return;
     setError(null);
+    // A very large discount is usually a paid amount typed into it: ask once.
+    const share = discountShare(products, payload.discount_amount);
+    if (share.large && discountOkFor !== share.total) {
+      setDiscountOkFor(share.total);
+      setError(
+        `Chegirma juda katta: ${formatMoney(share.total)} (summaning ${share.percent.toFixed(0)}%). Mijoz to'lagan pul bo'lsa — uni "To'lovlar"ga yozing. Chegirma to'g'ri bo'lsa, yana bir marta "Saqlash"ni bosing.`,
+      );
+      return;
+    }
     const filteredProducts = products.filter((p) => p.product_name.trim() || p.quantity > 0);
     if (!payload.title.trim() && !filteredProducts[0]?.product_name) {
       setError("Buyurtma nomi yoki mahsulot kiritilishi shart");

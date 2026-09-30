@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMarginRows, catalogCostLookup, findDuplicateLines, lineCostKey, orderOnlyKey, profitBreakdown, summarize, totalMismatch } from "../src/lib/margin";
+import { buildMarginRows, catalogCostLookup, findDuplicateLines, largeDiscountOrders, lineCostKey, orderOnlyKey, profitBreakdown, summarize, totalMismatch } from "../src/lib/margin";
 import type { Order, OrderCost, OrderProduct } from "../src/lib/types";
 
 const order = (id: string, total: number, extra: Partial<Order> = {}) => ({ id, total_amount: total, status: "new", title: `Buyurtma ${id}`, ...extra }) as Order;
@@ -91,5 +91,15 @@ describe("data checks", () => {
     const ls = [line("a", "o1", 500, 9500), line("b", "o1", 500, 9500)];
     expect(totalMismatch(order("o1", 4_750_000), ls)).toBe(-4_750_000);
     expect(totalMismatch(order("o1", 9_000_000, { discount_amount: 500_000 }), ls)).toBe(0);
+  });
+});
+
+describe("large discounts", () => {
+  it("flags a paid amount typed into the discount box, not a normal discount", () => {
+    const ls = [line("a", "o1", 500, 9500)];
+    expect(largeDiscountOrders([order("o1", 2_380_000, { discount_amount: 2_370_000 })], ls)).toHaveLength(1);
+    expect(largeDiscountOrders([order("o1", 4_500_000, { discount_amount: 250_000 })], ls)).toHaveLength(0);
+    expect(largeDiscountOrders([order("o1", 2_380_000, { discount_amount: 2_370_000, discount_confirmed: true })], ls)).toHaveLength(0);
+    expect(largeDiscountOrders([order("o1", 2_380_000)], [line("a", "o1", 500, 9500, { discount: 2_370_000 })])[0].percent).toBeCloseTo(49.9, 0);
   });
 });

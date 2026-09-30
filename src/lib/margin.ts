@@ -1,6 +1,7 @@
 import type { CostTier, Expense, Order, OrderCost, OrderProduct } from "./types";
 import { tierCostFor } from "./priceTiers";
 import { VENDOR_EXPENSE_CATEGORY } from "./orderConstants";
+import { discountShare } from "./orderCalculations";
 
 // Margin = what an order line sold for minus what it cost us. The cost is
 // typed by an admin on the Marja page (order_costs/{line id}, admin-only
@@ -205,4 +206,17 @@ export function totalMismatch(order: Order, lines: OrderProduct[]): number {
   const expected = own.reduce((s, l) => s + Number(l.total || 0), 0) - Number(order.discount_amount || 0);
   const diff = Number(order.total_amount || 0) - expected;
   return Math.abs(diff) >= 1 ? diff : 0;
+}
+
+// Orders whose discounts (per line + on the order) are a large share of the
+// list price — usually a paid amount typed into the discount box — and not
+// yet confirmed as intended (order.discount_confirmed).
+export function largeDiscountOrders(orders: Order[], lines: OrderProduct[]) {
+  return orders
+    .filter((o) => !o.discount_confirmed)
+    .map((o) => {
+      const own = lines.filter((l) => l.order_id === o.id);
+      return { order: o, lines: own, ...discountShare(own, Number(o.discount_amount || 0)) };
+    })
+    .filter((x) => x.large);
 }

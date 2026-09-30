@@ -4,6 +4,8 @@ import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/or
 import type { Product, TextileCompany } from "../../../lib/types";
 import { listAll } from "../../../lib/firestoreDb";
 import { DESIGNER_STATUSES, DELIVERY_TYPES, PAYMENT_TYPES } from "../../../lib/orderConstants";
+import { formatMoney } from "../../../lib/format";
+import { discountShare } from "../../../lib/orderCalculations";
 import ProductLineItem from "./ProductLineItem";
 
 type Props = {
@@ -147,17 +149,21 @@ export default function ProductionStep({
         </div>
       </div>
 
+      <OrderDiscountCard payload={payload} products={products} onPayloadChange={onPayloadChange} />
+
       <div className="card p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-lg font-bold text-ink-900">To'lovlar</h2>
           <button className="btn-primary" onClick={addPayment}><Plus className="h-4 w-4" /> To'lov qo'shish</button>
         </div>
-        <div className="mb-3">
-          <label className="label">Umumiy chegirma</label>
-          <input type="number" className="input max-w-xs" value={payload.discount_amount || ""} onChange={(e) => onPayloadChange({ discount_amount: Number(e.target.value) || 0 })} />
-        </div>
         {payments.length === 0 && (
-          <div className="rounded-xl border border-dashed border-ink-200 p-6 text-center text-sm text-ink-500">To'lov qo'shilmagan</div>
+          <button
+            type="button"
+            onClick={addPayment}
+            className="w-full rounded-xl border border-dashed border-ink-200 p-6 text-center text-sm text-ink-500 hover:border-brand-300 hover:bg-brand-50/40"
+          >
+            To'lov qo'shilmagan. Mijoz to'lagan summani yozish uchun <b className="text-brand-700">"To'lov qo'shish"</b>ni bosing.
+          </button>
         )}
         <div className="space-y-2">
           {payments.map((p, i) => (
@@ -217,6 +223,61 @@ export default function ProductionStep({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+// The order-level discount, kept apart from the payments below it: typing
+// the paid amount here by mistake used to cut the order total.
+function OrderDiscountCard({
+  payload,
+  products,
+  onPayloadChange,
+}: {
+  payload: OrderPayload;
+  products: WizardProduct[];
+  onPayloadChange: (patch: Partial<OrderPayload>) => void;
+}) {
+  const d = discountShare(products, payload.discount_amount);
+  return (
+    <div className="card p-5">
+      <h2 className="mb-1 font-display text-lg font-bold text-ink-900">Buyurtmaga chegirma</h2>
+      <p className="mb-3 text-xs text-ink-500">
+        Faqat mijozga berilgan chegirma yoziladi. Mijoz to'lagan pul bu yerga emas — pastdagi "To'lovlar"ga.
+      </p>
+      <div className="flex flex-wrap items-end gap-4">
+        <div>
+          <label className="label">Chegirma (so'm)</label>
+          <input
+            type="number"
+            min={0}
+            className={`input max-w-xs ${d.large ? "border-amber-400 bg-amber-50" : ""}`}
+            value={payload.discount_amount || ""}
+            placeholder="0"
+            onChange={(e) => onPayloadChange({ discount_amount: Math.max(0, Number(e.target.value) || 0) })}
+          />
+        </div>
+        <div className="pb-2 text-sm text-ink-600">
+          Mahsulotlar: <b>{formatMoney(d.gross)}</b>
+          {d.total > 0 && (
+            <>
+              {" "}· chegirma <b>{formatMoney(d.total)}</b> ({d.percent.toFixed(0)}%)
+            </>
+          )}{" "}
+          · jami <b>{formatMoney(Math.max(0, d.gross - d.total))}</b>
+        </div>
+      </div>
+      {d.large && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span>
+            ⚠️ Chegirma summaning <b>{d.percent.toFixed(0)}%</b>i. Mijoz to'lagan pulni yozmoqchi bo'lsangiz — uni "To'lovlar"ga yozing.
+          </span>
+          {payload.discount_amount > 0 && (
+            <button type="button" className="btn-secondary text-xs" onClick={() => onPayloadChange({ discount_amount: 0 })}>
+              Chegirmani olib tashlash
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
