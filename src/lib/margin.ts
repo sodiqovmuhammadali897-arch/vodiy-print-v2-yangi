@@ -178,3 +178,31 @@ export function catalogCostLookup(
     byName.get(String(line.product_name || "").trim().toLowerCase()) ||
     null;
 }
+
+// Lines written twice by an overlapping save (orderService now prevents
+// it): the same order, place, product, quantity and price. Returns the ids
+// of the extra copies, keeping the first of each.
+export function findDuplicateLines(lines: OrderProduct[]): { ids: string[]; orders: Set<string> } {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  const orders = new Set<string>();
+  const sorted = [...lines].sort((a, b) => a.id.localeCompare(b.id));
+  for (const l of sorted) {
+    const k = [l.order_id, l.position ?? 0, String(l.product_name || "").trim().toLowerCase(), Number(l.quantity || 0), Number(l.unit_price || 0)].join("|");
+    if (seen.has(k)) {
+      ids.push(l.id);
+      orders.add(l.order_id);
+    } else seen.add(k);
+  }
+  return { ids, orders };
+}
+
+// The order total should be its lines minus the order discount; when it
+// isn't, the order needs opening and saving again (or fixing).
+export function totalMismatch(order: Order, lines: OrderProduct[]): number {
+  const own = lines.filter((l) => l.order_id === order.id);
+  if (!own.length) return 0;
+  const expected = own.reduce((s, l) => s + Number(l.total || 0), 0) - Number(order.discount_amount || 0);
+  const diff = Number(order.total_amount || 0) - expected;
+  return Math.abs(diff) >= 1 ? diff : 0;
+}

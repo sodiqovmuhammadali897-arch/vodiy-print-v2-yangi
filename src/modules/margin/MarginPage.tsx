@@ -6,7 +6,7 @@ import { useAuth } from "../../lib/AuthContext";
 import { canViewMargin } from "../../lib/rolePermissions";
 import { exportCsv } from "../../lib/exportCsv";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
-import { buildMarginRows, catalogCostLookup, isSaleOrder, summarize, type MarginRow } from "../../lib/margin";
+import { buildMarginRows, catalogCostLookup, findDuplicateLines, isSaleOrder, lineCostKey, summarize, totalMismatch, type MarginRow } from "../../lib/margin";
 import type { Customer, Order, OrderCost, OrderProduct, Product, ProductCost } from "../../lib/types";
 import StatCard from "../../components/ui/StatCard";
 import AsyncState from "../../components/ui/AsyncState";
@@ -144,6 +144,63 @@ export default function MarginPage() {
         next.delete(r.key);
         return next;
       });
+    }
+  };
+
+  // Lines written twice by an overlapping save split the order total in two.
+  const monthOrderIds = useMemo(() => new Set(rows.map((r) => r.order.id)), [rows]);
+  const duplicates = useMemo(() => {
+    const d = findDuplicateLines(lines.filter((l) => monthOrderIds.has(l.order_id)));
+    return { ...d, numbers: orders.filter((o) => d.orders.has(o.id)).map((o) => o.order_number || o.id) };
+  }, [lines, orders, monthOrderIds]);
+  const [cleaning, setCleaning] = useState(false);
+
+  const cleanDuplicates = async () => {
+    setCleaning(true);
+    setError(null);
+    try {
+      const dupIds = new Set(duplicates.ids);
+      const affected = orders.filter((o) => duplicates.orders.has(o.id));
+      // Costs typed on any copy stay with the line that is kept.
+      const before = buildMarginRows(affected, lines, costs);
+      const costOf = new Map(before.filter((r) => r.cost !== null && r.line).map((r) => [r.line!.id, r]));
+      const groupKey = (l: OrderProduct) => [l.order_id, l.position ?? 0, String(l.product_name || "").trim().toLowerCase(), Number(l.quantity || 0), Number(l.unit_price || 0)].join("|");
+      const groupCost = new Map<string, MarginRow>();
+      for (const l of lines) {
+        const r = costOf.get(l.id);
+        if (r && !groupCost.has(groupKey(l))) groupCost.set(groupKey(l), r);
+      }
+      for (const id of dupIds) await deleteOne("order_products", id);
+      const kept = lines.filter((l) => !dupIds.has(l.id));
+      for (const o of affected) {
+        const own = kept.filter((l) => l.order_id === o.id).sort((a, b) => (a.position || 0) - (b.position || 0));
+        const oldCount = lines.filter((l) => l.order_id === o.id).length;
+        for (let i = 0; i < own.length; i++) {
+          const r = groupCost.get(groupKey(own[i]));
+          const key = lineCostKey(o.id, i);
+          if (r && r.cost !== null) {
+            await upsertOne("order_costs", key, {
+              id: key,
+              order_id: o.id,
+              total_cost: Math.round(r.cost),
+              unit_cost: own[i].quantity ? r.cost / Number(own[i].quantity) : r.cost,
+              source: costs.get(r.key)?.source || "manual",
+              product_name: own[i].product_name,
+              updated_by: auth.user?.email || "",
+              updated_at: new Date().toISOString(),
+            } satisfies OrderCost);
+          } else if (costs.has(key)) await deleteOne("order_costs", key);
+        }
+        for (let j = own.length; j < oldCount; j++) if (costs.has(lineCostKey(o.id, j))) await deleteOne("order_costs", lineCostKey(o.id, j));
+        for (const l of lines.filter((x) => x.order_id === o.id)) if (costs.has(l.id)) await deleteOne("order_costs", l.id);
+      }
+      const [l2, c2] = await Promise.all([listAll<OrderProduct>("order_products"), listAll<OrderCost>("order_costs")]);
+      setLines(l2);
+      setCosts(new Map(c2.map((x) => [x.id, x])));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Tozalab bo'lmadi");
+    } finally {
+      setCleaning(false);
     }
   };
 
@@ -292,6 +349,20 @@ export default function MarginPage() {
         )}
       </div>
 
+      {duplicates.ids.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <span>
+            🧹 <b>{duplicates.orders.size} ta buyurtmada</b> qator ikki marta yozilib qolgan ({duplicates.ids.length} ta ortiqcha qator):{" "}
+            {duplicates.numbers.slice(0, 8).join(", ")}
+            {duplicates.numbers.length > 8 ? "…" : ""}. Shu sabab buyurtma summasi qatorlarga bo'linib, sotuv kam ko'rinyapti. Tozalansa, har qatordan bittasi
+            qoladi, kiritilgan tannarx saqlanadi.
+          </span>
+          <button className="btn-primary" onClick={cleanDuplicates} disabled={cleaning}>
+            {cleaning ? "Tozalanmoqda…" : `Takror qatorlarni o'chirish (${duplicates.ids.length})`}
+          </button>
+        </div>
+      )}
+
       {view === "orders" && summary.loss > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           <span>
@@ -344,6 +415,11 @@ export default function MarginPage() {
                             </Link>{" "}
                             · {orderDay(r.order).slice(8, 10)}.{orderDay(r.order).slice(5, 7)} · {customerOf(r.order) || r.order.title || "—"}
                             {r.order.manager_name && <span className="font-medium text-ink-500"> · {r.order.manager_name}</span>}
+                            {!duplicates.orders.has(r.order.id) && totalMismatch(r.order, lines) !== 0 && (
+                              <span className="ml-2 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800" title="Buyurtmani ochib, qayta saqlang yoki summasini tekshiring">
+                                ⚠️ buyurtma summasi qatorlardan {num(Math.round(Math.abs(totalMismatch(r.order, lines))))} {totalMismatch(r.order, lines) < 0 ? "kam" : "ko'p"}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ) : null;
@@ -365,7 +441,11 @@ export default function MarginPage() {
                               title="Summa — mijoz haqiqatda to'laydigan pul: buyurtma summasi (chegirmadan keyin) qatorlarga bo'lingan"
                             >
                               <span className="line-through">{num(Math.round(r.quantity * r.unitPrice))}</span>{" "}
-                              {r.revenue < r.quantity * r.unitPrice ? `chegirma −${num(Math.round(r.quantity * r.unitPrice - r.revenue))}` : "buyurtma summasi bo'yicha"}
+                              {duplicates.orders.has(r.order.id)
+                                ? "takror qator sababli"
+                                : Number(r.line.discount || 0) > 0 || Number(r.order.discount_amount || 0) > 0
+                                  ? `chegirma −${num(Math.round(r.quantity * r.unitPrice - r.revenue))}`
+                                  : "buyurtma summasi mos emas"}
                             </div>
                           )}
                         </td>

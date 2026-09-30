@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -84,6 +84,7 @@ export default function OrderWizard() {
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [initialStatus, setInitialStatus] = useState<string | null>(null);
 
@@ -258,6 +259,8 @@ export default function OrderWizard() {
   );
 
   const doSave = async (asDraft: boolean) => {
+    // A second click before the first save finishes would save twice.
+    if (savingRef.current) return;
     setError(null);
     const filteredProducts = products.filter((p) => p.product_name.trim() || p.quantity > 0);
     if (!payload.title.trim() && !filteredProducts[0]?.product_name) {
@@ -265,6 +268,7 @@ export default function OrderWizard() {
       return;
     }
     setSaving(true);
+    savingRef.current = true;
     const res = await saveOrder(
       {
         ...payload,
@@ -282,6 +286,7 @@ export default function OrderWizard() {
         : undefined,
     );
     setSaving(false);
+    savingRef.current = false;
     if ("error" in res) {
       setError(res.error);
       return;

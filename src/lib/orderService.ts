@@ -73,7 +73,20 @@ export type OrderPayload = {
   created_at?: string;
 };
 
-const upsertChildren = async (
+// Children are rewritten as delete-then-insert; two saves of the same order
+// running at once (a double click) would both delete and then both insert,
+// leaving every line twice. Saves of one order therefore run one after
+// another.
+const childWrites = new Map<string, Promise<unknown>>();
+const upsertChildren = (orderId: string, products: WizardProduct[], payments: WizardPayment[]) => {
+  const run = (childWrites.get(orderId) || Promise.resolve())
+    .catch(() => undefined)
+    .then(() => writeChildren(orderId, products, payments));
+  childWrites.set(orderId, run);
+  return run;
+};
+
+const writeChildren = async (
   orderId: string,
   products: WizardProduct[],
   payments: WizardPayment[],

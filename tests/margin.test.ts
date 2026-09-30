@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMarginRows, catalogCostLookup, lineCostKey, orderOnlyKey, profitBreakdown, summarize } from "../src/lib/margin";
+import { buildMarginRows, catalogCostLookup, findDuplicateLines, lineCostKey, orderOnlyKey, profitBreakdown, summarize, totalMismatch } from "../src/lib/margin";
 import type { Order, OrderCost, OrderProduct } from "../src/lib/types";
 
 const order = (id: string, total: number, extra: Partial<Order> = {}) => ({ id, total_amount: total, status: "new", title: `Buyurtma ${id}`, ...extra }) as Order;
@@ -76,5 +76,20 @@ describe("summarize and profitBreakdown", () => {
     const none = summarize(buildMarginRows([order("o1", 1_000_000)], [line("a", "o1", 1000, 1000)], new Map()));
     const b = profitBreakdown(none, [{ amount: 300_000, category: "Ta'minotchiga to'lov" }]);
     expect(b).toMatchObject({ mode: "cash", net: 700_000 });
+  });
+});
+
+describe("data checks", () => {
+  it("finds lines written twice and keeps one of each", () => {
+    const ls = [line("b2", "o1", 500, 9500), line("b1", "o1", 500, 9500), line("c", "o1", 100, 50, { position: 1 }), line("d", "o2", 500, 9500)];
+    const dup = findDuplicateLines(ls);
+    expect(dup.ids).toEqual(["b2"]);
+    expect([...dup.orders]).toEqual(["o1"]);
+  });
+
+  it("flags an order whose total doesn't match its lines", () => {
+    const ls = [line("a", "o1", 500, 9500), line("b", "o1", 500, 9500)];
+    expect(totalMismatch(order("o1", 4_750_000), ls)).toBe(-4_750_000);
+    expect(totalMismatch(order("o1", 9_000_000, { discount_amount: 500_000 }), ls)).toBe(0);
   });
 });
