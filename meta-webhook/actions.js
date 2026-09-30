@@ -431,12 +431,20 @@ const decideAction = async (db, telegram, id, ok, actor, extra = {}) => {
 };
 
 // isWorkChat: the report channel or the linked work group.
-const handleCallback = async (db, telegram, cq, isWorkChat) => {
+// privateAdmin(chatId, userId): an admin's own private chat with the bot,
+// where the buttons of the Hisobchi's proposals may be pressed by them.
+const handleCallback = async (db, telegram, cq, isWorkChat, privateAdmin = null) => {
   const answer = (text, alert = false) => telegram("answerCallbackQuery", { callback_query_id: cq.id, text, show_alert: alert });
   const chatId = cq.message && cq.message.chat && cq.message.chat.id;
   const m = /^(ok|no):([A-Za-z0-9]+)$/.exec(cq.data || "");
-  if (!m || !chatId || !(await isWorkChat(chatId))) return answer("Ruxsat yo'q");
-  if (!(await isChatAdmin(telegram, chatId, cq.from.id))) return answer("Faqat kanal adminlari tasdiqlay oladi", true);
+  if (!m || !chatId) return answer("Ruxsat yo'q");
+  const isPrivate = cq.message.chat.type === "private";
+  if (isPrivate) {
+    if (!privateAdmin || !(await privateAdmin(chatId, cq.from.id))) return answer("Ruxsat yo'q", true);
+  } else {
+    if (!(await isWorkChat(chatId))) return answer("Ruxsat yo'q");
+    if (!(await isChatAdmin(telegram, chatId, cq.from.id))) return answer("Faqat kanal adminlari tasdiqlay oladi", true);
+  }
   const actor = [cq.from.first_name, cq.from.last_name].filter(Boolean).join(" ") || cq.from.username || String(cq.from.id);
   const res = await decideAction(db, telegram, m[2], m[1] === "ok", actor, { chatId, tgUserId: cq.from.id, via: "telegram", message: { chat_id: chatId, message_id: cq.message.message_id } });
   return answer(res.message, !["done", "cancelled"].includes(res.status));

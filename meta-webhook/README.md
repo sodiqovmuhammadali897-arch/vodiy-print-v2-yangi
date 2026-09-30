@@ -270,6 +270,10 @@ message is a question answered from the same snapshot and memory; `/brif`
 
 ## Employees' questions (`staffbot.js`)
 
+A linked admin (`staff.role` "admin") gets the full Hisobchi in the bot's
+private chat. That means every data tool, and changes proposed with
+confirmation buttons that only that admin can press there.
+
 In the bot's private chat, a linked employee whom an admin allowed
 (`staff.bot_ask`, Sozlamalar → Xodimlar; admins always) can ask Claude
 about:

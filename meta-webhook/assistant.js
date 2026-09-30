@@ -436,6 +436,12 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
     return { start: () => {} };
   }
   const mainChat = [...ALLOWED_CHATS][0];
+  // A private chat whose owner is a linked admin (staff.role "admin").
+  const privateAdmin = async (chatId, userId) => {
+    if (!chatId || Number(chatId) !== Number(userId)) return false;
+    const snap = await db.collection("staff").where("telegram_chat_id", "==", Number(chatId)).limit(1).get();
+    return !snap.empty && snap.docs[0].data().role === "admin";
+  };
   // Employees' own questions in private chat (staffbot.js).
   const staffbot = require("./staffbot").create(db, { priceTools: (ctx) => createFileTools(db, ctx) });
   const isWorkChat = async (id) => ALLOWED_CHATS.has(String(id)) || (groups ? await groups.isWorkChat(id) : false);
@@ -452,7 +458,7 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
         // Task buttons live in employees' private chats (tasks.js).
         if (tasks && /^task:/.test(data)) await tasks.handleCallback(req.body.callback_query);
         else if (chief && /^chief:/.test(data)) await chief.handleCallback(req.body.callback_query, isWorkChat);
-        else await handleCallback(db, telegram, req.body.callback_query, isWorkChat);
+        else await handleCallback(db, telegram, req.body.callback_query, isWorkChat, privateAdmin);
       } catch (err) {
         console.error("Hisobchi callback failed", err);
       }
@@ -469,6 +475,15 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
           return false;
         });
         if (handled) return;
+      }
+      // An admin gets the full Hisobchi in private chat (all data, and
+      // changes with confirmation buttons); other staff the limited one.
+      if (text && !text.startsWith("/") && !msg.from?.is_bot && (await privateAdmin(msg.chat.id, msg.from?.id))) {
+        await handleQuestion(db, { chatId: msg.chat.id, replyTo: msg.message_id, text, context: msg.reply_to_message?.text || "", source: "private" }).catch(async (err) => {
+          console.error("Hisobchi private answer failed", err);
+          await telegram("sendMessage", { chat_id: msg.chat.id, text: "Kechirasiz, hozir javob bera olmadim. Birozdan keyin qayta urinib ko'ring." });
+        });
+        return;
       }
       if (text && !msg.from?.is_bot) {
         const answered = await staffbot.handlePrivateMessage(msg).catch((err) => {

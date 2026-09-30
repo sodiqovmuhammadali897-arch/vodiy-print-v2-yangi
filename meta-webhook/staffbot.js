@@ -1,6 +1,6 @@
 // Employees' questions in the bot's private chat. Only staff an admin
-// ticked in Sozlamalar → Xodimlar (staff.bot_ask) — and admins — may ask,
-// and only about:
+// ticked in Sozlamalar → Xodimlar (staff.bot_ask) may ask (admins get the
+// full Hisobchi there instead — assistant.js), and only about:
 //   • product prices (the customer price sheet, no cost) — if they may view
 //     Mahsulotlar on the site;
 //   • their own tasks, attendance and monthly KPI;
