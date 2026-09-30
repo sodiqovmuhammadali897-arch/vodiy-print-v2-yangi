@@ -270,9 +270,15 @@ message is a question answered from the same snapshot and memory; `/brif`
 
 ## Employees' questions (`staffbot.js`)
 
-A linked admin (`staff.role` "admin") gets the full Hisobchi in the bot's
-private chat. That means every data tool, and changes proposed with
-confirmation buttons that only that admin can press there.
+A linked admin (`staff.role` "admin") talks to every agent in the bot's
+private chat.
+- A persistent keyboard picks who answers: 💼 Hisobchi (default, all data
+  tools, changes with confirmation buttons only that admin can press),
+  📣 Marketolog or 🧠 Bosh agent. The same choice is available as the
+  commands `/hisobchi`, `/marketolog` and `/bosh`.
+- The choice is kept per chat in `tg_private_mode/{chatId}`.
+- `/hisobot`, `/raqobat` and `/brif` work from any mode. Their results
+  go to the work-group topics, as usual.
 
 In the bot's private chat, a linked employee whom an admin allowed
 (`staff.bot_ask`, Sozlamalar → Xodimlar; admins always) can ask Claude

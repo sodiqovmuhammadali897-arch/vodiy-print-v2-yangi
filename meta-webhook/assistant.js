@@ -442,6 +442,43 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
     const snap = await db.collection("staff").where("telegram_chat_id", "==", Number(chatId)).limit(1).get();
     return !snap.empty && snap.docs[0].data().role === "admin";
   };
+  // An admin's private chat: the buttons at the bottom pick who answers —
+  // the Hisobchi (default), the Marketolog or the Bosh agent — and the
+  // choice is kept per chat (tg_private_mode). Their commands work too:
+  // /hisobot, /raqobat (Marketolog), /brif (Bosh agent); those results are
+  // posted in the work group topics as usual.
+  const AGENTS = { hisobchi: "💼 Hisobchi", mkt: "📣 Marketolog", chief: "🧠 Bosh agent" };
+  const AGENT_INTRO = {
+    hisobchi: "Moliya, qarzlar, buyurtmalar, lidlar, ombor, narx varag'i. O'zgartirishlar tasdiqlash tugmasi bilan.",
+    mkt: "Sotuv manbalari, reklama, mijozlar, raqobatchilar, post va aksiya g'oyalari. /hisobot — haftalik hisobot, /raqobat — raqobatchilar tahlili.",
+    chief: "Kompaniyaning umumiy holati, reja, muammolar va tavsiyalar. /brif — bugungi brif va takliflar.",
+  };
+  const agentKeyboard = { keyboard: [[{ text: AGENTS.hisobchi }, { text: AGENTS.mkt }, { text: AGENTS.chief }]], resize_keyboard: true, is_persistent: true };
+  const adminPrivate = async (msg, text) => {
+    const chatId = msg.chat.id;
+    const ref = db.collection("tg_private_mode").doc(String(chatId));
+    const state = (await ref.get()).data() || null;
+    const say = (t) => telegram("sendMessage", { chat_id: chatId, text: t, reply_markup: agentKeyboard });
+    const available = (k) => k === "hisobchi" || (k === "mkt" ? Boolean(marketing) : Boolean(chief));
+    const picked =
+      Object.keys(AGENTS).find((k) => text === AGENTS[k]) ||
+      (/^\/(hisobchi)\b/i.test(text) ? "hisobchi" : /^\/(marketolog|mkt)\b/i.test(text) ? "mkt" : /^\/(bosh|chief)\b/i.test(text) ? "chief" : null);
+    if (picked || /^\/(start|agent|yordam)\b/i.test(text)) {
+      const mode = picked || (state && state.mode) || "hisobchi";
+      if (!available(mode)) return say("Bu agent hozir o'chirilgan.");
+      await ref.set({ mode, updated_at: new Date().toISOString() });
+      return say(`Endi ${AGENTS[mode]} bilan gaplashyapsiz.\n${AGENT_INTRO[mode]}\n\nAgentni pastdagi tugmalar bilan almashtirasiz.`);
+    }
+    if (!state) {
+      await ref.set({ mode: "hisobchi", updated_at: new Date().toISOString() });
+      await say("Pastdagi tugmalar bilan kim javob berishini tanlaysiz: Hisobchi, Marketolog yoki Bosh agent. Hozir — 💼 Hisobchi.");
+    }
+    const mode = /^\/(hisobot|raqobat)\b/i.test(text) ? "mkt" : /^\/brif\b/i.test(text) ? "chief" : (state && state.mode) || "hisobchi";
+    if (mode === "mkt" && marketing) return marketing.handleMessage(msg, text);
+    if (mode === "chief" && chief) return chief.handleMessage(msg, text);
+    if (text.startsWith("/")) return say("Noma'lum buyruq. Savolni oddiy matn bilan yozing.");
+    return handleQuestion(db, { chatId, replyTo: msg.message_id, text, context: msg.reply_to_message?.text || "", source: "private" });
+  };
   // Employees' own questions in private chat (staffbot.js).
   const staffbot = require("./staffbot").create(db, { priceTools: (ctx) => createFileTools(db, ctx) });
   const isWorkChat = async (id) => ALLOWED_CHATS.has(String(id)) || (groups ? await groups.isWorkChat(id) : false);
@@ -476,11 +513,11 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
         });
         if (handled) return;
       }
-      // An admin gets the full Hisobchi in private chat (all data, and
-      // changes with confirmation buttons); other staff the limited one.
-      if (text && !text.startsWith("/") && !msg.from?.is_bot && (await privateAdmin(msg.chat.id, msg.from?.id))) {
-        await handleQuestion(db, { chatId: msg.chat.id, replyTo: msg.message_id, text, context: msg.reply_to_message?.text || "", source: "private" }).catch(async (err) => {
-          console.error("Hisobchi private answer failed", err);
+      // An admin talks to every agent in private chat (adminPrivate below);
+      // other staff get the limited assistant.
+      if (text && !/^\/start\s/.test(text) && !msg.from?.is_bot && (await privateAdmin(msg.chat.id, msg.from?.id))) {
+        await adminPrivate(msg, text).catch(async (err) => {
+          console.error("Admin private message failed", err);
           await telegram("sendMessage", { chat_id: msg.chat.id, text: "Kechirasiz, hozir javob bera olmadim. Birozdan keyin qayta urinib ko'ring." });
         });
         return;
