@@ -14,6 +14,7 @@ const titleMap: Record<string, string> = {
   "/textile": "Textil",
   "/warehouse": "Ombor",
   "/finance": "Moliya",
+  "/margin": "Marja",
   "/reports": "Hisobot",
   "/ai-office": "AI Ofis",
   "/attendance": "Davomat va KPI",

@@ -15,17 +15,18 @@ import {
 } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
 import type {
-  CostTier,
   Customer,
   Expense,
   MonthlyPlan,
   Order,
+  OrderCost,
   OrderPayment,
   OrderProduct,
-  Product,
-  ProductCost,
 } from "../../lib/types";
-import { tierCostFor } from "../../lib/priceTiers";
+import { buildMarginRows, isSaleOrder, profitBreakdown, summarize } from "../../lib/margin";
+import { canViewMargin } from "../../lib/rolePermissions";
+import { Link } from "react-router-dom";
+import ProfitLines from "../margin/ProfitLines";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
 import {
   defaultDateRange,
@@ -49,7 +50,8 @@ const planId = (year: number, month: number) =>
   `${year}-${String(month).padStart(2, "0")}`;
 
 export default function Finance() {
-  const { isAdmin } = useAuth();
+  const auth = useAuth();
+  const showMargin = canViewMargin(auth);
   const containerRef = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState<DateRange>(defaultDateRange());
   const [loading, setLoading] = useState(true);
@@ -59,7 +61,7 @@ export default function Finance() {
   const [customers, setCustomers] = useState<Map<string, Customer>>(new Map());
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
   const [orderProducts, setOrderProducts] = useState<OrderProduct[]>([]);
-  const [costByProductName, setCostByProductName] = useState<Map<string, CostTier[]>>(new Map());
+  const [orderCosts, setOrderCosts] = useState<Map<string, OrderCost>>(new Map());
 
   const load = async () => {
     setLoading(true);
@@ -78,20 +80,13 @@ export default function Finance() {
     setCustomers(new Map(customersData.map((c) => [c.id, c])));
     setPlan(planData);
 
-    if (isAdmin) {
-      const [orderProductsData, productsData, costsData] = await Promise.all([
+    if (showMargin) {
+      const [orderProductsData, costsData] = await Promise.all([
         listAll<OrderProduct>("order_products"),
-        listAll<Product>("products"),
-        listAll<ProductCost>("product_costs"),
+        listAll<OrderCost>("order_costs"),
       ]);
       setOrderProducts(orderProductsData);
-      const costById = new Map(costsData.map((c) => [c.id, c.cost_tiers || []]));
-      const byName = new Map<string, CostTier[]>();
-      for (const p of productsData) {
-        const costTiers = costById.get(p.id);
-        if (costTiers && costTiers.length > 0) byName.set(p.name, costTiers);
-      }
-      setCostByProductName(byName);
+      setOrderCosts(new Map(costsData.map((c) => [c.id, c])));
     }
 
     setLoading(false);
@@ -100,7 +95,7 @@ export default function Finance() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, [showMargin]);
 
   const ordersInRange = useMemo(
     () => orders.filter((o) => inRange(o.order_date || o.created_at, range)),
@@ -149,22 +144,14 @@ export default function Finance() {
     [orders, range],
   );
 
-  // Real (cost-adjusted) profit: only computable for admins, since cost
-  // price is admin-only, and only for order lines whose product_name
-  // matches a catalog product exactly — lines with no match are excluded.
-  const cogs = useMemo(() => {
-    if (!isAdmin) return 0;
-    const orderIdsInRange = new Set(ordersInRange.map((o) => o.id));
-    return orderProducts
-      .filter((p) => orderIdsInRange.has(p.order_id))
-      .reduce((s, p) => {
-        const quantity = Number(p.quantity || 0);
-        const costTiers = costByProductName.get(p.product_name?.trim() || "");
-        if (!costTiers) return s;
-        return s + tierCostFor(costTiers, quantity) * quantity;
-      }, 0);
-  }, [isAdmin, orderProducts, costByProductName, ordersInRange]);
-  const realProfit = profit - cogs;
+  // Real profit from the costs typed on the Marja page (admin-only):
+  // revenue − cost = gross; − the other expenses = net (supplier and raw
+  // material payments are the cost itself, so they aren't subtracted twice).
+  const breakdown = useMemo(() => {
+    if (!showMargin) return null;
+    const summary = summarize(buildMarginRows(ordersInRange.filter(isSaleOrder), orderProducts, orderCosts));
+    return profitBreakdown(summary, expensesInRange);
+  }, [showMargin, ordersInRange, orderProducts, orderCosts, expensesInRange]);
 
   const paymentTypeDonut: DonutSlice[] = useMemo(() => {
     const map = new Map<string, number>();
@@ -302,35 +289,18 @@ export default function Finance() {
         />
       </div>
 
-      {isAdmin && (
+      {breakdown && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <Lock className="h-4 w-4 text-amber-700" />
-            <h2 className="font-display text-base font-bold text-ink-900">
-              Haqiqiy sof foyda (tan narx bilan) — faqat admin
-            </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-amber-700" />
+              <h2 className="font-display text-base font-bold text-ink-900">Haqiqiy sof foyda (tannarx bilan) — faqat admin</h2>
+            </div>
+            <Link to="/margin" className="text-sm font-semibold text-brand-700 hover:underline">
+              Marja panelida tannarx kiritish →
+            </Link>
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <StatCard
-              title="Mahsulot tannarxi (COGS)"
-              value={formatMoneyShort(cogs)}
-              hint={formatMoney(cogs)}
-              tone="amber"
-              icon={<Lock className="h-5 w-5" />}
-            />
-            <StatCard
-              title="Haqiqiy sof foyda"
-              value={formatMoneyShort(realProfit)}
-              hint={formatMoney(realProfit)}
-              tone={realProfit >= 0 ? "emerald" : "rose"}
-              icon={<PiggyBank className="h-5 w-5" />}
-            />
-          </div>
-          <p className="mt-3 text-xs text-ink-500">
-            Faqat "Mahsulotlar" katalogida tan narxi kiritilgan va nomi
-            buyurtmadagi nom bilan aynan mos kelgan mahsulotlar hisobga
-            olinadi — bu taxminiy ko'rsatkich.
-          </p>
+          <ProfitLines b={breakdown} />
         </div>
       )}
 
@@ -349,3 +319,4 @@ export default function Finance() {
     </div>
   );
 }
+

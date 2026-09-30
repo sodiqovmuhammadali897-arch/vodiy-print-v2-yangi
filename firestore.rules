@@ -157,6 +157,11 @@ service cloud.firestore {
       allow read, write: if isAdmin() && !isManagerAccount();
     }
 
+    // Each order line's cost (Marja page) — same audience as product_costs.
+    match /order_costs/{id} {
+      allow read, write: if isAdmin() && !isManagerAccount();
+    }
+
     // Which company produces a product, and its lead time — operational
     // info, not pricing (cost stays exclusively in product_costs above), so
     // it's visible to the same audience as the product itself.

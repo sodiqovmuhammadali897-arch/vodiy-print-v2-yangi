@@ -129,7 +129,7 @@ const create = (db, { route = null, analytics } = {}) => {
   // ── the company snapshot (all numbers computed here) ───────────────
   const loadAll = async () => {
     const data = await analytics.load();
-    const [payments, supplierInvoices, stock, plans, staff, research, proposals] = await Promise.all([
+    const [payments, supplierInvoices, stock, plans, staff, research, proposals, orderCosts] = await Promise.all([
       read("order_payments"),
       read("supplier_invoices").catch(() => []),
       read("warehouse_items").catch(() => []),
@@ -137,8 +137,9 @@ const create = (db, { route = null, analytics } = {}) => {
       read("staff").catch(() => []),
       read("competitor_research").catch(() => []),
       read("chief_proposals").catch(() => []),
+      read("order_costs").catch(() => []),
     ]);
-    return { ...data, payments, supplierInvoices, stock, plans, staff, research, proposals };
+    return { ...data, payments, supplierInvoices, stock, plans, staff, research, proposals, orderCosts };
   };
 
   const orderDay = (o) => dayCodeOf(o.order_date || o.created_at);
@@ -159,6 +160,8 @@ const create = (db, { route = null, analytics } = {}) => {
   const marginOf = (data, from, to) => {
     const ids = new Set(data.orders.filter((o) => orderDay(o) >= from && orderDay(o) <= to).map((o) => o.id));
     const cost = unitCostFn(data);
+    // Costs typed on the Marja page win; the catalog cost fills the rest.
+    const typed = new Map((data.orderCosts || []).map((c) => [c.id, Number(c.total_cost) || 0]));
     let known = 0;
     let knownCost = 0;
     let all = 0;
@@ -166,6 +169,11 @@ const create = (db, { route = null, analytics } = {}) => {
       if (!ids.has(l.order_id)) continue;
       const total = Number(l.total || 0);
       all += total;
+      if (typed.has(l.id)) {
+        known += total;
+        knownCost += typed.get(l.id);
+        continue;
+      }
       const c = cost(l.product_name, Number(l.quantity || 0));
       if (c !== null) {
         known += total;

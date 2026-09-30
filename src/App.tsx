@@ -20,6 +20,7 @@ const Textile = lazy(() => import("./modules/textile/Textile"));
 const Warehouse = lazy(() => import("./modules/warehouse/Warehouse"));
 const Finance = lazy(() => import("./modules/finance/Finance"));
 const Reports = lazy(() => import("./modules/reports/Reports"));
+const MarginPage = lazy(() => import("./modules/margin/MarginPage"));
 const AiOffice = lazy(() => import("./modules/aioffice/AiOffice"));
 const Production = lazy(() => import("./modules/production/Production"));
 const Pechatnik = lazy(() => import("./modules/production/Pechatnik"));
@@ -99,6 +100,7 @@ export default function App() {
           <Route element={<AdminRoute />}>
             <Route path="/settings" element={<Settings />} />
             <Route path="/ai-office" element={<AiOffice />} />
+            <Route path="/margin" element={<MarginPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

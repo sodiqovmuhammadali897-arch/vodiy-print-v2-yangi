@@ -26,7 +26,11 @@ import {
   UserCheck,
 } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
-import type { AttendanceRecord, Brand, Customer, Expense, KpiSettings, Manager, Order, OrderProduct, PersonalSchedule, WorkSchedule } from "../../lib/types";
+import type { AttendanceRecord, Brand, Customer, Expense, KpiSettings, Manager, Order, OrderCost, OrderProduct, PersonalSchedule, WorkSchedule } from "../../lib/types";
+import { buildMarginRows, isSaleOrder, profitBreakdown, summarize } from "../../lib/margin";
+import { canViewMargin } from "../../lib/rolePermissions";
+import ProfitLines from "../margin/ProfitLines";
+import { Link } from "react-router-dom";
 import { DEFAULT_KPI_WEIGHTS } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { formatDate, formatMoney, formatMoneyShort, monthNameUz } from "../../lib/format";
@@ -76,7 +80,9 @@ const daysBetween = (a: string, b: string): number =>
   Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000));
 
 export default function Reports() {
-  const { can, isAdmin, staff } = useAuth();
+  const auth = useAuth();
+  const { can, isAdmin, staff } = auth;
+  const showMargin = canViewMargin(auth);
   const canViewFinance = can("finance", "view");
   // orders/customers/brands are permission-gated in Firestore rules
   // separately from reports.view (see firestore.rules) — a staff member
@@ -99,6 +105,7 @@ export default function Reports() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [managers, setManagers] = useState<Manager[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [orderCosts, setOrderCosts] = useState<Map<string, OrderCost>>(new Map());
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [workSchedule, setWorkSchedule] = useState<WorkSchedule | null>(null);
@@ -123,6 +130,10 @@ export default function Reports() {
       // Expenses live behind the finance permission — a reports-only viewer
       // would get a Firestore permission error fetching them, so only ask
       // when allowed, and just hide the profit card otherwise.
+      if (showMargin) {
+        const rows = await listAll<OrderCost>("order_costs").catch(() => [] as OrderCost[]);
+        setOrderCosts(new Map(rows.map((c) => [c.id, c])));
+      }
       if (canViewFinance) {
         setExpenses(await listAll<Expense>("expenses"));
       }
@@ -147,7 +158,7 @@ export default function Reports() {
     };
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canViewFinance, canOrders, canCustomers, canAttendance]);
+  }, [canViewFinance, canOrders, canCustomers, canAttendance, showMargin]);
 
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const brandMap = useMemo(() => new Map(brands.map((b) => [b.id, b])), [brands]);
@@ -258,8 +269,18 @@ export default function Reports() {
   );
   const totalExpense = expensesInRange.reduce((s, e) => s + Number(e.amount || 0), 0);
   const prevExpense = expensesPrevRange.reduce((s, e) => s + Number(e.amount || 0), 0);
-  const profit = totalRevenue - totalExpense;
-  const prevProfit = prevRevenue - prevExpense;
+  // With costs typed on the Marja page (admins), profit is revenue − cost −
+  // the other expenses; otherwise revenue − all expenses (lib/margin.ts).
+  const breakdown = useMemo(
+    () => (showMargin ? profitBreakdown(summarize(buildMarginRows(ordersInRange.filter(isSaleOrder), products, orderCosts)), expensesInRange) : null),
+    [showMargin, ordersInRange, products, orderCosts, expensesInRange],
+  );
+  const prevBreakdown = useMemo(
+    () => (showMargin ? profitBreakdown(summarize(buildMarginRows(ordersPrevRange.filter(isSaleOrder), products, orderCosts)), expensesPrevRange) : null),
+    [showMargin, ordersPrevRange, products, orderCosts, expensesPrevRange],
+  );
+  const profit = breakdown ? breakdown.net : totalRevenue - totalExpense;
+  const prevProfit = prevBreakdown ? prevBreakdown.net : prevRevenue - prevExpense;
   const profitGrowth = growthPercent(profit, prevProfit);
 
   // Total outstanding debt across ALL active orders (not range-scoped — a
@@ -922,6 +943,18 @@ export default function Reports() {
           />
         )}
       </div>
+
+      {breakdown && (
+        <div className="card p-5">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-base font-bold text-ink-900">Foyda tarkibi</h2>
+            <Link to="/margin" className="text-sm font-semibold text-brand-700 hover:underline">
+              Marja paneli →
+            </Link>
+          </div>
+          <ProfitLines b={breakdown} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
         {canViewFinance && (

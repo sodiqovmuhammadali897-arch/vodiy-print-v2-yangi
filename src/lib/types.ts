@@ -244,6 +244,19 @@ export type Product = {
 // stays readable by admins only, even though the product itself is visible
 // to anyone with products.view. Cost tiers mirror price_tiers by min_qty,
 // since the supplier's unit cost usually drops with volume too.
+// What an order line cost us (Marja page), admin-only like ProductCost.
+// id = the order_products id, or "order_<orderId>" for an order without
+// lines. total_cost is authoritative; unit_cost = total_cost / quantity.
+export type OrderCost = {
+  id: string;
+  order_id: string;
+  unit_cost: number;
+  total_cost: number;
+  source: "manual" | "catalog";
+  updated_at?: string;
+  updated_by?: string;
+};
+
 export type ProductCost = {
   id: string;
   cost_tiers: CostTier[];
