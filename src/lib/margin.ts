@@ -91,6 +91,7 @@ export type MarginSummary = {
   missingLines: number;
   missingRevenue: number;
   lowMargin: number; // costed lines under 15 %
+  loss: number; // costed lines whose cost is above what they sold for
 };
 
 export function summarize(rows: MarginRow[]): MarginSummary {
@@ -109,6 +110,7 @@ export function summarize(rows: MarginRow[]): MarginSummary {
     missingLines: rows.length - costed.length,
     missingRevenue: revenue - costedRevenue,
     lowMargin: costed.filter((r) => r.margin !== null && r.margin < 15).length,
+    loss: costed.filter((r) => (r.profit ?? 0) < 0).length,
   };
 }
 

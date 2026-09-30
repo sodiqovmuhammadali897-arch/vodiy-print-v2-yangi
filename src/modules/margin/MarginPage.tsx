@@ -12,7 +12,7 @@ import StatCard from "../../components/ui/StatCard";
 import AsyncState from "../../components/ui/AsyncState";
 
 type View = "orders" | "products" | "managers";
-type Filter = "all" | "missing" | "costed" | "low";
+type Filter = "all" | "missing" | "costed" | "low" | "loss";
 
 const MONTHS = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"];
 const thisMonth = () => new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 7);
@@ -97,6 +97,7 @@ export default function MarginPage() {
     if (filter === "missing" && r.cost !== null) return false;
     if (filter === "costed" && r.cost === null) return false;
     if (filter === "low" && !(r.margin !== null && r.margin < 15)) return false;
+    if (filter === "loss" && !((r.profit ?? 0) < 0)) return false;
     if (!q) return true;
     return [r.name, r.order.order_number, customerOf(r.order), r.order.manager_name].some((v) => String(v || "").toLowerCase().includes(q));
   });
@@ -225,7 +226,7 @@ export default function MarginPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard title="Aylanma" value={formatMoneyShort(summary.revenue)} hint={`${new Set(rows.map((r) => r.order.id)).size} buyurtma · ${summary.lines} qator`} tone="sky" icon={<Wallet className="h-5 w-5" />} />
         <StatCard title="Tannarx" value={formatMoneyShort(summary.cost)} hint={`kiritilgan: ${summary.costedLines} / ${summary.lines} qator`} tone="violet" icon={<Coins className="h-5 w-5" />} progress={coverage} progressLabel={`${coverage}% to'ldirilgan`} />
-        <StatCard title="Yalpi foyda (marja)" value={formatMoneyShort(summary.profit)} hint="tannarxi kiritilgan qatorlardan" tone="emerald" icon={<TrendingUp className="h-5 w-5" />} />
+        <StatCard title="Yalpi foyda (marja)" value={formatMoneyShort(summary.profit)} hint="tannarxi kiritilgan qatorlardan" tone={summary.profit < 0 ? "rose" : "emerald"} icon={<TrendingUp className="h-5 w-5" />} />
         <StatCard
           title="O'rtacha marja"
           value={summary.margin === null ? "—" : `${summary.margin.toFixed(1)}%`}
@@ -265,6 +266,7 @@ export default function MarginPage() {
                   ["missing", `Tannarxsiz (${summary.missingLines})`],
                   ["costed", `Kiritilgan (${summary.costedLines})`],
                   ["low", `Past marja <15% (${summary.lowMargin})`],
+                  ...(summary.loss ? ([["loss", `Zarar (${summary.loss})`]] as [Filter, string][]) : []),
                 ] as [Filter, string][]
               ).map(([k, label]) => (
                 <button key={k} onClick={() => setFilter(k)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${filter === k ? "bg-white text-ink-900 shadow-sm" : "text-ink-500"}`}>
@@ -279,6 +281,18 @@ export default function MarginPage() {
           </div>
         )}
       </div>
+
+      {view === "orders" && summary.loss > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <span>
+            ⚠️ <b>{summary.loss} ta qatorda</b> tannarx sotuv summasidan katta (zarar). Ko'pincha jami summa "dona" katagiga yozilganda shunday bo'ladi — tekshirib
+            chiqing.
+          </span>
+          <button className="btn-secondary" onClick={() => setFilter("loss")}>
+            Ko'rsatish ({summary.loss})
+          </button>
+        </div>
+      )}
 
       {view === "orders" && fillable.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -326,7 +340,7 @@ export default function MarginPage() {
                     lastOrder = r.order.id;
                     return [
                       head,
-                      <tr key={r.key} className="border-b border-ink-100 hover:bg-ink-50/40">
+                      <tr key={r.key} className={`border-b border-ink-100 ${(r.profit ?? 0) < 0 ? "bg-rose-50/70" : "hover:bg-ink-50/40"}`}>
                         <td className="table-td">
                           <div className="font-medium text-ink-800">{r.name}</div>
                           {!r.line && <div className="text-[11px] text-ink-400">qatorlarsiz buyurtma</div>}

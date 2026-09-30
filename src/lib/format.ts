@@ -5,10 +5,12 @@ export const formatMoney = (n: number | null | undefined): string => {
 
 export const formatMoneyShort = (n: number | null | undefined): string => {
   const v = Number(n ?? 0);
-  if (v >= 1_000_000_000) return (v / 1_000_000_000).toFixed(1) + " mlrd";
-  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + " mln";
-  if (v >= 1_000) return (v / 1_000).toFixed(1) + " ming";
-  return v.toString();
+  const sign = v < 0 ? "−" : "";
+  const a = Math.abs(v);
+  if (a >= 1_000_000_000) return sign + (a / 1_000_000_000).toFixed(1) + " mlrd";
+  if (a >= 1_000_000) return sign + (a / 1_000_000).toFixed(1) + " mln";
+  if (a >= 1_000) return sign + (a / 1_000).toFixed(1) + " ming";
+  return sign + Math.round(a).toString();
 };
 
 export const formatDate = (iso: string | null | undefined): string => {
