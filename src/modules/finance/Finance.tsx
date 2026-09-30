@@ -171,8 +171,17 @@ export default function Finance() {
       ["Davr", `${range.from} - ${range.to}`],
       ["Kirim (buyurtmalar summasi)", income],
       ["To'langan (naqd kirim)", collected],
-      ["Chiqim", expenseTotal],
-      ["Sof foyda", profit],
+      ...(breakdown && breakdown.mode === "margin"
+        ? ([
+            ["Tannarx (Marja)", breakdown.cost],
+            ["Yalpi foyda", breakdown.gross],
+            ["Xarajatlar (tannarxdan tashqari)", breakdown.otherExpenses],
+            ["Sof foyda", breakdown.net],
+          ] as [string, number][])
+        : ([
+            ["Chiqim", expenseTotal],
+            ["Sof foyda", profit],
+          ] as [string, number][])),
       ["Chegirmalar", discountTotal],
       ["Yetkazish xarajati", deliveryTotal],
       ["Umumiy qarzdorlik", debtTotal],
@@ -208,6 +217,62 @@ export default function Finance() {
 
       <DateRangeFilter value={range} onChange={setRange} />
 
+      {breakdown ? (
+        // Admins: cost from the Marja page, then the expenses typed below.
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <StatCard
+            title="Kirim"
+            value={formatMoneyShort(breakdown.revenue)}
+            hint={`${formatMoney(breakdown.revenue)} · Buyurtmalar summasi`}
+            tone="emerald"
+            icon={<TrendingUp className="h-5 w-5" />}
+          />
+          <StatCard
+            title="Tannarx (Marja)"
+            value={breakdown.costedLines ? formatMoneyShort(breakdown.cost) : "—"}
+            hint={
+              <>
+                {breakdown.costedLines ? `kiritilgan: ${breakdown.costedLines} / ${breakdown.lines} qator · ` : "hali kiritilmagan · "}
+                <Link to="/margin" className="font-semibold text-brand-700 hover:underline">
+                  Marja →
+                </Link>
+              </>
+            }
+            tone="violet"
+            icon={<Lock className="h-5 w-5" />}
+            progress={breakdown.lines ? (breakdown.costedLines / breakdown.lines) * 100 : undefined}
+          />
+          <StatCard
+            title={breakdown.mode === "margin" ? "Xarajatlar" : "Chiqim"}
+            value={formatMoneyShort(breakdown.otherExpenses)}
+            hint={
+              breakdown.mode === "margin" && breakdown.costExpenses > 0
+                ? `${formatMoney(breakdown.otherExpenses)} · ta'minotchi/xomashyo (${formatMoneyShort(breakdown.costExpenses)}) tannarxda`
+                : formatMoney(breakdown.otherExpenses)
+            }
+            tone="rose"
+            icon={<TrendingDown className="h-5 w-5" />}
+          />
+          <StatCard
+            title="Sof foyda"
+            value={formatMoneyShort(breakdown.net)}
+            hint={
+              breakdown.mode === "margin"
+                ? `${formatMoney(breakdown.net)} · kirim − tannarx − xarajat${breakdown.missingLines ? ` (${breakdown.missingLines} qator tannarxsiz)` : ""}`
+                : `${formatMoney(breakdown.net)} · kirim − chiqim`
+            }
+            tone={breakdown.net >= 0 ? "brand" : "rose"}
+            icon={<PiggyBank className="h-5 w-5" />}
+          />
+          <StatCard
+            title="Umumiy qarzdorlik"
+            value={formatMoneyShort(debtTotal)}
+            hint={formatMoney(debtTotal)}
+            tone="amber"
+            icon={<Wallet className="h-5 w-5" />}
+          />
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Kirim"
@@ -238,6 +303,7 @@ export default function Finance() {
           icon={<Wallet className="h-5 w-5" />}
         />
       </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <StatCard
@@ -295,7 +361,7 @@ export default function Finance() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Lock className="h-4 w-4 text-amber-700" />
-              <h2 className="font-display text-base font-bold text-ink-900">Haqiqiy sof foyda (tannarx bilan) — faqat admin</h2>
+              <h2 className="font-display text-base font-bold text-ink-900">Foyda tarkibi (tannarx bilan) — faqat admin</h2>
             </div>
             <Link to="/margin" className="text-sm font-semibold text-brand-700 hover:underline">
               Marja panelida tannarx kiritish →
