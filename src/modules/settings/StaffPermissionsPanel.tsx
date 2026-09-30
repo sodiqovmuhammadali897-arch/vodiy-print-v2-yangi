@@ -134,7 +134,7 @@ export default function StaffPermissionsPanel() {
                       {s.attendance_notify === false ? (
                         <span className="text-ink-400">O'chirilgan</span>
                       ) : s.telegram_chat_id ? (
-                        <span className="chip bg-sky-100 text-sky-700">Telegram</span>
+                        <span className="chip bg-sky-100 text-sky-700">Telegram{s.role === "admin" || s.bot_ask ? " · savol ✓" : ""}</span>
                       ) : s.phone ? (
                         <span className="chip bg-amber-100 text-amber-800">SMS · {s.phone}</span>
                       ) : (
@@ -193,6 +193,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
   const [ordersScope, setOrdersScope] = useState<"own" | "all">("own");
   const [phone, setPhone] = useState("");
   const [notify, setNotify] = useState(true);
+  const [botAsk, setBotAsk] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -209,6 +210,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       setOrdersScope(staff.orders_scope === "all" ? "all" : "own");
       setPhone(staff.phone || "");
       setNotify(staff.attendance_notify !== false);
+      setBotAsk(staff.bot_ask === true);
     } else {
       setEmail("");
       setFullName("");
@@ -218,6 +220,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       setOrdersScope("own");
       setPhone("");
       setNotify(true);
+      setBotAsk(false);
     }
     setError(null);
   }, [staff, open]);
@@ -253,6 +256,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
         orders_scope: ordersScope,
         phone: phone.trim(),
         attendance_notify: notify,
+        bot_ask: botAsk,
       });
       setSaving(false);
       onSaved();
@@ -327,6 +331,17 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
           </label>
           <p className="mt-1 text-xs text-ink-500">
             {staff?.telegram_chat_id ? "Telegram ulangan: xabar Telegram'ga boradi (bepul)." : "Telegram ulanmagan: xabar SMS bo'lib boradi."}
+          </p>
+        </div>
+        <div>
+          <label className="label">Botdan savol so'rash</label>
+          <label className="flex h-[42px] items-center gap-2 text-sm text-ink-700">
+            <input id="staff-bot-ask" type="checkbox" checked={role === "admin" || botAsk} disabled={role === "admin"} onChange={(e) => setBotAsk(e.target.checked)} />
+            Botdan savol so'ray oladi
+          </label>
+          <p className="mt-1 text-xs text-ink-500">
+            Telegram botda mahsulot narxlari (Mahsulotlar ruxsati bo'lsa), o'z vazifalari, davomati, KPI bali va — manager bo'lsa — o'z savdosi haqida
+            so'ray oladi. Kompaniya foydasi, xarajat, tannarx va boshqalarning ma'lumoti aytilmaydi.
           </p>
         </div>
         <div>

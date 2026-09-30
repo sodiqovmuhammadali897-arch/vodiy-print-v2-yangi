@@ -268,6 +268,24 @@ In the topic: reply to a pending proposal to have it rewritten; any other
 message is a question answered from the same snapshot and memory; `/brif`
 (or `POST /webhooks/chief/run` as an admin) runs the brief now.
 
+## Employees' questions (`staffbot.js`)
+
+In the bot's private chat, a linked employee whom an admin allowed
+(`staff.bot_ask`, Sozlamalar → Xodimlar; admins always) can ask Claude
+about:
+- product prices: the customer price sheet as text / PDF / PNG, with no
+  cost. Only for staff with Mahsulotlar view;
+- their own tasks, attendance (by their own schedule) and monthly KPI;
+- their own sales, plan and customer debts, if linked to a Managerlar
+  record (`report_manager_id`).
+
+Every tool reads only the asker's records, so company totals, costs and
+other people's data never reach the model. Details:
+- Other linked staff get "admin ruxsat berishi kerak".
+- Unlinked chats fall through to the HR agent.
+- Up to 30 questions an hour per chat.
+- The last 4 exchanges are kept for 30 minutes, for follow-ups.
+
 ## Task notifications (`tasks.js`)
 
 Tasks go Yangi → Ishga olindi → Bajarildi (`status`: new / in_progress /

@@ -436,6 +436,8 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
     return { start: () => {} };
   }
   const mainChat = [...ALLOWED_CHATS][0];
+  // Employees' own questions in private chat (staffbot.js).
+  const staffbot = require("./staffbot").create(db, { priceTools: (ctx) => createFileTools(db, ctx) });
   const isWorkChat = async (id) => ALLOWED_CHATS.has(String(id)) || (groups ? await groups.isWorkChat(id) : false);
   let botUsername = "";
   let botUserId = null;
@@ -467,6 +469,13 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
           return false;
         });
         if (handled) return;
+      }
+      if (text && !msg.from?.is_bot) {
+        const answered = await staffbot.handlePrivateMessage(msg).catch((err) => {
+          console.error("Staff bot failed", err);
+          return false;
+        });
+        if (answered) return;
       }
       if (hr && text) await hr.handlePrivateMessage(msg).catch((err) => console.error("HR private message failed", err));
       return;

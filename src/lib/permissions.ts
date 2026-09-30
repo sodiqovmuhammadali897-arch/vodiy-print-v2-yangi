@@ -47,6 +47,9 @@ export type Staff = {
   // notices go. Telegram when linked (free), otherwise SMS to `phone`.
   phone?: string;
   attendance_notify?: boolean;
+  // May ask the bot in private chat about prices and their own tasks,
+  // attendance, KPI and sales (meta-webhook/staffbot.js). Admins always may.
+  bot_ask?: boolean;
   telegram_chat_id?: number | null;
   telegram_linked_at?: string | null;
 };
