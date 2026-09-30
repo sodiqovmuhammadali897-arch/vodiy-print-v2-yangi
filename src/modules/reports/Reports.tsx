@@ -29,6 +29,7 @@ import { getOne, listAll } from "../../lib/firestoreDb";
 import type { AttendanceRecord, Brand, Customer, Expense, KpiSettings, Manager, Order, OrderCost, OrderProduct, PersonalSchedule, WorkSchedule } from "../../lib/types";
 import { buildMarginRows, isSaleOrder, profitBreakdown, summarize } from "../../lib/margin";
 import { canViewMargin } from "../../lib/rolePermissions";
+import { isSale } from "../../lib/salesPeriod";
 import ProfitLines from "../margin/ProfitLines";
 import { Link } from "react-router-dom";
 import { DEFAULT_KPI_WEIGHTS } from "../../lib/types";
@@ -182,7 +183,7 @@ export default function Reports() {
     if (!isManagerMode || !myManager) return [];
     const name = myManager.name.trim().toLowerCase();
     return orders.filter(
-      (o) => o.status !== "cancelled" && (o.manager_name || "").trim().toLowerCase() === name,
+      (o) => isSale(o) && (o.manager_name || "").trim().toLowerCase() === name,
     );
   }, [orders, isManagerMode, myManager]);
   const myOrdersInRange = useMemo(
@@ -224,7 +225,7 @@ export default function Reports() {
     () =>
       orders.filter(
         (o) =>
-          o.status !== "cancelled" &&
+          isSale(o) &&
           inRange(o.order_date || o.created_at, range) &&
           (!managerFilter || o.manager_name === managerFilter),
       ),
@@ -235,7 +236,7 @@ export default function Reports() {
     () =>
       orders.filter(
         (o) =>
-          o.status !== "cancelled" &&
+          isSale(o) &&
           inRange(o.order_date || o.created_at, prevRange) &&
           (!managerFilter || o.manager_name === managerFilter),
       ),

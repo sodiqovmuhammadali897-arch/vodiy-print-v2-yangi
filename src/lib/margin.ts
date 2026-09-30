@@ -40,7 +40,7 @@ export type MarginRow = {
   margin: number | null; // %
 };
 
-export const isSaleOrder = (o: Order) => o.status !== "cancelled" && !o.is_draft;
+export { isSale as isSaleOrder } from "./salesPeriod";
 
 export function buildMarginRows(
   orders: Order[],
@@ -60,7 +60,8 @@ export function buildMarginRows(
     const total = Number(order.total_amount || 0);
     const linesSum = own.reduce((s, l) => s + Number(l.total || 0), 0);
     const scale = linesSum > 0 ? total / linesSum : 0;
-    const items: { key: string; legacyKey: string | null; line: OrderProduct | null; name: string; quantity: number; unitPrice: number; revenue: number }[] = own.length
+    // Lines that sum to nothing can't carry the order total: one row then.
+    const items: { key: string; legacyKey: string | null; line: OrderProduct | null; name: string; quantity: number; unitPrice: number; revenue: number }[] = own.length && linesSum > 0
       ? own.map((l, i) => ({
           key: lineCostKey(order.id, i),
           legacyKey: l.id,

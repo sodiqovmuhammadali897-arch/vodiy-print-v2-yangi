@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Target, TrendingUp, TrendingDown, Wallet, PackageOpen, ClipboardList, CircleCheck as CheckCircle2, Hourglass, Info } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
-import { computeWorkdayStats, monthRange, startOfDay } from "../../lib/workdays";
+import { computeWorkdayStats, startOfDay } from "../../lib/workdays";
+import { currentMonth, isSale, saleDay } from "../../lib/salesPeriod";
 import { useAuth } from "../../lib/AuthContext";
 import { ownOrdersOnly } from "../../lib/orderScope";
 import type { Expense, Holiday, Manager, MonthlyPlan, Order, OrderPayment } from "../../lib/types";
@@ -100,7 +101,6 @@ export default function Dashboard() {
 
   const { stats, recentOrders } = useMemo(() => {
     const today = new Date();
-    const { start, end } = monthRange(today);
     const dayStart = startOfDay(today).toISOString();
     const todayDateStr = dayStart.slice(0, 10);
     const name = manager ? manager.name.trim().toLowerCase() : "";
@@ -117,7 +117,9 @@ export default function Dashboard() {
       .reduce((s, p) => s + Number(p.amount || 0), 0);
     const todayExpense = expenses.filter((e) => e.date === todayDateStr).reduce((s, e) => s + Number(e.amount || 0), 0);
     const open = (o: Order) => o.status !== "delivered" && o.status !== "closed" && o.status !== "cancelled";
-    const monthOrders = scoped.filter((o) => o.created_at >= start && o.created_at < end && o.status !== "cancelled");
+    // Same rule as Hisobot and Marja: the order's Sana, no cancelled or drafts.
+    const month = currentMonth(today);
+    const monthOrders = scoped.filter((o) => isSale(o) && saleDay(o).startsWith(month));
 
     const next: Stats = {
       plan: manager ? Number(manager.monthly_plan) || 0 : companyPlan,

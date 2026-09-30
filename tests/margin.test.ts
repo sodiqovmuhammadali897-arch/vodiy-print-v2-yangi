@@ -103,3 +103,18 @@ describe("large discounts", () => {
     expect(largeDiscountOrders([order("o1", 2_380_000)], [line("a", "o1", 500, 9500, { discount: 2_370_000 })])[0].percent).toBeCloseTo(49.9, 0);
   });
 });
+
+describe("sales period", () => {
+  it("counts an order on its Sana, and drops cancelled and drafts", async () => {
+    const { saleDay, isSale } = await import("../src/lib/salesPeriod");
+    expect(saleDay({ order_date: "2026-08-30", created_at: "2026-09-02T05:00:00Z" } as Order)).toBe("2026-08-30");
+    expect(saleDay({ order_date: null, created_at: "2026-08-31T20:30:00Z" } as Order)).toBe("2026-09-01");
+    expect(isSale({ status: "new", is_draft: true } as Order)).toBe(false);
+    expect(isSale({ status: "cancelled", is_draft: false } as Order)).toBe(false);
+  });
+  it("keeps the first day of a range for plain dates", async () => {
+    const { inRange } = await import("../src/lib/dateRange");
+    expect(inRange("2026-09-01", { from: "2026-09-01", to: "2026-09-30" } as never)).toBe(true);
+    expect(inRange("2026-09-30T20:00:00Z", { from: "2026-09-01", to: "2026-09-30" } as never)).toBe(false); // Oct 1 in Tashkent
+  });
+});

@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { UserRound, Users } from "lucide-react";
 import { listAll } from "../../lib/firestoreDb";
 import { formatMoney, formatMoneyShort, initialsOf } from "../../lib/format";
-import { monthRange } from "../../lib/workdays";
-import type { Manager } from "../../lib/types";
+import { currentMonth, isSale, saleDay } from "../../lib/salesPeriod";
+import type { Manager, Order } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 
 type Row = {
@@ -20,17 +20,13 @@ export default function ManagerStatsPanel() {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const { start, end } = monthRange(new Date());
+      const month = currentMonth();
       const [managers, allOrders] = await Promise.all([
         listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }),
-        listAll<{ manager_name: string; total_amount: number; created_at: string; status: string }>(
-          "orders",
-        ),
+        listAll<Order>("orders"),
       ]);
       if (cancelled) return;
-      const orders = allOrders.filter(
-        (o) => o.created_at >= start && o.created_at < end && o.status !== "cancelled",
-      );
+      const orders = allOrders.filter((o) => isSale(o) && saleDay(o).startsWith(month));
       const totals = new Map<string, number>();
       for (const o of orders) {
         const key = (o.manager_name || "").trim();

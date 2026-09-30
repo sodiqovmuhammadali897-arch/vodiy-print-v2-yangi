@@ -45,10 +45,14 @@ export const rangeBounds = (range: DateRange): { fromISO: string; toISO: string 
   return { fromISO, toISO: toDate.toISOString() };
 };
 
+// A plain date ("2026-09-01", like an order's Sana) is compared as a day —
+// comparing it to a timestamp bound used to drop the range's first day —
+// and a timestamp by its Tashkent day.
 export const inRange = (isoDateOrDatetime: string | null | undefined, range: DateRange): boolean => {
   if (!isoDateOrDatetime) return false;
-  const { fromISO, toISO } = rangeBounds(range);
-  return isoDateOrDatetime >= fromISO && isoDateOrDatetime < toISO;
+  const v = String(isoDateOrDatetime);
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : new Date(Date.parse(v) + 5 * 3600 * 1000).toISOString().slice(0, 10);
+  return day >= range.from && day <= range.to;
 };
 
 // Returns the immediately preceding period of equal length, for

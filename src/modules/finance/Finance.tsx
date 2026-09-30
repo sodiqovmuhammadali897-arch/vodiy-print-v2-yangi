@@ -25,6 +25,7 @@ import type {
 } from "../../lib/types";
 import { buildMarginRows, isSaleOrder, profitBreakdown, summarize } from "../../lib/margin";
 import { canViewMargin } from "../../lib/rolePermissions";
+import { isSale } from "../../lib/salesPeriod";
 import { Link } from "react-router-dom";
 import ProfitLines from "../margin/ProfitLines";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
@@ -114,7 +115,7 @@ export default function Finance() {
   // define revenue), not just cash already collected — an order counts the
   // moment it's placed, even if it's still unpaid (see Umumiy qarzdorlik).
   const income = ordersInRange
-    .filter((o) => o.status !== "cancelled")
+    .filter(isSale)
     .reduce((s, o) => s + Number(o.total_amount || 0), 0);
   const collected = paymentsInRange.reduce((s, p) => s + Number(p.amount || 0), 0);
   const expenseTotal = expensesInRange.reduce((s, e) => s + Number(e.amount || 0), 0);

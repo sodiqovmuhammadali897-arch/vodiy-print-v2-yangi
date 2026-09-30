@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, Coins, Download, Lock, Percent, Search, TrendingUp, Wallet, Wand2 } from "lucide-react";
 import { deleteOne, insertOne, listAll, listWhere, updateOne, upsertOne } from "../../lib/firestoreDb";
 import { PAYMENT_TYPES } from "../../lib/orderConstants";
+import { saleDay } from "../../lib/salesPeriod";
 import { useAuth } from "../../lib/AuthContext";
 import { canViewMargin } from "../../lib/rolePermissions";
 import { exportCsv } from "../../lib/exportCsv";
@@ -40,7 +41,7 @@ const parseNum = (s: string): number | null => {
   const n = Number(t);
   return Number.isFinite(n) && n >= 0 ? n : NaN;
 };
-const orderDay = (o: Order) => String(o.order_date || o.created_at || "").slice(0, 10);
+const orderDay = (o: Order) => saleDay(o);
 const marginChip = (m: number | null) =>
   m === null ? "text-ink-400" : m < 15 ? "bg-rose-50 text-rose-700" : m < 25 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700";
 
