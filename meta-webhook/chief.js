@@ -160,8 +160,20 @@ const create = (db, { route = null, analytics } = {}) => {
   const marginOf = (data, from, to) => {
     const ids = new Set(data.orders.filter((o) => orderDay(o) >= from && orderDay(o) <= to).map((o) => o.id));
     const cost = unitCostFn(data);
-    // Costs typed on the Marja page win; the catalog cost fills the rest.
-    const typed = new Map((data.orderCosts || []).map((c) => [c.id, Number(c.total_cost) || 0]));
+    // Costs typed on the Marja page win (keyed by order + the line's place,
+    // older ones by line id — see src/lib/margin.ts); the catalog fills the rest.
+    const typedDocs = new Map((data.orderCosts || []).map((c) => [c.id, c]));
+    const byOrder = new Map();
+    for (const l of data.lines) if (ids.has(l.order_id)) byOrder.set(l.order_id, [...(byOrder.get(l.order_id) || []), l]);
+    const typed = new Map();
+    for (const [orderId, ls] of byOrder) {
+      ls.sort((a, b) => (a.position || 0) - (b.position || 0)).forEach((l, i) => {
+        const c = typedDocs.get(`${orderId}_L${i}`);
+        const ok = c && (!c.product_name || norm(c.product_name) === norm(l.product_name));
+        const hit = ok ? c : typedDocs.get(l.id);
+        if (hit) typed.set(l.id, Number(hit.total_cost) || 0);
+      });
+    }
     let known = 0;
     let knownCost = 0;
     let all = 0;

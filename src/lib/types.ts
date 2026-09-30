@@ -245,14 +245,16 @@ export type Product = {
 // to anyone with products.view. Cost tiers mirror price_tiers by min_qty,
 // since the supplier's unit cost usually drops with volume too.
 // What an order line cost us (Marja page), admin-only like ProductCost.
-// id = the order_products id, or "order_<orderId>" for an order without
-// lines. total_cost is authoritative; unit_cost = total_cost / quantity.
+// id = "<orderId>_L<n>" (the line's place in the order — lib/margin.ts),
+// or "order_<orderId>" for an order without lines; older ones used the
+// line id. total_cost is authoritative; unit_cost = total_cost / quantity.
 export type OrderCost = {
   id: string;
   order_id: string;
   unit_cost: number;
   total_cost: number;
   source: "manual" | "catalog";
+  product_name?: string; // the line's product when the cost was typed
   updated_at?: string;
   updated_by?: string;
 };

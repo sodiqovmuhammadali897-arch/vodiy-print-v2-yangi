@@ -14,9 +14,16 @@ export const COST_EXPENSE_CATEGORIES = [VENDOR_EXPENSE_CATEGORY, "Xomashyo"];
 
 // An order with no product lines still gets one row (its own key).
 export const orderOnlyKey = (orderId: string) => `order_${orderId}`;
+// Editing an order rewrites its lines with new ids, so a cost is keyed by
+// the order and the line's place in it, and remembers the product name: a
+// different product in that place asks for the cost again.
+export const lineCostKey = (orderId: string, index: number) => `${orderId}_L${index}`;
+const sameProduct = (a: string | undefined, b: string | undefined) =>
+  !a || String(a).trim().toLowerCase() === String(b || "").trim().toLowerCase();
 
 export type MarginRow = {
-  key: string; // order_costs doc id: the order line id, or orderOnlyKey()
+  key: string; // order_costs doc id: lineCostKey(), or orderOnlyKey()
+  legacyKey: string | null; // a cost saved under the line id (before lineCostKey)
   order: Order;
   line: OrderProduct | null;
   name: string;
@@ -52,18 +59,22 @@ export function buildMarginRows(
     const total = Number(order.total_amount || 0);
     const linesSum = own.reduce((s, l) => s + Number(l.total || 0), 0);
     const scale = linesSum > 0 ? total / linesSum : 0;
-    const items: { key: string; line: OrderProduct | null; name: string; quantity: number; unitPrice: number; revenue: number }[] = own.length
-      ? own.map((l) => ({
-          key: l.id,
+    const items: { key: string; legacyKey: string | null; line: OrderProduct | null; name: string; quantity: number; unitPrice: number; revenue: number }[] = own.length
+      ? own.map((l, i) => ({
+          key: lineCostKey(order.id, i),
+          legacyKey: l.id,
           line: l,
           name: [l.product_name, l.variant, l.size].filter(Boolean).join(", ") || l.category || "Mahsulot",
           quantity: Number(l.quantity || 0),
           unitPrice: Number(l.unit_price || 0),
           revenue: Number(l.total || 0) * scale,
         }))
-      : [{ key: orderOnlyKey(order.id), line: null, name: order.title || "Buyurtma", quantity: 1, unitPrice: total, revenue: total }];
+      : [{ key: orderOnlyKey(order.id), legacyKey: null, line: null, name: order.title || "Buyurtma", quantity: 1, unitPrice: total, revenue: total }];
     for (const it of items) {
-      const saved = costs.get(it.key);
+      const byPlace = costs.get(it.key);
+      const saved =
+        (byPlace && (!it.line || sameProduct(byPlace.product_name, it.line.product_name)) ? byPlace : undefined) ||
+        (it.legacyKey ? costs.get(it.legacyKey) : undefined);
       const cost = saved ? Number(saved.total_cost || 0) : null;
       const tiers = it.line ? catalogCost(it.line) : null;
       rows.push({

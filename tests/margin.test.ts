@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMarginRows, catalogCostLookup, orderOnlyKey, profitBreakdown, summarize } from "../src/lib/margin";
+import { buildMarginRows, catalogCostLookup, lineCostKey, orderOnlyKey, profitBreakdown, summarize } from "../src/lib/margin";
 import type { Order, OrderCost, OrderProduct } from "../src/lib/types";
 
 const order = (id: string, total: number, extra: Partial<Order> = {}) => ({ id, total_amount: total, status: "new", title: `Buyurtma ${id}`, ...extra }) as Order;
@@ -22,6 +22,16 @@ describe("buildMarginRows", () => {
     expect(rows[0].margin).toBeCloseTo(37.89, 1);
     const empty = buildMarginRows([order("o1", 1_140_000)], [line("a", "o1", 6000, 190)], new Map());
     expect(empty[0].profit).toBeNull();
+  });
+
+  it("keeps a cost when the order is edited and its lines get new ids", () => {
+    const saved = new Map([[lineCostKey("o1", 1), { id: lineCostKey("o1", 1), order_id: "o1", unit_cost: 0, total_cost: 300_000, source: "manual", product_name: "Vizitka" } as OrderCost]]);
+    const lines = [line("new1", "o1", 1000, 1000), line("new2", "o1", 500, 1000, { product_name: "Vizitka", position: 1 })];
+    const rows = buildMarginRows([order("o1", 1_500_000)], lines, saved);
+    expect(rows.map((r) => r.cost)).toEqual([null, 300_000]);
+    // another product now in that place: ask again
+    const swapped = [line("x", "o1", 1000, 1000), line("y", "o1", 500, 1000, { product_name: "Stiker", position: 1 })];
+    expect(buildMarginRows([order("o1", 1_500_000)], swapped, saved)[1].cost).toBeNull();
   });
 
   it("gives an order without lines one row of its own", () => {

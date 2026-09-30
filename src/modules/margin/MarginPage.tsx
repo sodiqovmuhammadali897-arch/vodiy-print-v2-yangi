@@ -106,11 +106,15 @@ export default function MarginPage() {
   const save = async (r: MarginRow, total: number | null, source: OrderCost["source"] = "manual") => {
     setSaving((s) => new Set(s).add(r.key));
     try {
+      // A cost saved under the old line id moves to the order+place key.
+      const legacy = r.legacyKey && costs.has(r.legacyKey) ? r.legacyKey : null;
       if (total === null) {
         await deleteOne("order_costs", r.key);
+        if (legacy) await deleteOne("order_costs", legacy);
         setCosts((m) => {
           const next = new Map(m);
           next.delete(r.key);
+          if (legacy) next.delete(legacy);
           return next;
         });
       } else {
@@ -120,11 +124,17 @@ export default function MarginPage() {
           total_cost: Math.round(total),
           unit_cost: r.quantity > 0 ? total / r.quantity : total,
           source,
+          product_name: r.line?.product_name || r.name,
           updated_by: auth.user?.email || "",
           updated_at: new Date().toISOString(),
         };
         await upsertOne("order_costs", r.key, doc);
-        setCosts((m) => new Map(m).set(r.key, doc));
+        if (legacy) await deleteOne("order_costs", legacy);
+        setCosts((m) => {
+          const next = new Map(m).set(r.key, doc);
+          if (legacy) next.delete(legacy);
+          return next;
+        });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Saqlab bo'lmadi");
@@ -347,7 +357,18 @@ export default function MarginPage() {
                         </td>
                         <td className="table-td text-right">{num(r.quantity)}</td>
                         <td className="table-td text-right">{num(r.unitPrice, 2)}</td>
-                        <td className="table-td text-right">{num(Math.round(r.revenue))}</td>
+                        <td className="table-td text-right">
+                          {num(Math.round(r.revenue))}
+                          {Math.abs(r.quantity * r.unitPrice - r.revenue) >= 1 && r.line && (
+                            <div
+                              className="text-[11px] text-ink-400"
+                              title="Summa — mijoz haqiqatda to'laydigan pul: buyurtma summasi (chegirmadan keyin) qatorlarga bo'lingan"
+                            >
+                              <span className="line-through">{num(Math.round(r.quantity * r.unitPrice))}</span>{" "}
+                              {r.revenue < r.quantity * r.unitPrice ? `chegirma −${num(Math.round(r.quantity * r.unitPrice - r.revenue))}` : "buyurtma summasi bo'yicha"}
+                            </div>
+                          )}
+                        </td>
                         <td className="table-td text-right">
                           <CostInput
                             value={r.unitCost}
@@ -454,7 +475,8 @@ export default function MarginPage() {
       </div>
 
       <p className="text-xs text-ink-500">
-        Tannarxni dona uchun yoki jami summa bilan yozing — biri yozilsa, ikkinchisi hisoblanadi; Enter yoki boshqa joyni bosganda o'zi saqlanadi, o'chirsangiz
+        "Summa" — mijoz haqiqatda to'laydigan pul: buyurtmaning yakuniy summasi (chegirmadan keyin) qatorlarga bo'lingan; soni × narxdan farq qilsa, tagida
+        ko'rsatiladi. Tannarxni dona uchun yoki jami summa bilan yozing — biri yozilsa, ikkinchisi hisoblanadi; Enter yoki boshqa joyni bosganda o'zi saqlanadi, o'chirsangiz
         tannarx olib tashlanadi. Buyurtmadagi umumiy chegirma qatorlarga summasiga qarab bo'linadi. Katalog tannarxi keyin o'zgarsa, kiritilganlari o'zgarmaydi.
       </p>
     </div>
