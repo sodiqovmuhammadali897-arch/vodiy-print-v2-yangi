@@ -43,6 +43,7 @@ import { formatDate, formatMoneyShort, initialsOf } from "../../lib/format";
 import { remainingTimeLabel } from "../../lib/remainingTime";
 import { useAuth } from "../../lib/AuthContext";
 import { useOrderScope } from "../../lib/orderScope";
+import { isOrderNumber, orderNumberQuery, textMatches } from "../../lib/search";
 
 // A quick at-a-glance production indicator for managers who don't have
 // access to Ishlab chiqarish/Pechatnik — the "worst" (least progressed)
@@ -239,8 +240,11 @@ export default function Orders() {
   );
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
+    const orderNo = orderNumberQuery(q);
     return rows.filter((r) => {
+      // Looking an order up by its number finds it even when it's closed.
+      if (orderNo && isOrderNumber(r.order_number, orderNo)) return true;
       if (statusFilter !== "all") {
         if (r.status !== statusFilter) return false;
       } else if (!showClosed && ORDER_CLOSED_STATUSES.includes(r.status)) {
@@ -255,7 +259,7 @@ export default function Orders() {
       if (dateFrom && (!d || d.slice(0, 10) < dateFrom)) return false;
       if (dateTo && (!d || d.slice(0, 10) > dateTo)) return false;
       if (!q) return true;
-      return [
+      return textMatches(q, [
         r.order_number,
         r.title,
         r.manager_name,
@@ -263,14 +267,11 @@ export default function Orders() {
         r.customer?.customer_number,
         r.customer?.first_name,
         r.customer?.last_name,
+        `${r.customer?.first_name || ""} ${r.customer?.last_name || ""}`,
         r.customer?.company,
         r.customer?.phone,
         r.productPreview,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
+      ]);
     });
   }, [rows, search, statusFilter, showClosed, managerFilter, categoryFilter, dateFrom, dateTo, productsByOrder]);
 

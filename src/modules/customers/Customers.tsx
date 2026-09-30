@@ -12,6 +12,7 @@ import {
   Landmark,
 } from "lucide-react";
 import { listAll } from "../../lib/firestoreDb";
+import { isOrderNumber, orderNumberQuery, textMatches } from "../../lib/search";
 import type { Brand, Customer, Manager, Order, OrderFile, OrderPayment } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
 import StatCard from "../../components/ui/StatCard";
@@ -126,19 +127,30 @@ export default function Customers() {
     [customers],
   );
 
+  // Every order number of each customer (cancelled ones too), so a customer
+  // can be found by typing their order's number.
+  const orderNumbersByCustomer = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const o of orders) {
+      if (!o.customer_id || !o.order_number) continue;
+      map.set(o.customer_id, [...(map.get(o.customer_id) || []), o.order_number]);
+    }
+    return map;
+  }, [orders]);
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
+    const orderNo = orderNumberQuery(q);
     return rows.filter((c) => {
       if (industryFilter && c.industry !== industryFilter) return false;
       if (typeFilter && c.customer_type !== typeFilter) return false;
       if (managerFilter && c.manager_name !== managerFilter) return false;
       if (!q) return true;
-      return [c.first_name, c.last_name, c.phone, c.company, c.telegram]
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
+      const numbers = orderNumbersByCustomer.get(c.id) || [];
+      if (orderNo && numbers.some((n) => isOrderNumber(n, orderNo))) return true;
+      return textMatches(q, [c.first_name, c.last_name, `${c.first_name || ""} ${c.last_name || ""}`, c.phone, c.company, c.telegram, c.customer_number, ...numbers]);
     });
-  }, [rows, search, industryFilter, typeFilter, managerFilter]);
+  }, [rows, search, industryFilter, typeFilter, managerFilter, orderNumbersByCustomer]);
 
   useEffect(() => {
     setPage(1);
@@ -220,7 +232,7 @@ export default function Customers() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Mijoz nomi yoki telefon..."
+            placeholder="Mijoz nomi, telefon yoki buyurtma raqami (VP-126)..."
             className="w-full min-w-[160px] bg-transparent text-sm outline-none placeholder-ink-400"
           />
         </div>
