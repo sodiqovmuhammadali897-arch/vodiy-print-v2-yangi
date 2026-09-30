@@ -621,7 +621,7 @@ const create = (db, { route = null, analytics } = {}) => {
       `${SYSTEM}\nHozir rahbar savol berdi yoki topshiriq berdi. Holat va xotiraga tayanib, aniq javob ber: avval xulosa, keyin tafsilot va tavsiya. Oddiy matn.`,
       JSON.stringify({ holat: snap, xotira: memoryOf(data), savol: text, oldingi_xabar: msg.reply_to_message?.text || "" }),
       null,
-      8000,
+      16000,
     );
     await reply(out || "Javob topilmadi.");
     await emitEvent(db, { agent: "chief", kind: "report", text: clip(out, 200), bubble: clip(out, 80), source: "telegram" });

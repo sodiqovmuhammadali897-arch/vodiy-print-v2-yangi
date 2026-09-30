@@ -474,10 +474,23 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
       await say("Pastdagi tugmalar bilan kim javob berishini tanlaysiz: Hisobchi, Marketolog yoki Bosh agent. Hozir — 💼 Hisobchi.");
     }
     const mode = /^\/(hisobot|raqobat)\b/i.test(text) ? "mkt" : /^\/brif\b/i.test(text) ? "chief" : (state && state.mode) || "hisobchi";
-    if (mode === "mkt" && marketing) return marketing.handleMessage(msg, text);
-    if (mode === "chief" && chief) return chief.handleMessage(msg, text);
-    if (text.startsWith("/")) return say("Noma'lum buyruq. Savolni oddiy matn bilan yozing.");
-    return handleQuestion(db, { chatId, replyTo: msg.message_id, text, context: msg.reply_to_message?.text || "", source: "private" });
+    if (text.startsWith("/") && mode === "hisobchi") return say("Noma'lum buyruq. Savolni oddiy matn bilan yozing.");
+    // The Marketolog and the Bosh agent think for a minute or two: say so,
+    // and keep "typing…" on until the answer is sent.
+    if (mode !== "hisobchi" && !text.startsWith("/")) {
+      await telegram("sendMessage", { chat_id: chatId, text: mode === "chief" ? "⏳ Bosh agent o'ylayapti — 1–2 daqiqa…" : "⏳ Marketolog tayyorlayapti — bir daqiqa…" });
+    }
+    const typing = setInterval(() => telegram("sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => undefined), 4500);
+    try {
+      if (mode === "mkt" && marketing) return await marketing.handleMessage(msg, text);
+      if (mode === "chief" && chief) return await chief.handleMessage(msg, text);
+      return await handleQuestion(db, { chatId, replyTo: msg.message_id, text, context: msg.reply_to_message?.text || "", source: "private" });
+    } catch (err) {
+      console.error(`Admin private ${mode} failed`, err);
+      return say(`Kechirasiz, ${AGENTS[mode]} javob bera olmadi: ${clip(err.message || String(err), 300)}`);
+    } finally {
+      clearInterval(typing);
+    }
   };
   // Employees' own questions in private chat (staffbot.js).
   const staffbot = require("./staffbot").create(db, { priceTools: (ctx) => createFileTools(db, ctx) });
