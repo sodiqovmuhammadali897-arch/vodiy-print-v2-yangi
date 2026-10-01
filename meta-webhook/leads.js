@@ -66,6 +66,11 @@ const blankLead = (now) => ({
   updated_at: now,
 });
 
+// ERP leads are off while sales run in amoCRM (Sotuv bo'limi shows the
+// amoCRM analysis only): the Meta form webhook, the Instagram agent and
+// Mois Zvonki calls create no ERP leads. ERP_LEADS=on brings them back.
+const ERP_LEADS_ON = process.env.ERP_LEADS === "on";
+
 // Creates a lead with the next LID number and registers its source so it
 // shows up in the Sotuv bo'limi filters. Returns { id, lead_number }.
 const createLead = async (db, fields, sourceId = fields.source ? slugify(fields.source) : "") => {
@@ -78,4 +83,4 @@ const createLead = async (db, fields, sourceId = fields.source ? slugify(fields.
   return { id: ref.id, lead_number };
 };
 
-module.exports = { slugify, normalizePhone, nextLeadNumber, findByPhone, blankLead, createLead };
+module.exports = { ERP_LEADS_ON, slugify, normalizePhone, nextLeadNumber, findByPhone, blankLead, createLead };

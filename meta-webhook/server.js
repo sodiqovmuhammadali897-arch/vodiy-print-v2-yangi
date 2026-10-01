@@ -70,7 +70,7 @@ const tasks = process.env.TELEGRAM_BOT_TOKEN ? require("./tasks").create(db) : n
 // amoCRM, read only — see amocrm.js; feeds the "amoCRM tahlil" tab.
 const amocrm = require("./amocrm").create(db);
 const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks);
-const { slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
+const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
 // same Meta callback below (object "instagram").
 const instagram = require("./instagram").create(db, {
@@ -103,6 +103,10 @@ const graphName = async (id) => {
 };
 
 const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
+  if (!ERP_LEADS_ON) {
+    console.log(`Meta lead ${leadgenId} skipped: ERP leads are off (sales run in amoCRM)`);
+    return;
+  }
   const res = await fetch(
     `https://graph.facebook.com/${GRAPH_VERSION}/${leadgenId}?access_token=${PAGE_ACCESS_TOKEN}`,
   );
@@ -249,7 +253,7 @@ const handleCallFinish = async (event) => {
   // No existing lead/customer on an incoming call — this is a fresh
   // enquiry over the phone, so it becomes a lead like any other channel
   // (a call should never go untracked, same rule as the Meta leads).
-  if (!lead && !customer && isIncoming) {
+  if (ERP_LEADS_ON && !lead && !customer && isIncoming) {
     lead = await createLead(
       db,
       { full_name: clientName || "Noma'lum (qo'ng'iroq)", phone: clientNumber || "", source: "Telefon qo'ng'irog'i" },

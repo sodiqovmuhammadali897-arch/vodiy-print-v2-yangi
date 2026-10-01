@@ -361,3 +361,9 @@ server matches an amoCRM user to a staff member by `staff.amo_user_id`
 Env: `AMO_SUBDOMAIN` (`vodiyprint` or `vodiyprint.amocrm.ru`) and
 `AMO_TOKEN` (long-lived token of a private integration). Off until both are
 set.
+
+ERP leads are off while sales run in amoCRM (`ERP_LEADS_ON` in `leads.js`):
+the Meta form webhook, the Instagram agent and Mois Zvonki calls create no
+ERP leads. The Instagram agent still thanks the customer and sends the
+number to the managers' topic. Set `ERP_LEADS=on` in the server env to bring
+ERP leads back.

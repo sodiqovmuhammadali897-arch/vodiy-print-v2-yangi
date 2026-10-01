@@ -17,7 +17,7 @@
 const { telegram } = require("./telegram");
 const { staffFromRequest } = require("./auth");
 const { emitEvent, clip } = require("./shared");
-const { findByPhone, createLead } = require("./leads");
+const { ERP_LEADS_ON, findByPhone, createLead } = require("./leads");
 
 const DEFAULT_TEXTS = {
   greeting:
@@ -162,9 +162,11 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     const display = name || convo.name || (convo.username ? `@${convo.username}` : "Instagram mijoz");
     const source = convo.via === "comment" ? "Instagram izoh" : "Instagram Direct";
     const history = (convo.texts || []).map((t) => `— ${t}`).join("\n");
-    let lead = await findByPhone(db, "leads", phone);
+    let lead = ERP_LEADS_ON ? await findByPhone(db, "leads", phone) : null;
     let isNew = false;
-    if (lead) {
+    if (!ERP_LEADS_ON) {
+      // No ERP lead: the managers get the number in Telegram.
+    } else if (lead) {
       await db.collection("lead_activities").add({
         lead_id: lead.id,
         text: `📸 ${source} orqali yana yozdi (${who(convo)})${history ? `:\n${history}` : ""}`,
@@ -204,8 +206,9 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     await convoRef(igsid).set(
       {
         state: silent ? "human" : "done",
-        lead_id: lead.id,
-        lead_number: lead.lead_number || "",
+        lead_id: lead ? lead.id : "",
+        lead_number: lead ? lead.lead_number || "" : "",
+        captured: true,
         phone,
         name: name || convo.name || "",
         ...(silent ? {} : { last_bot_text: reply }),
@@ -215,11 +218,11 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     );
     await notify(
       [
-        isNew ? `✅ Yangi lid ${lead.lead_number} — ${source}` : `🔁 ${source}: mavjud lid ${lead.lead_number || ""} qayta yozdi`,
+        !lead ? `📸 ${source}: mijoz raqam qoldirdi` : isNew ? `✅ Yangi lid ${lead.lead_number} — ${source}` : `🔁 ${source}: mavjud lid ${lead.lead_number || ""} qayta yozdi`,
         `👤 ${display}${convo.username ? ` (@${convo.username})` : ""}`,
         `📞 ${phone}`,
         history ? `💬 ${clip(history.replace(/\n/g, " "), 300)}` : "",
-        LEADS_URL,
+        lead ? LEADS_URL : "",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -227,12 +230,12 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     await emitEvent(db, {
       agent: "ig",
       kind: "report",
-      text: `${isNew ? "Yangi lid" : "Qayta murojaat"}: ${display}, ${phone}`,
-      bubble: isNew ? `Yangi lid: ${clip(display, 24)} 📞` : "Mavjud mijoz yozdi",
+      text: `${!lead ? "Raqam qoldirdi" : isNew ? "Yangi lid" : "Qayta murojaat"}: ${display}, ${phone}`,
+      bubble: !lead ? `Raqam qoldirdi: ${clip(display, 24)} 📞` : isNew ? `Yangi lid: ${clip(display, 24)} 📞` : "Mavjud mijoz yozdi",
       visit: isNew ? "sales" : null,
       source: "instagram",
     });
-    console.log(`Instagram lead ${isNew ? "created" : "touched"}: ${lead.lead_number || lead.id} (${who(convo)}, ${phone})`);
+    console.log(`Instagram ${!lead ? "phone captured" : isNew ? "lead created" : "lead touched"}: ${lead ? lead.lead_number || lead.id : "-"} (${who(convo)}, ${phone})`);
   };
 
   const onDirect = async (igsid, text) => {
@@ -267,11 +270,11 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     if (convo.state === "human") {
       // A manager is talking to them: no replies, but a phone they leave
       // still becomes a lead so it isn't lost in the chat.
-      if (found.phone && !convo.lead_id) return capture(igsid, convo, found.phone, nameNow(), cfg, true);
+      if (found.phone && !convo.lead_id && !convo.captured) return capture(igsid, convo, found.phone, nameNow(), cfg, true);
       return;
     }
     if (convo.state === "done") {
-      await notify(`💬 ${who(convo)} (${convo.lead_number || "lid"}) yana yozdi:\n${clip(text || "(rasm/fayl)", 500)}\n\nJavobni Instagram'dan yozing.`);
+      await notify(`💬 ${who(convo)} ${convo.lead_number ? `(${convo.lead_number}) ` : ""}yana yozdi:\n${clip(text || "(rasm/fayl)", 500)}\n\nJavobni Instagram'dan yozing.`);
       return;
     }
     if (!cfg.enabled) return;
