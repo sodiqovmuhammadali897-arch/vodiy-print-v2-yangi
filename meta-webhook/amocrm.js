@@ -178,6 +178,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   const sources = new Map();
   const leads = new Map();
   const calls = new Map();
+  let unsorted = new Map(); // lead id → lead, still in "Неразобранное"
   let leadsSince = 0;
   let notesSince = 0;
   let metaAt = 0;
@@ -198,6 +199,8 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     for (let attempt = 0; attempt < 3; attempt++) {
       const res = await fetchImpl(`https://${host}/api/v4/${path}${qs.toString() ? `?${qs}` : ""}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        // A hung request would stop every later sync (one runs at a time).
+        signal: AbortSignal.timeout(30 * 1000),
       });
       if (res.status === 204) return null;
       if (res.status === 429) {
@@ -269,6 +272,38 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     return rows.length;
   };
 
+  // Incoming requests (chats, calls, forms) wait in "Неразобранное" until a
+  // manager accepts them; they are leads too. Rebuilt every time, since an
+  // accepted one moves to the normal list and a declined one disappears.
+  const pullUnsorted = async () => {
+    let rows = [];
+    try {
+      rows = await pageAll("leads/unsorted", {}, "unsorted");
+    } catch (err) {
+      log.error("amoCRM unsorted failed", err.message || err);
+      return 0;
+    }
+    const next = new Map();
+    for (const u of rows) {
+      const lead = ((u._embedded && u._embedded.leads) || [])[0];
+      const id = Number((lead && lead.id) || 0) || `u${u.uid}`;
+      next.set(id, {
+        id,
+        created: Number(u.created_at || 0) * 1000,
+        updated: Number(u.created_at || 0) * 1000,
+        closed: null,
+        status: -1,
+        pipeline: Number(u.pipeline_id || 0),
+        user: 0,
+        price: 0,
+        loss: null,
+        source: u.source_name || u.category || "Noma'lum",
+      });
+    }
+    unsorted = next;
+    return rows.length;
+  };
+
   const pullCalls = async (since) => {
     let n = 0;
     for (const entity of ["leads", "contacts"]) {
@@ -285,7 +320,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   const writeStats = async (now) => {
     const cur = monthOf(now);
     const months = [cur, prevMonth(cur)];
-    const leadList = [...leads.values()];
+    const leadList = [...leads.values(), ...[...unsorted.values()].filter((u) => !leads.has(u.id))];
     const callList = [...calls.values()];
     const batch = db.batch();
     let changed = 0;
@@ -337,10 +372,29 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
         await pullLeads(leadsSince);
         await pullCalls(notesSince);
       }
+      const unsortedCount = await pullUnsorted();
       leadsSince = startedAt;
       notesSince = startedAt;
       const changed = await writeStats(now);
-      await writeStatus({ ok: true, error: null, last_sync: new Date(now).toISOString(), leads: leads.size, calls_loaded: calls.size, poll_minutes: POLL_MS / 60000 });
+      const month = monthOf(now);
+      const all = [...leads.values(), ...[...unsorted.values()].filter((u) => !leads.has(u.id))];
+      const newest = all.reduce((m, l) => Math.max(m, l.created), 0);
+      // What the server holds, so a page showing zeros can say why.
+      await writeStatus({
+        ok: true,
+        error: null,
+        last_sync: new Date(now).toISOString(),
+        poll_minutes: POLL_MS / 60000,
+        leads: leads.size,
+        unsorted: unsortedCount,
+        leads_this_month: all.filter((l) => monthOf(l.created) === month).length,
+        newest_lead_at: newest ? new Date(newest).toISOString() : null,
+        calls_loaded: calls.size,
+        calls_this_month: [...calls.values()].filter((c) => monthOf(c.at) === month).length,
+        stats_docs_written: changed,
+        server_month: month,
+      });
+      log.log(`amoCRM sync: ${leads.size} leads (+${unsortedCount} unsorted), ${calls.size} calls, ${changed} stat docs written`);
       return changed;
     } catch (err) {
       log.error("amoCRM sync failed", err.message || err);

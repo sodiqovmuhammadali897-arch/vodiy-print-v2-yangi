@@ -641,6 +641,14 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
       <p className="flex items-center gap-1.5 text-xs text-ink-400">
         <PhoneCall className="h-3 w-3" /> Faqat o'qiladi: ERP amoCRM ga hech narsa yozmaydi, suhbatlar va telefon raqamlar olinmaydi.
       </p>
+      {isAdmin && status.leads !== undefined && (
+        <p className="text-[11px] text-ink-400">
+          Serverda: {status.leads} lid{status.unsorted ? ` (+${status.unsorted} saralanmagan)` : ""}, shu oyda {status.leads_this_month ?? "—"} · {status.calls_loaded ?? 0} qo'ng'iroq, shu oyda{" "}
+          {status.calls_this_month ?? "—"}
+          {status.newest_lead_at ? ` · eng yangi lid: ${tashkentDay(status.newest_lead_at)}` : ""}
+          {status.server_month && status.server_month !== thisMonth ? ` · server oyi: ${status.server_month}` : ""}
+        </p>
+      )}
     </div>
   );
 }

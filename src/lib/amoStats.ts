@@ -26,6 +26,13 @@ export type AmoStatus = {
   host?: string;
   poll_minutes?: number;
   users?: { id: number; name: string }[];
+  leads?: number;
+  unsorted?: number;
+  leads_this_month?: number;
+  newest_lead_at?: string | null;
+  calls_loaded?: number;
+  calls_this_month?: number;
+  server_month?: string;
   statuses?: Record<string, { name: string; pipeline: string; pipeline_sort: number; sort: number; color: string | null }>;
 };
 
@@ -71,8 +78,11 @@ export function funnelRows(funnel: Record<string, number>, statuses: AmoStatus["
   const pipelines = new Set(Object.keys(funnel).map((k) => statuses[k]?.pipeline).filter(Boolean));
   return Object.entries(funnel)
     .map(([k, value]) => {
-      const s = statuses[k];
-      const name = s ? s.name : `Bosqich ${k.split(":")[1]}`;
+      const [pipelineId, statusId] = k.split(":");
+      // Not yet accepted ("Неразобранное"): first, before the pipeline's stages.
+      const sibling = Object.entries(statuses).find(([key]) => key.startsWith(`${pipelineId}:`))?.[1];
+      const s = statusId === "-1" ? (sibling ? { ...sibling, name: "Saralanmagan", sort: -1 } : undefined) : statuses[k];
+      const name = s ? s.name : statusId === "-1" ? "Saralanmagan" : `Bosqich ${statusId}`;
       return { key: k, label: pipelines.size > 1 && s ? `${s.pipeline} · ${name}` : name, value, order: s ? [s.pipeline_sort, s.sort] : [9e9, 9e9] };
     })
     .sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1]);
