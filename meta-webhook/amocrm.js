@@ -378,7 +378,8 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       const changed = await writeStats(now);
       const month = monthOf(now);
       const all = [...leads.values(), ...[...unsorted.values()].filter((u) => !leads.has(u.id))];
-      const newest = all.reduce((m, l) => Math.max(m, l.created), 0);
+      const newestLead = all.reduce((m, l) => (!m || l.created > m.created ? l : m), null);
+      const newest = newestLead ? newestLead.created : 0;
       // What the server holds, so a page showing zeros can say why.
       await writeStatus({
         ok: true,
@@ -389,6 +390,8 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
         unsorted: unsortedCount,
         leads_this_month: all.filter((l) => monthOf(l.created) === month).length,
         newest_lead_at: newest ? new Date(newest).toISOString() : null,
+        newest_lead_id: newestLead ? String(newestLead.id) : null,
+        max_lead_id: all.reduce((m, l) => (typeof l.id === "number" && l.id > m ? l.id : m), 0),
         calls_loaded: calls.size,
         calls_this_month: [...calls.values()].filter((c) => monthOf(c.at) === month).length,
         stats_docs_written: changed,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Clock3, Flame, PhoneCall, PhoneIncoming, Target, TrendingDown, TrendingUp, Trophy, UserRound, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Clock3, Flame, Inbox, Layers, Link2, PhoneCall, PhoneIncoming, Target, TrendingDown, TrendingUp, Trophy, UserRound, Users, XCircle } from "lucide-react";
 import { subscribeOne, subscribeWhere } from "../../lib/firestoreDb";
 import { formatMoneyShort, initialsOf } from "../../lib/format";
 import { tashkentDay } from "../../lib/salesPeriod";
@@ -284,27 +284,7 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
     <div className="space-y-5 pb-6">
       {header}
 
-      {isAdmin && (status.leads === undefined || !status.leads_this_month) && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-          <div className="font-bold">Ulanish holati (faqat admin ko'radi)</div>
-          {status.leads === undefined ? (
-            <p className="mt-1">Server hali yangi versiyada ishga tushmagan yoki amoCRM dan birinchi o'qish tugamagan. 2–3 daqiqadan keyin sahifani yangilang.</p>
-          ) : (
-            <ul className="mt-1 grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
-              <li>amoCRM manzili: <b>{status.host || "—"}</b></li>
-              <li>Oxirgi o'qish: <b>{status.last_sync ? new Date(status.last_sync).toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" }) : "—"}</b></li>
-              <li>Foydalanuvchilar: <b>{status.users_count ?? status.users?.length ?? 0}</b> · bosqichlar: <b>{status.stages_count ?? Object.keys(status.statuses || {}).length}</b></li>
-              <li>Jami lidlar: <b>{status.leads}</b> · saralanmagan: <b>{status.unsorted ?? 0}</b></li>
-              <li>Shu oy ({status.server_month || "—"}) lidlar: <b>{status.leads_this_month ?? 0}</b></li>
-              <li>Eng yangi lid: <b>{status.newest_lead_at ? new Date(status.newest_lead_at).toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" }) : "yo'q"}</b></li>
-              <li>Qo'ng'iroqlar: <b>{status.calls_loaded ?? 0}</b> · shu oy: <b>{status.calls_this_month ?? 0}</b></li>
-              <li>Server vaqti: <b>{status.server_time ? new Date(status.server_time).toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" }) : "—"}</b></li>
-              {status.error && <li className="sm:col-span-2">Oxirgi xato: <b>{status.error}</b></li>}
-            </ul>
-          )}
-          <p className="mt-2 text-xs opacity-80">Shu blokni skrinshot qilib yuboring — muammo qayerdaligi ko'rinadi.</p>
-        </div>
-      )}
+      {isAdmin && <ConnectionPanel status={status} thisMonth={thisMonth} />}
 
       {status.ok === false && isAdmin && (
         <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
@@ -663,14 +643,6 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
       <p className="flex items-center gap-1.5 text-xs text-ink-400">
         <PhoneCall className="h-3 w-3" /> Faqat o'qiladi: ERP amoCRM ga hech narsa yozmaydi, suhbatlar va telefon raqamlar olinmaydi.
       </p>
-      {isAdmin && status.leads !== undefined && (
-        <p className="text-[11px] text-ink-400">
-          Serverda: {status.leads} lid{status.unsorted ? ` (+${status.unsorted} saralanmagan)` : ""}, shu oyda {status.leads_this_month ?? "—"} · {status.calls_loaded ?? 0} qo'ng'iroq, shu oyda{" "}
-          {status.calls_this_month ?? "—"}
-          {status.newest_lead_at ? ` · eng yangi lid: ${tashkentDay(status.newest_lead_at)}` : ""}
-          {status.server_month && status.server_month !== thisMonth ? ` · server oyi: ${status.server_month}` : ""}
-        </p>
-      )}
     </div>
   );
 }
@@ -734,5 +706,102 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     >
       {children}
     </button>
+  );
+}
+
+const fmtInt = (n: number | undefined) => (n ?? 0).toLocaleString("ru-RU").replace(/\u00a0/g, " ");
+const fmtTashkent = (iso: string | null | undefined) => {
+  if (!iso) return "—";
+  const d = new Date(Date.parse(iso) + 5 * 3600e3).toISOString();
+  return `${Number(d.slice(8, 10))}-${MONTHS[Number(d.slice(5, 7)) - 1].toLowerCase()}, ${d.slice(11, 16)}`;
+};
+
+// "30.09 · 18:24" — fits a tile.
+const fmtShort = (iso: string | null | undefined) => {
+  if (!iso) return "—";
+  const d = new Date(Date.parse(iso) + 5 * 3600e3).toISOString();
+  return `${d.slice(8, 10)}.${d.slice(5, 7)} · ${d.slice(11, 16)}`;
+};
+
+// What the server got from amoCRM on its last pull (amo_meta/status), for
+// admins. Opens by itself when something needs a look.
+function ConnectionPanel({ status, thisMonth }: { status: AmoStatus; thisMonth: string }) {
+  const loaded = status.leads !== undefined;
+  const noLeadsYet = loaded && !status.leads_this_month;
+  const problem = status.ok === false || !loaded;
+  const [open, setOpen] = useState(problem || noLeadsYet);
+  const tiles: { icon: React.ReactNode; label: string; value: string; sub?: string; tone?: string }[] = [
+    { icon: <Users className="h-4 w-4" />, label: "Foydalanuvchilar", value: fmtInt(status.users_count ?? status.users?.length), sub: "amoCRM dagi menejerlar" },
+    { icon: <Layers className="h-4 w-4" />, label: "Bosqichlar", value: fmtInt(status.stages_count ?? Object.keys(status.statuses || {}).length), sub: "barcha voronkalarda" },
+    { icon: <Target className="h-4 w-4" />, label: "Jami lidlar", value: fmtInt(status.leads), sub: `saralanmagan: ${fmtInt(status.unsorted)}` },
+    {
+      icon: <Inbox className="h-4 w-4" />,
+      label: `Shu oy lidlari`,
+      value: fmtInt(status.leads_this_month),
+      sub: status.server_month && status.server_month !== thisMonth ? `server oyi: ${status.server_month}` : monthLabel(thisMonth),
+      tone: noLeadsYet ? "text-amber-600 dark:text-amber-400" : undefined,
+    },
+    { icon: <PhoneCall className="h-4 w-4" />, label: "Qo'ng'iroqlar", value: fmtInt(status.calls_loaded), sub: `shu oy: ${fmtInt(status.calls_this_month)}` },
+    { icon: <CalendarClock className="h-4 w-4" />, label: "Eng yangi lid", value: fmtShort(status.newest_lead_at), sub: status.newest_lead_id ? `#${status.newest_lead_id} · eng katta ID #${status.max_lead_id ?? "—"}` : "amoCRM da yaratilgan vaqti" },
+  ];
+  return (
+    <div className="overflow-hidden rounded-3xl border border-ink-100 bg-surface shadow-sm">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full flex-wrap items-center gap-3 px-5 py-4 text-left">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-blue-950/50 dark:text-blue-300">
+          <Link2 className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="font-display text-[15px] font-bold text-ink-900">amoCRM ulanishi</div>
+          <div className="truncate text-xs text-ink-500">
+            {status.host || "—"} · oxirgi o'qish {fmtTashkent(status.last_sync)}
+          </div>
+        </div>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${
+            status.ok === false
+              ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
+              : !loaded
+                ? "bg-ink-100 text-ink-600"
+                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+          }`}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${status.ok === false ? "bg-rose-500" : !loaded ? "bg-ink-400" : "bg-emerald-500"}`} />
+          {status.ok === false ? "Xato" : !loaded ? "Kutilmoqda" : "Ulangan"}
+        </span>
+        <ChevronDown className={`h-4 w-4 text-ink-400 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="border-t border-ink-100 px-5 pb-5 pt-4">
+          {!loaded ? (
+            <p className="text-sm text-ink-500">Server amoCRM dan birinchi marta o'qiyapti. 2–3 daqiqadan keyin sahifani yangilang.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              {tiles.map((t) => (
+                <div key={t.label} className="rounded-2xl bg-ink-50/70 p-3.5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+                    <span className="text-ink-400">{t.icon}</span>
+                    {t.label}
+                  </div>
+                  <div className={`mt-1.5 font-display text-xl font-extrabold tabular-nums ${t.tone || "text-ink-900"}`}>{t.value}</div>
+                  {t.sub && <div className="mt-0.5 truncate text-[11px] text-ink-400">{t.sub}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+          {noLeadsYet && (
+            <div className="mt-3 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>amoCRM bu oyda yaratilgan lidni bermadi: eng yangi lid {fmtTashkent(status.newest_lead_at)}. Qo'ng'iroqlar esa kelyapti.</span>
+            </div>
+          )}
+          {status.error && (
+            <div className="mt-3 flex items-start gap-2 rounded-2xl bg-rose-50 p-3 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>Oxirgi xato: {status.error}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
