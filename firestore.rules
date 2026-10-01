@@ -205,6 +205,39 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Reklama (meta-webhook/targetolog.js). The server writes campaigns,
+    // the summary and the log; people only move proposals along:
+    //   marketolog (ads.edit): review → approve / rejected, warning → stop;
+    //   admin: review|approve → approved / rejected, warning → stop / keep.
+    match /ads_state/{id} {
+      allow read: if can('ads', 'view');
+      allow write: if false;
+    }
+    match /ads_campaigns/{id} {
+      allow read: if can('ads', 'view');
+      allow write: if false;
+    }
+    match /ads_log/{id} {
+      allow read: if can('ads', 'view');
+      allow write: if false;
+    }
+    match /ads_settings/{id} {
+      allow read: if can('ads', 'view');
+      allow write: if isAdmin();
+    }
+    match /ads_proposals/{id} {
+      function stageOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stage', 'history', 'updated_at']);
+      }
+      function move(fromStages, toStages) {
+        return resource.data.stage in fromStages && request.resource.data.stage in toStages && stageOnly();
+      }
+      allow read: if can('ads', 'view');
+      allow update: if (isAdmin() && (move(['review', 'approve'], ['approved', 'rejected']) || move(['warning'], ['approved', 'kept'])))
+        || (can('ads', 'edit') && (move(['review'], ['approve', 'rejected']) || move(['warning'], ['approved'])));
+      allow create, delete: if false;
+    }
+
     match /agent_status/{id} {
       allow read: if isAdmin(); // AI Ofis is admin-only
       allow write: if false;

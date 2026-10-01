@@ -367,3 +367,22 @@ the Meta form webhook, the Instagram agent and Mois Zvonki calls create no
 ERP leads. The Instagram agent still thanks the customer and sends the
 number to the managers' topic. Set `ERP_LEADS=on` in the server env to bring
 ERP leads back.
+
+## Targetolog agent (`targetolog.js`)
+
+Facebook/Instagram ads through the Meta Marketing API (`META_ADS_TOKEN` with
+`ads_management`, `META_AD_ACCOUNT_ID`). Every 15 minutes it reads the
+account, campaigns, ad sets and daily insights (results = leads + Direct
+conversations) and writes `ads_state/summary` and `ads_campaigns/*` for the
+Reklama page; money in so'm (account currency × `ads_settings.rate`).
+
+It never spends on its own. Changes are `ads_proposals` moving through
+stages: `review` (marketolog — staff with `ads.edit`) → `approve` (admin) →
+`approved` → executed by the server → `done` / `failed`. Budget changes are
+refused when the active daily total would pass `daily_limit` or the month
+would pass `monthly_limit`. A campaign whose lead price is over
+`stop_multiplier` × the 30-day average (or that spends that much with no
+results) gets a `warning` to the marketolog and admins; unless an admin
+presses "Davom etsin" within `grace_minutes`, it is paused. Buttons
+`ads:<rv|rj|ok|st|go>:<id>` in private chats; the morning report and every
+result go to the 🎯 Reklama topic; everything is logged in `ads_log`.

@@ -12,7 +12,8 @@ export type ModuleKey =
   | "finance"
   | "reports"
   | "attendance"
-  | "tasks";
+  | "tasks"
+  | "ads";
 
 export type PermissionAction = "view" | "edit" | "delete";
 
@@ -72,6 +73,9 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "reports", label: "Hisobot" },
   { key: "attendance", label: "Davomat va KPI" },
   { key: "tasks", label: "Vazifalar" },
+  // Reklama (Targetolog agent): view = see the page; edit = marketolog,
+  // reviews proposals before the admin approves them.
+  { key: "ads", label: "Reklama (marketolog)" },
 ];
 
 export const emptyPermissions = (): StaffPermissions => {

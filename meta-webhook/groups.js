@@ -22,6 +22,7 @@ const TOPICS = [
   { key: "hr", name: "🧑‍💼 HR / Davomat", color: 0xff93b2, intro: "Davomat: ishga kelish/ketish rasmlari, 09:05 eslatmalari, kech qolganlar." },
   { key: "chief", name: "🧠 Bosh agent", color: 0x6fb9f0, intro: "Bosh agent: har kuni 08:30 da (dush–shan) kompaniya holati, 3 ta muammo, 3 ta imkoniyat va ✅/❌ tugmali takliflar. ✅ bosilsa — vazifalar, postlar va mijozlar ro'yxati tayyorlanadi, natija keyin o'lchanadi. Taklifga javob yozsangiz — qayta ishlaydi. /brif — hozir tahlil." },
   { key: "mkt", name: "📣 Marketing", color: 0xffd67e, intro: "Marketolog: har dushanba 09:00 da haftalik tahlil, kontent-reja va qaytariladigan mijozlar. Shu yerda so'rang: «bu oy qaysi manba yaxshi ishladi?», «8-mart uchun 3 ta post yoz», «uxlab qolgan mijozlar». /hisobot — hisobotni hozir olish, /raqobat — raqobatchilarni hozir tahlil qilish." },
+  { key: "ads", name: "🎯 Reklama", color: 0xfb6f5f, intro: "Targetolog agent: har kuni 09:00 da reklama hisoboti (sarf, natija, lid narxi). Byudjet o'zgartirish takliflari marketolog → admin tasdig'i bilan bajariladi; qimmatlashgan reklama haqida ogohlantiradi va javob bo'lmasa to'xtatadi." },
   { key: "ig", name: "📸 Instagram Direct", color: 0xff93b2, intro: "Instagram Direct va izohlar: yangi murojaatlar, raqam qoldirganlar (Sotuv bo'limiga lid bo'lib tushadi)." },
 ];
 

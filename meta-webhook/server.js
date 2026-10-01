@@ -69,7 +69,9 @@ if (chief) chief.register(app);
 const tasks = process.env.TELEGRAM_BOT_TOKEN ? require("./tasks").create(db) : null;
 // amoCRM, read only — see amocrm.js; feeds the "amoCRM tahlil" tab.
 const amocrm = require("./amocrm").create(db);
-const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks);
+// Targetolog — Meta ads with marketolog → admin approval; see targetolog.js.
+const targetolog = groups ? require("./targetolog").create(db, { route: groups.route }) : null;
+const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
 // same Meta callback below (object "instagram").
@@ -347,4 +349,5 @@ app.listen(PORT, () => {
   if (chief) void chief.start().catch((err) => console.error("Bosh agent start failed", err));
   if (tasks) tasks.start();
   void amocrm.start().catch((err) => console.error("amoCRM start failed", err));
+  if (targetolog) void targetolog.start().catch((err) => console.error("Targetolog start failed", err));
 });
