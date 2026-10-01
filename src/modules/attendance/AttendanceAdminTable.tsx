@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Users } from "lucide-react";
-import { listAll, subscribeWhere } from "../../lib/firestoreDb";
+import { MapPin, Undo2, Users } from "lucide-react";
+import { insertOne, listAll, subscribeWhere, updateOne } from "../../lib/firestoreDb";
+import { useAuth } from "../../lib/AuthContext";
 import type { AttendanceRecord, PersonalSchedule, WorkSchedule } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
@@ -26,6 +27,39 @@ export default function AttendanceAdminTable() {
   const [personal, setPersonal] = useState<Map<string, PersonalSchedule>>(new Map());
   const [loading, setLoading] = useState(true);
   const dateCode = dateCodeOf(new Date());
+  const { user } = useAuth();
+  const [undoing, setUndoing] = useState<string | null>(null);
+
+  // A check-out pressed by mistake (e.g. on someone else's phone): reopen
+  // the day so the employee can work on and check out again. Logged.
+  const undoCheckOut = async (s: Staff, record: AttendanceRecord) => {
+    if (!window.confirm(`${s.full_name || s.email}: ${record.checkOutTime} dagi "ishni tugatish" bekor qilinsinmi? Kun qayta ochiladi.`)) return;
+    setUndoing(record.id);
+    try {
+      await updateOne("attendance", record.id, {
+        checkOutTime: null,
+        checkOutTimestamp: null,
+        checkOutLocation: null,
+        workedMinutes: 0,
+        earlyLeaveMinutes: 0,
+        overtimeMinutes: 0,
+        status: (record.lateMinutes || 0) > 0 ? "Kechikdi" : "Vaqtida keldi",
+        updatedAt: new Date().toISOString(),
+      });
+      await insertOne("attendance_audit", {
+        attendance_id: record.id,
+        employee_email: record.employeeId,
+        action: "undo_check_out",
+        before: { checkOutTime: record.checkOutTime, checkOutTimestamp: record.checkOutTimestamp, status: record.status },
+        by_email: (user?.email || "").toLowerCase(),
+        at: new Date().toISOString(),
+      }).catch(() => undefined);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Bekor qilib bo'lmadi");
+    } finally {
+      setUndoing(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +151,27 @@ export default function AttendanceAdminTable() {
                       <div className={`text-[11px] ${own ? "font-semibold text-brand-600" : "text-ink-400"}`}>{hours}</div>
                     </td>
                     <td className="table-td">{record?.checkInTime || "-"}</td>
-                    <td className="table-td">{record?.checkOutTime || "-"}</td>
+                    <td className="table-td">
+                      {record?.checkOutTime ? (
+                        <div className="flex items-center gap-1.5">
+                          <span>{record.checkOutTime}</span>
+                          {record.dateCode === dateCode && (
+                            <button
+                              type="button"
+                              title="Chiqishni bekor qilish"
+                              aria-label="Chiqishni bekor qilish"
+                              disabled={undoing === record.id}
+                              onClick={() => void undoCheckOut(s, record)}
+                              className="inline-flex items-center gap-1 rounded-md border border-ink-200 px-1.5 py-0.5 text-[11px] font-semibold text-ink-600 hover:bg-ink-50 disabled:opacity-50"
+                            >
+                              <Undo2 className="h-3 w-3" /> Bekor
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td className="table-td">
                       {record?.workedMinutes ? formatMinutes(record.workedMinutes) : "-"}
                     </td>
