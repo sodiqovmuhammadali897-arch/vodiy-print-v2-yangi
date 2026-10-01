@@ -131,3 +131,14 @@ describe("personal schedules", () => {
     expect(computeAttendanceKpi(records, 1, DEFAULT_KPI_WEIGHTS, undefined, 300).hoursScore).toBe(DEFAULT_KPI_WEIGHTS.hoursWorked);
   });
 });
+
+describe("withWorkedMinutes", () => {
+  it("recounts a finished day: a 09:15–09:32 stay is 17 minutes, a full day 480", async () => {
+    const { withWorkedMinutes } = await import("../src/utils/attendanceCalculations");
+    const sched = { breakStart: "13:00", breakEnd: "14:00", breakMinutes: 60 };
+    const r = (from: string, to: string) => ({ checkInTimestamp: `2026-10-01T${from}:00Z`, checkOutTimestamp: `2026-10-01T${to}:00Z`, workedMinutes: 0 });
+    expect(withWorkedMinutes(r("04:15", "04:32"), sched).workedMinutes).toBe(17);
+    expect(withWorkedMinutes(r("04:00", "13:00"), sched).workedMinutes).toBe(480);
+    expect(withWorkedMinutes({ checkInTimestamp: "2026-10-01T04:00:00Z", checkOutTimestamp: null, workedMinutes: 5 }, sched).workedMinutes).toBe(5);
+  });
+});

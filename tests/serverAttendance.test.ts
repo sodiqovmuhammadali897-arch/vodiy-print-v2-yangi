@@ -64,9 +64,16 @@ describe("computeCheckOutStats", () => {
     expect(stats.status).toBe("Qo'shimcha ishladi");
   });
 
-  it("never reports negative worked time for a very short stay", () => {
-    const stats = computeCheckOutStats(checkIn, at("04:30"), schedule);
-    expect(stats.workedMinutes).toBe(0);
+  it("a short morning stay keeps its minutes: no lunch was taken", () => {
+    expect(computeCheckOutStats(checkIn, at("04:30"), schedule).workedMinutes).toBe(30);
+    expect(computeCheckOutStats(at("04:15"), at("04:32"), schedule).workedMinutes).toBe(17);
+  });
+
+  it("only the covered part of the break comes off", () => {
+    // 09:00 → 13:30: half the 13:00–14:00 break
+    expect(computeCheckOutStats(checkIn, at("08:30"), schedule).workedMinutes).toBe(240);
+    // 14:00 → 18:00: after the break
+    expect(computeCheckOutStats(at("09:00"), at("13:00"), schedule).workedMinutes).toBe(240);
   });
 });
 

@@ -52,6 +52,39 @@ const hmToMin = (hm: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
+const minutesOfDay = (date: Date): number => {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(date);
+  const h = Number(parts.find((p) => p.type === "hour")?.value || 0) % 24;
+  return h * 60 + Number(parts.find((p) => p.type === "minute")?.value || 0);
+};
+
+// Worked minutes between check-in and `until`: the lunch break only comes
+// off for the part of it the stay covered (same rule as the server).
+export const workedMinutesBetween = (
+  checkIn: Date,
+  until: Date,
+  schedule: Pick<WorkSchedule, "breakStart" | "breakEnd" | "breakMinutes">,
+): number => {
+  const raw = Math.max(0, (until.getTime() - checkIn.getTime()) / 60000);
+  const breakMinutes = schedule.breakMinutes || 0;
+  let overlap = breakMinutes;
+  if (schedule.breakStart && schedule.breakEnd) {
+    const outMin = dateCodeOf(until) === dateCodeOf(checkIn) ? minutesOfDay(until) : 24 * 60;
+    overlap = Math.min(breakMinutes, Math.max(0, Math.min(outMin, hmToMin(schedule.breakEnd)) - Math.max(minutesOfDay(checkIn), hmToMin(schedule.breakStart))));
+  }
+  return Math.max(0, Math.round(raw - overlap));
+};
+
+// Records saved before the break rule was fixed took the whole break off
+// any stay; recount finished days from their check-in/out times.
+export const withWorkedMinutes = <T extends Pick<AttendanceRecord, "checkInTimestamp" | "checkOutTimestamp" | "workedMinutes">>(
+  record: T,
+  schedule: Pick<WorkSchedule, "breakStart" | "breakEnd" | "breakMinutes">,
+): T =>
+  record.checkInTimestamp && record.checkOutTimestamp
+    ? { ...record, workedMinutes: workedMinutesBetween(new Date(record.checkInTimestamp), new Date(record.checkOutTimestamp), schedule) }
+    : record;
+
 // Minutes a normal day of this schedule asks for (end − start − break).
 export const dailyWorkMinutes = (schedule: Pick<WorkSchedule, "workStart" | "workEnd" | "breakMinutes">): number =>
   Math.max(0, hmToMin(schedule.workEnd) - hmToMin(schedule.workStart) - (schedule.breakMinutes || 0));

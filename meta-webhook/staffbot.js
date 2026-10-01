@@ -24,6 +24,21 @@ const toMin = (hm) => {
   const [h, m] = String(hm || "0:0").split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
 };
+// Tashkent minutes of the day (UTC+5, no DST).
+const tkMin = (iso) => {
+  const d = new Date(new Date(iso).getTime() + 5 * 3600 * 1000);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+};
+// Worked minutes of a finished day: the lunch break only comes off for the
+// part of it the stay covered (same rule as the site).
+const workedOf = (r, sched) => {
+  if (!r.checkInTimestamp || !r.checkOutTimestamp) return Number(r.workedMinutes || 0);
+  const raw = Math.max(0, (new Date(r.checkOutTimestamp) - new Date(r.checkInTimestamp)) / 60000);
+  const sameDay = dayCodeOf(r.checkInTimestamp) === dayCodeOf(r.checkOutTimestamp);
+  const out = sameDay ? tkMin(r.checkOutTimestamp) : 24 * 60;
+  const overlap = Math.min(sched.breakMinutes, Math.max(0, Math.min(out, toMin(sched.breakEnd)) - Math.max(tkMin(r.checkInTimestamp), toMin(sched.breakStart))));
+  return Math.max(0, Math.round(raw - overlap));
+};
 const monthOf = (month) => (/^\d{4}-\d{2}$/.test(month || "") ? month : todayCode().slice(0, 7));
 const round1 = (n) => Math.round(n * 10) / 10;
 
@@ -84,12 +99,14 @@ const create = (db, { priceTools }) => {
   const scheduleOf = async (email) => {
     const col = db.collection("work_schedules");
     const [g, own] = await Promise.all([col.doc("default").get(), col.doc(email).get()]);
-    const general = { workStart: "09:00", workEnd: "18:00", breakMinutes: 60, weeklyOffDay: 0, ...(g.exists ? g.data() : {}) };
+    const general = { workStart: "09:00", workEnd: "18:00", breakStart: "13:00", breakEnd: "14:00", breakMinutes: 60, weeklyOffDay: 0, ...(g.exists ? g.data() : {}) };
     const p = own.exists ? own.data() : null;
     return {
       workStart: (p && p.workStart) || general.workStart,
       workEnd: (p && p.workEnd) || general.workEnd,
       breakMinutes: Number(general.breakMinutes) || 0,
+      breakStart: general.breakStart || "13:00",
+      breakEnd: general.breakEnd || "14:00",
       offDays: p && Array.isArray(p.offDays) ? p.offDays : Array.isArray(general.offDays) ? general.offDays : [Number(general.weeklyOffDay)],
       graceMinutes: general.graceMinutes ?? 5,
     };
@@ -157,7 +174,7 @@ const create = (db, { priceTools }) => {
           kech_qolgan_kunlar: late.length,
           jami_kechikish_daqiqa: late.reduce((a, r) => a + Number(r.lateMinutes || 0), 0),
           kechikishlar: late.slice(-10).map((r) => `${r.dateCode}: ${r.lateMinutes} daqiqa (${r.checkInTime})`),
-          ishlagan_soat: round1(came.reduce((a, r) => a + Number(r.workedMinutes || 0), 0) / 60),
+          ishlagan_soat: round1(came.reduce((a, r) => a + workedOf(r, sched), 0) / 60),
           bugun: today ? { keldi: today.checkInTime || null, ketdi: today.checkOutTime || null } : "bugun hali belgilanmagan",
         };
       },
@@ -173,7 +190,7 @@ const create = (db, { priceTools }) => {
         const days = workingDays(mon, sched.offDays);
         const present = rows.filter((r) => r.checkInTime);
         const onTime = present.filter((r) => !(Number(r.lateMinutes) > 0)).length;
-        const worked = present.reduce((a, r) => a + Number(r.workedMinutes || 0), 0);
+        const worked = present.reduce((a, r) => a + workedOf(r, sched), 0);
         const daily = Math.max(0, toMin(sched.workEnd) - toMin(sched.workStart) - sched.breakMinutes);
         const monthTasks = tasks.docs.map((d) => d.data()).filter((x) => String(x.created_at || "").startsWith(mon));
         const done = monthTasks.filter((x) => x.status === "done").length;

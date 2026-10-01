@@ -4,7 +4,7 @@ import { useAuth } from "../../lib/AuthContext";
 import { getOne, listWhere } from "../../lib/firestoreDb";
 import { DEFAULT_KPI_WEIGHTS, type AttendanceRecord, type KpiSettings, type Task, type WorkSchedule } from "../../lib/types";
 import { getWorkSchedule, listMonthAttendance } from "../../services/attendanceService";
-import { computeAttendanceKpi, dailyWorkMinutes, dateCodeOf, workingDaysSoFar } from "../../utils/attendanceCalculations";
+import { computeAttendanceKpi, dailyWorkMinutes, dateCodeOf, withWorkedMinutes, workingDaysSoFar } from "../../utils/attendanceCalculations";
 
 export default function KpiPanel() {
   const { user } = useAuth();
@@ -30,7 +30,7 @@ export default function KpiPanel() {
           listWhere<Task>("tasks", "assigned_to_email", email),
         ]);
         setSchedule(sched);
-        setRecords(rows);
+        setRecords(rows.map((r) => withWorkedMinutes(r, sched)));
         setTasks(myTasks.filter((t) => t.created_at.slice(0, 7) === monthPrefix));
         if (settings?.weights) setWeights(settings.weights);
       } catch (err) {

@@ -59,6 +59,7 @@ import {
   workingDaysSoFar,
   mergeSchedule,
   dailyWorkMinutes,
+  withWorkedMinutes,
 } from "../../utils/attendanceCalculations";
 import StatCard from "../../components/ui/StatCard";
 import DateRangeFilter from "../../components/ui/DateRangeFilter";
@@ -437,7 +438,7 @@ export default function Reports() {
     for (const r of attendanceRecords) {
       if (!r.dateCode.startsWith(monthPrefix)) continue;
       const arr = byEmployee.get(r.employeeId) || [];
-      arr.push(r);
+      arr.push(withWorkedMinutes(r, workSchedule));
       byEmployee.set(r.employeeId, arr);
     }
     const revenueByManager = new Map(managerRows.map((m) => [m.name, m.revenue]));

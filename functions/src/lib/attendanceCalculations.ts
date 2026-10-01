@@ -61,6 +61,23 @@ export const computeCheckInStatus = (
   };
 };
 
+// The lunch break only comes off the part of it the stay actually covered:
+// someone who leaves at 09:32 never had lunch at work.
+export const breakOverlapMinutes = (
+  checkIn: Date,
+  checkOut: Date,
+  schedule: Pick<WorkSchedule, "breakStart" | "breakEnd" | "breakMinutes">,
+): number => {
+  const breakMinutes = schedule.breakMinutes || 0;
+  if (breakMinutes <= 0) return 0;
+  if (!schedule.breakStart || !schedule.breakEnd) return breakMinutes;
+  const inMin = minutesOfDay(checkIn);
+  // A stay over midnight runs past the end of the day.
+  const outMin = dateCodeOf(checkOut) === dateCodeOf(checkIn) ? minutesOfDay(checkOut) : 24 * 60;
+  const overlap = Math.min(outMin, parseHM(schedule.breakEnd)) - Math.max(inMin, parseHM(schedule.breakStart));
+  return Math.min(breakMinutes, clampNonNegative(overlap));
+};
+
 export const computeCheckOutStats = (
   checkIn: Date,
   checkOut: Date,
@@ -78,7 +95,7 @@ export const computeCheckOutStats = (
   const rawWorkedMinutes = clampNonNegative(
     (checkOut.getTime() - checkIn.getTime()) / 60000,
   );
-  const workedMinutes = clampNonNegative(rawWorkedMinutes - schedule.breakMinutes);
+  const workedMinutes = clampNonNegative(rawWorkedMinutes - breakOverlapMinutes(checkIn, checkOut, schedule));
   const requiredMinutes = clampNonNegative(endMin - startMin - schedule.breakMinutes);
   const overtimeMinutes = clampNonNegative(workedMinutes - requiredMinutes);
 

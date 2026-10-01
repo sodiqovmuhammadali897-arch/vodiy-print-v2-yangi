@@ -9,7 +9,7 @@ import {
   getWorkSchedule,
   listMonthAttendance,
 } from "../../services/attendanceService";
-import { attendancePercent, dateCodeOf, formatMinutes, offDaysOf, WEEKDAY_SHORT, workingDaysSoFar } from "../../utils/attendanceCalculations";
+import { attendancePercent, dateCodeOf, formatMinutes, offDaysOf, WEEKDAY_SHORT, withWorkedMinutes, workedMinutesBetween, workingDaysSoFar } from "../../utils/attendanceCalculations";
 import CheckInButton from "./CheckInButton";
 import CheckOutButton from "./CheckOutButton";
 
@@ -34,8 +34,8 @@ export default function EmployeeAttendanceCard() {
         getTodayAttendance(email),
         listMonthAttendance(email, dateCodeOf(new Date()).slice(0, 7)),
       ]);
-      setToday(t);
-      setMonthRecords(m);
+      setToday(t && withWorkedMinutes(t, sched));
+      setMonthRecords(m.map((r) => withWorkedMinutes(r, sched)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ma'lumotlarni yuklab bo'lmadi");
     } finally {
@@ -55,9 +55,10 @@ export default function EmployeeAttendanceCard() {
 
   const liveWorkedMinutes = useMemo(() => {
     if (!today?.checkInTimestamp || today.checkOutTime) return today?.workedMinutes || 0;
-    const elapsed = (now.getTime() - new Date(today.checkInTimestamp).getTime()) / 60000;
-    return Math.max(0, Math.round(elapsed - (today.breakMinutes || 0)));
-  }, [today, now]);
+    const checkIn = new Date(today.checkInTimestamp);
+    if (schedule) return workedMinutesBetween(checkIn, now, schedule);
+    return Math.max(0, Math.round((now.getTime() - checkIn.getTime()) / 60000));
+  }, [today, now, schedule]);
 
   const monthStats = useMemo(() => {
     if (!schedule) return null;

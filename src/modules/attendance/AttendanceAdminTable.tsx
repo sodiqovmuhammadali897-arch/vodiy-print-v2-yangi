@@ -4,7 +4,7 @@ import { listAll, subscribeWhere } from "../../lib/firestoreDb";
 import type { AttendanceRecord, PersonalSchedule, WorkSchedule } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
-import { deriveDisplayStatus, dateCodeOf, formatMinutes, mergeSchedule } from "../../utils/attendanceCalculations";
+import { deriveDisplayStatus, dateCodeOf, formatMinutes, mergeSchedule, withWorkedMinutes } from "../../utils/attendanceCalculations";
 import AsyncState from "../../components/ui/AsyncState";
 
 const STATUS_TONE: Record<string, string> = {
@@ -57,7 +57,8 @@ export default function AttendanceAdminTable() {
     if (!schedule) return [];
     const byEmail = new Map(today.map((r) => [r.employeeId, r]));
     return staff.map((s) => {
-      const record = byEmail.get(s.email) || null;
+      const saved = byEmail.get(s.email) || null;
+      const record = saved && withWorkedMinutes(saved, schedule);
       const own = mergeSchedule(schedule, personal.get(s.email.toLowerCase()));
       return {
         staff: s,
