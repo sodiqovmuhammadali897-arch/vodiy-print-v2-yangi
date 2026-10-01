@@ -284,6 +284,28 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
     <div className="space-y-5 pb-6">
       {header}
 
+      {isAdmin && (status.leads === undefined || !status.leads_this_month) && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <div className="font-bold">Ulanish holati (faqat admin ko'radi)</div>
+          {status.leads === undefined ? (
+            <p className="mt-1">Server hali yangi versiyada ishga tushmagan yoki amoCRM dan birinchi o'qish tugamagan. 2–3 daqiqadan keyin sahifani yangilang.</p>
+          ) : (
+            <ul className="mt-1 grid gap-x-6 gap-y-0.5 sm:grid-cols-2">
+              <li>amoCRM manzili: <b>{status.host || "—"}</b></li>
+              <li>Oxirgi o'qish: <b>{status.last_sync ? new Date(status.last_sync).toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" }) : "—"}</b></li>
+              <li>Foydalanuvchilar: <b>{status.users_count ?? status.users?.length ?? 0}</b> · bosqichlar: <b>{status.stages_count ?? Object.keys(status.statuses || {}).length}</b></li>
+              <li>Jami lidlar: <b>{status.leads}</b> · saralanmagan: <b>{status.unsorted ?? 0}</b></li>
+              <li>Shu oy ({status.server_month || "—"}) lidlar: <b>{status.leads_this_month ?? 0}</b></li>
+              <li>Eng yangi lid: <b>{status.newest_lead_at ? new Date(status.newest_lead_at).toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" }) : "yo'q"}</b></li>
+              <li>Qo'ng'iroqlar: <b>{status.calls_loaded ?? 0}</b> · shu oy: <b>{status.calls_this_month ?? 0}</b></li>
+              <li>Server vaqti: <b>{status.server_time ? new Date(status.server_time).toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" }) : "—"}</b></li>
+              {status.error && <li className="sm:col-span-2">Oxirgi xato: <b>{status.error}</b></li>}
+            </ul>
+          )}
+          <p className="mt-2 text-xs opacity-80">Shu blokni skrinshot qilib yuboring — muammo qayerdaligi ko'rinadi.</p>
+        </div>
+      )}
+
       {status.ok === false && isAdmin && (
         <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

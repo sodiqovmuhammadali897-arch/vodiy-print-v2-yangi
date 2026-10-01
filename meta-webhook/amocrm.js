@@ -392,6 +392,9 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
         calls_loaded: calls.size,
         calls_this_month: [...calls.values()].filter((c) => monthOf(c.at) === month).length,
         stats_docs_written: changed,
+        users_count: users.size,
+        stages_count: Object.keys(statuses).length,
+        server_time: new Date().toISOString(),
         server_month: month,
       });
       log.log(`amoCRM sync: ${leads.size} leads (+${unsortedCount} unsorted), ${calls.size} calls, ${changed} stat docs written`);

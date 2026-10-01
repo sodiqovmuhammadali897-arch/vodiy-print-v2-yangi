@@ -33,6 +33,9 @@ export type AmoStatus = {
   calls_loaded?: number;
   calls_this_month?: number;
   server_month?: string;
+  users_count?: number;
+  stages_count?: number;
+  server_time?: string;
   statuses?: Record<string, { name: string; pipeline: string; pipeline_sort: number; sort: number; color: string | null }>;
 };
 
