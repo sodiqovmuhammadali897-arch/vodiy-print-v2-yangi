@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Users, Plus, Pencil, Trash2, ShieldCheck } from "lucide-react";
-import { listAll, upsertOne, deleteOne } from "../../lib/firestoreDb";
+import { getOne, listAll, upsertOne, deleteOne } from "../../lib/firestoreDb";
 import {
   MODULES,
   emptyPermissions,
@@ -194,6 +194,14 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
   const [phone, setPhone] = useState("");
   const [notify, setNotify] = useState(true);
   const [botAsk, setBotAsk] = useState(false);
+  const [amoUserId, setAmoUserId] = useState("");
+  const [amoUsers, setAmoUsers] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    void getOne<{ users?: { id: number; name: string }[] }>("amo_meta", "status")
+      .then((s) => setAmoUsers(s?.users || []))
+      .catch(() => setAmoUsers([]));
+  }, [open]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -211,6 +219,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       setPhone(staff.phone || "");
       setNotify(staff.attendance_notify !== false);
       setBotAsk(staff.bot_ask === true);
+      setAmoUserId(staff.amo_user_id ? String(staff.amo_user_id) : "");
     } else {
       setEmail("");
       setFullName("");
@@ -221,6 +230,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       setPhone("");
       setNotify(true);
       setBotAsk(false);
+      setAmoUserId("");
     }
     setError(null);
   }, [staff, open]);
@@ -257,6 +267,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
         phone: phone.trim(),
         attendance_notify: notify,
         bot_ask: botAsk,
+        amo_user_id: amoUserId ? Number(amoUserId) : null,
       });
       setSaving(false);
       onSaved();
@@ -345,6 +356,20 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
               : "Telegram botda mahsulot narxlari (Mahsulotlar ruxsati bo'lsa), o'z vazifalari, davomati, KPI bali va — manager bo'lsa — o'z savdosi haqida so'ray oladi. Kompaniya foydasi, xarajat, tannarx va boshqalarning ma'lumoti aytilmaydi."}
           </p>
         </div>
+        {amoUsers.length > 0 && (
+          <div>
+            <label className="label">amoCRM foydalanuvchisi</label>
+            <select className="input" value={amoUserId} onChange={(e) => setAmoUserId(e.target.value)}>
+              <option value="">Email bo'yicha avtomatik</option>
+              {amoUsers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-ink-500">Sotuv bo'limi → amoCRM tahlil oynasida shu xodimga faqat o'z raqamlari ko'rinadi.</p>
+          </div>
+        )}
         <div>
           <label className="label">Rol</label>
           <select

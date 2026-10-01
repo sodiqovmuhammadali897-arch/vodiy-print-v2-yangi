@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search, SlidersHorizontal, LayoutGrid, List as ListIcon, BarChart3 } from "lucide-react";
+import { Plus, Search, SlidersHorizontal, LayoutGrid, List as ListIcon, BarChart3, PhoneCall } from "lucide-react";
 import { listAll, subscribeAll, subscribeWhere, subscribeOne, type Unsubscribe } from "../../lib/firestoreDb";
 import { LEAD_SOURCES } from "../../lib/orderConstants";
 import { convertLeadToCustomer } from "../../lib/leadConversion";
@@ -14,6 +14,7 @@ import LeadDetailPanel from "./LeadDetailPanel";
 import LeadKanbanView from "./LeadKanbanView";
 import LeadListView from "./LeadListView";
 import LeadAnalyticsView from "./LeadAnalyticsView";
+import AmoAnalyticsView from "./AmoAnalyticsView";
 import TodayTasksPanel from "./TodayTasksPanel";
 import LeadTaskToasts from "./LeadTaskToasts";
 
@@ -42,7 +43,7 @@ export default function SalesPipeline() {
   const canEdit = can("leads", "edit");
   const email = user?.email?.toLowerCase() || "";
 
-  const [view, setView] = useState<"kanban" | "list" | "analytics">("kanban");
+  const [view, setView] = useState<"kanban" | "list" | "analytics" | "amo">("kanban");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [orders, setOrders] = useState<Record<string, Order>>({});
   const [staffList, setStaffList] = useState<Staff[]>([]);
@@ -203,6 +204,7 @@ export default function SalesPipeline() {
             <ViewTab active={view === "kanban"} onClick={() => setView("kanban")} icon={<LayoutGrid className="h-3.5 w-3.5" />} label="Kanban" />
             <ViewTab active={view === "list"} onClick={() => setView("list")} icon={<ListIcon className="h-3.5 w-3.5" />} label="Ro'yxat" />
             <ViewTab active={view === "analytics"} onClick={() => setView("analytics")} icon={<BarChart3 className="h-3.5 w-3.5" />} label="Analitika" />
+            <ViewTab active={view === "amo"} onClick={() => setView("amo")} icon={<PhoneCall className="h-3.5 w-3.5" />} label="amoCRM tahlil" />
           </div>
           {canEdit && (
             <button className="btn-primary" onClick={openNew}>
@@ -212,6 +214,7 @@ export default function SalesPipeline() {
         </div>
       </div>
 
+      {view !== "amo" && (
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2 rounded-xl border border-ink-200 bg-surface px-3 py-2 shadow-sm">
           <Search className="h-4 w-4 text-ink-400" />
@@ -236,8 +239,9 @@ export default function SalesPipeline() {
           <SlidersHorizontal className="h-4 w-4" /> Filtrlar
         </button>
       </div>
+      )}
 
-      {filterPanelOpen && (
+      {view !== "amo" && filterPanelOpen && (
         <div className="grid grid-cols-2 gap-3 rounded-xl border border-ink-200 bg-ink-50 p-3.5 sm:grid-cols-4">
           <div>
             <label className="label">Manba</label>
@@ -314,6 +318,8 @@ export default function SalesPipeline() {
       {view === "analytics" && (
         <LeadAnalyticsView leads={leads} orders={orders} staffList={staffList} managerEmail={isAdmin ? managerFilter : email} />
       )}
+
+      {view === "amo" && <AmoAnalyticsView isAdmin={isAdmin} email={email} />}
 
       <LeadDetailPanel
         lead={selectedLead}

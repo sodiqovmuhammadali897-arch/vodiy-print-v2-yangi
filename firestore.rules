@@ -194,6 +194,17 @@ service cloud.firestore {
       allow read: if isAdmin(); // AI Ofis is admin-only
       allow write: if false;
     }
+    // amoCRM counts, written only by the server (meta-webhook/amocrm.js):
+    // admins see everyone, an employee only their own manager doc.
+    match /amo_stats/{id} {
+      allow read: if isAdmin() || (isStaff() && resource.data.staff_email == email());
+      allow write: if false;
+    }
+    match /amo_meta/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
     match /agent_status/{id} {
       allow read: if isAdmin(); // AI Ofis is admin-only
       allow write: if false;

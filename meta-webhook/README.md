@@ -339,3 +339,25 @@ Also:
 - Daily jobs are claimed in `task_runs/{date}_{job}`.
 - The Reyting tab on the site (admins) scores each employee per month:
   share done on time, minus half a point per open overdue task.
+
+## amoCRM, read only (`amocrm.js`)
+
+Feeds the **Sotuv bo'limi → amoCRM tahlil** tab. Every 2 minutes the server
+pulls from amoCRM API v4: users, pipelines and stages, leads (stage,
+responsible manager, price, source, loss reason, dates) and call notes
+(`call_in` / `call_out` — Mois Zvonki writes each call into amoCRM with its
+duration). Nothing is written to amoCRM; chat and call content, recordings
+and phone numbers are not stored (a call is counted per person by a hash of
+the number).
+
+The raw data lives in memory and is reloaded from amoCRM on restart.
+Firestore only gets counts, one doc per amoCRM user per month in
+`amo_stats/{YYYY-MM}_{userId}` (current and previous month), plus
+`amo_meta/status` (last sync, error, users, stage names). Admins read every
+doc; an employee reads only the doc whose `staff_email` is theirs. The
+server matches an amoCRM user to a staff member by `staff.amo_user_id`
+(Sozlamalar → Xodimlar → "amoCRM foydalanuvchisi"), else by email.
+
+Env: `AMO_SUBDOMAIN` (`vodiyprint` or `vodiyprint.amocrm.ru`) and
+`AMO_TOKEN` (long-lived token of a private integration). Off until both are
+set.

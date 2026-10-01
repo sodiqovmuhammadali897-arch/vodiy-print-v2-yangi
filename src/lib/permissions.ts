@@ -50,6 +50,9 @@ export type Staff = {
   // May ask the bot in private chat about prices and their own tasks,
   // attendance, KPI and sales (meta-webhook/staffbot.js). Admins always may.
   bot_ask?: boolean;
+  // amoCRM user this employee is (meta-webhook/amocrm.js). Without it the
+  // server matches by email; the "amoCRM tahlil" tab shows them their own.
+  amo_user_id?: number | null;
   telegram_chat_id?: number | null;
   telegram_linked_at?: string | null;
 };

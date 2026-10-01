@@ -67,6 +67,8 @@ const chief = marketing ? require("./chief").create(db, { route: groups.route, a
 if (chief) chief.register(app);
 // Task notifications in employees' private chats — see tasks.js.
 const tasks = process.env.TELEGRAM_BOT_TOKEN ? require("./tasks").create(db) : null;
+// amoCRM, read only — see amocrm.js; feeds the "amoCRM tahlil" tab.
+const amocrm = require("./amocrm").create(db);
 const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks);
 const { slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
@@ -340,4 +342,5 @@ app.listen(PORT, () => {
   if (marketing) void marketing.start().catch((err) => console.error("Marketolog start failed", err));
   if (chief) void chief.start().catch((err) => console.error("Bosh agent start failed", err));
   if (tasks) tasks.start();
+  void amocrm.start().catch((err) => console.error("amoCRM start failed", err));
 });
