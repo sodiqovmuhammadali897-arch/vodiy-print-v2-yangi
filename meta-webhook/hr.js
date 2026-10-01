@@ -23,7 +23,7 @@ const REMINDER_AFTER_MIN = 5;
 const REMINDER_WINDOW_MIN = 90;
 const LATE_NOTICE_MAX_AGE_MS = 30 * 60 * 1000;
 const LINK_CODE_TTL_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_SCHEDULE = { workStart: "09:00", weeklyOffDay: 0 };
+const DEFAULT_SCHEDULE = { workStart: "09:00", workEnd: "18:00", weeklyOffDay: 0 };
 const toMin = (hm) => {
   const [h, m] = String(hm || "09:00").split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
@@ -47,6 +47,8 @@ const normalizePhone = (p) => {
 // approved in the Eskiz cabinet (see meta-webhook/README.md).
 const reminderText = (s, workStart) =>
   `Hurmatli ${firstName(s)}, ish kuni soat ${workStart} da boshlandi. Siz hali ishga kelganingizni belgilamadingiz. Vodiy Print`;
+const checkoutText = (s, workEnd) =>
+  `Hurmatli ${firstName(s)}, ish kuni soat ${workEnd} da tugadi. Siz hali "Ishni tugatish"ni bosmadingiz. Ishni tugatgan bo'lsangiz, printvodiy.uz saytidagi Davomat sahifasida belgilang. Vodiy Print`;
 const lateText = (s, minutes, at) =>
   `Hurmatli ${firstName(s)}, bugun ishga ${minutesLabel(minutes)} kech qoldingiz (kelgan vaqtingiz ${at}). Iltimos, vaqtida keling. Vodiy Print`;
 
@@ -105,7 +107,11 @@ const create = (db, { route }) => {
   const scheduleOf = (email) => {
     const own = personal.get(String(email).toLowerCase());
     const offDays = own && Array.isArray(own.offDays) ? own.offDays : Array.isArray(schedule.offDays) ? schedule.offDays : [Number(schedule.weeklyOffDay)];
-    return { workStart: (own && own.workStart) || schedule.workStart || "09:00", offDays: offDays.map(Number) };
+    return {
+      workStart: (own && own.workStart) || schedule.workStart || "09:00",
+      workEnd: (own && own.workEnd) || schedule.workEnd || "18:00",
+      offDays: offDays.map(Number),
+    };
   };
 
   const isHoliday = async (code) => !(await db.collection("holidays").where("date", "==", code).get()).empty;
@@ -168,8 +174,44 @@ const create = (db, { route }) => {
       if (!groups.has(own.workStart)) groups.set(own.workStart, []);
       groups.get(own.workStart).push(s);
     }
-    if (!groups.size || (await isHoliday(code))) return;
+    // End of day: 5 minutes after each end time, those who checked in but
+    // never checked out.
+    const ends = new Map();
+    for (const s of staffAll) {
+      const own = scheduleOf(s.email);
+      if (own.offDays.includes(weekday)) continue;
+      const endMin = toMin(own.workEnd);
+      if (nowMin < endMin + REMINDER_AFTER_MIN || nowMin > endMin + REMINDER_WINDOW_MIN) continue;
+      if (!ends.has(own.workEnd)) ends.set(own.workEnd, []);
+      ends.get(own.workEnd).push(s);
+    }
+    if ((!groups.size && !ends.size) || (await isHoliday(code))) return;
     for (const [workStart, group] of groups) await remindGroup(code, workStart, group);
+    for (const [workEnd, group] of ends) await remindCheckout(code, workEnd, group);
+  };
+
+  const remindCheckout = async (code, workEnd, group) => {
+    const run = db.collection("hr_runs").doc(`${code}_out${workEnd.replace(":", "")}`);
+    try {
+      await run.create({ started_at: new Date().toISOString(), work_end: workEnd });
+    } catch {
+      return;
+    }
+    const att = await db.collection("attendance").where("dateCode", "==", code).get();
+    const open = new Set(att.docs.map((d) => d.data()).filter((r) => r.checkInTime && !r.checkOutTime).map((r) => String(r.employeeId).toLowerCase()));
+    const missing = group.filter((s) => open.has(s.email) && (s.telegram_chat_id || s.phone));
+    const results = [];
+    for (const s of missing) results.push({ s, channel: await notify(s, checkoutText(s, workEnd), "checkout") });
+    await run.update({ missing: missing.map((s) => s.email), sent: results.filter((r) => r.channel).length });
+    if (!missing.length) return;
+    const line = results.map((r) => `${r.s.full_name || r.s.email} (${r.channel === "sms" ? "SMS" : r.channel === "telegram" ? "Telegram" : "yuborilmadi"})`).join(", ");
+    await channelPost(`🧑‍💼 HR · ${hhmm(new Date().toISOString())} (ish ${workEnd} da tugagan)\n"Ishni tugatish"ni bosmaganlar (${missing.length}): ${line}`);
+    await emitEvent(db, {
+      agent: "hr", kind: "alert", source: "schedule",
+      text: `${missing.length} kishi ishni tugatishni belgilamadi: ${missing.map((s) => firstName(s)).join(", ")} — eslatma yuborildi`,
+      bubble: `${missing.length} kishiga "ishni tugating" dedim`,
+    });
+    console.log(`HR checkout reminder ${code} ${workEnd}: ${missing.length} open`);
   };
 
   const remindGroup = async (code, workStart, group) => {
