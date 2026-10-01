@@ -429,7 +429,7 @@ const handleQuestion = async (db, { chatId, threadId = null, replyTo, text, cont
   return { reply, pending: ctx.pending, files: ctx.files.map((f) => f.filename) };
 };
 
-const register = (app, db, hr = null, groups = null, marketing = null, chief = null, tasks = null, ads = null) => {
+const register = (app, db, hr = null, groups = null, marketing = null, chief = null, tasks = null, ads = null, content = null) => {
   const configured = Boolean(BOT_TOKEN && ANTHROPIC_API_KEY && ALLOWED_CHATS.size > 0);
   if (!configured) {
     console.log("Hisobchi bot: TELEGRAM_BOT_TOKEN / ANTHROPIC_API_KEY / ASSISTANT_CHAT_IDS not all set — not enabled.");
@@ -528,6 +528,12 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
         });
         if (handled) return;
       }
+      // A video from an admin: the Marketolog analyses it (content.js).
+      const isVideo = msg.video || msg.video_note || /^video\//.test(msg.document?.mime_type || "");
+      if (content && isVideo && !msg.from?.is_bot && (await privateAdmin(msg.chat.id, msg.from?.id))) {
+        await content.handleTelegramVideo(msg).catch((err) => console.error("Video analysis failed", err));
+        return;
+      }
       // An admin talks to every agent in private chat (adminPrivate below);
       // other staff get the limited assistant.
       if (text && !/^\/start\s/.test(text) && !msg.from?.is_bot && (await privateAdmin(msg.chat.id, msg.from?.id))) {
@@ -545,6 +551,13 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
         if (answered) return;
       }
       if (hr && text) await hr.handlePrivateMessage(msg).catch((err) => console.error("HR private message failed", err));
+      return;
+    }
+    // A video in the Marketing topic of the work group: video tahlili.
+    if (content && msg && !msg.from?.is_bot && (msg.video || /^video\//.test(msg.document?.mime_type || "")) && groups && (await groups.isGroup(msg.chat?.id))) {
+      if (msg.message_thread_id && msg.message_thread_id === (await groups.topicId("mkt"))) {
+        await content.handleTelegramVideo(msg).catch((err) => console.error("Video analysis failed", err));
+      }
       return;
     }
     if (!msg || !text || msg.from?.is_bot) return;

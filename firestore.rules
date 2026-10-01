@@ -225,6 +225,11 @@ service cloud.firestore {
       allow read: if can('ads', 'view');
       allow write: if isAdmin();
     }
+    // Marketolog video tahlillari (meta-webhook/content.js).
+    match /content_analyses/{id} {
+      allow read: if can('ads', 'view');
+      allow write: if false;
+    }
     match /ads_proposals/{id} {
       function stageOnly() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stage', 'history', 'updated_at']);

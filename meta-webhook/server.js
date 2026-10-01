@@ -71,7 +71,10 @@ const tasks = process.env.TELEGRAM_BOT_TOKEN ? require("./tasks").create(db) : n
 const amocrm = require("./amocrm").create(db);
 // Targetolog — Meta ads with marketolog → admin approval; see targetolog.js.
 const targetolog = groups ? require("./targetolog").create(db, { route: groups.route }) : null;
-const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog);
+// Marketolog video tahlili — see content.js (bot + site upload).
+const content = require("./content").create(db);
+content.register(app);
+const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
 // same Meta callback below (object "instagram").

@@ -75,7 +75,7 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "tasks", label: "Vazifalar" },
   // Reklama (Targetolog agent): view = see the page; edit = marketolog,
   // reviews proposals before the admin approves them.
-  { key: "ads", label: "Reklama (marketolog)" },
+  { key: "ads", label: "Reklama va Kontent (marketolog)" },
 ];
 
 export const emptyPermissions = (): StaffPermissions => {

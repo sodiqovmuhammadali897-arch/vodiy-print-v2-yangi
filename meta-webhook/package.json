@@ -13,6 +13,7 @@
     "@anthropic-ai/sdk": "^0.128.0",
     "@napi-rs/canvas": "^0.1.65",
     "express": "^4.21.1",
+    "ffmpeg-static": "^5.2.0",
     "firebase-admin": "^12.7.0",
     "pdfkit": "^0.15.2"
   }

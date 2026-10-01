@@ -9,6 +9,7 @@ import Dashboard from "./modules/dashboard/Dashboard";
 
 const SalesPipeline = lazy(() => import("./modules/leads/SalesPipeline"));
 const AdsPage = lazy(() => import("./modules/ads/AdsPage"));
+const ContentPage = lazy(() => import("./modules/content/ContentPage"));
 const Orders = lazy(() => import("./modules/orders/Orders"));
 const OrderDetail = lazy(() => import("./modules/orders/OrderDetail"));
 const OrderWizard = lazy(() => import("./modules/orders/wizard/OrderWizard"));
@@ -47,6 +48,7 @@ export default function App() {
 
           <Route element={<PermissionRoute module="ads" />}>
             <Route path="/ads" element={<AdsPage />} />
+            <Route path="/content" element={<ContentPage />} />
           </Route>
 
           <Route element={<PermissionRoute module="orders" />}>

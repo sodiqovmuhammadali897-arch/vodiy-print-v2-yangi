@@ -386,3 +386,16 @@ results) gets a `warning` to the marketolog and admins; unless an admin
 presses "Davom etsin" within `grace_minutes`, it is paused. Buttons
 `ads:<rv|rj|ok|st|go>:<id>` in private chats; the morning report and every
 result go to the 🎯 Reklama topic; everything is logged in `ads_log`.
+
+## Marketolog: video tahlili (`content.js`)
+
+A video sent to the bot (an admin's private chat, or the 📣 Marketing topic;
+Telegram lets bots download up to 20 MB) or uploaded on the site's Kontent
+page (`POST /webhooks/content/analyze`, raw file body + Firebase token, up
+to 500 MB — nginx has its own location for it) is cut into ~10 frames with
+`ffmpeg-static` (0–3 s closely, then evenly). Claude looks at the frames and
+returns, through a forced tool call, a score per area (hook, on-screen text,
+brand, quality, offer), concrete fixes with timestamps, three post texts
+with hashtags, where and when to post. Results with small frame thumbnails
+go to `content_analyses/{id}` (`processing` → `done` / `failed`). The sound
+is not analysed.
