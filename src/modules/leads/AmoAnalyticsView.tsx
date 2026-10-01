@@ -234,7 +234,7 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
               {status.ok !== false && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />}
               <span className={`relative inline-flex h-2 w-2 rounded-full ${status.ok === false ? "bg-rose-500" : "bg-emerald-500"}`} />
             </span>
-            {status.ok === false ? "Ulanishda xato" : syncLabel(status, now)}
+            {status.ok === false ? "Ulanishda xato" : syncLabel(status)}
           </span>
         )}
         <div className="inline-flex items-center rounded-full border border-ink-100 bg-surface p-1 shadow-sm">
@@ -517,7 +517,7 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
           />
           <div className="relative h-48">
             <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
-              {[chartMax, Math.round(chartMax / 2), 0].map((v, i) => (
+              {[chartMax, chartMax % 2 === 0 ? chartMax / 2 : "", 0].map((v, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className="w-7 text-right text-[10px] tabular-nums text-ink-400">{v}</span>
                   <span className="h-px flex-1 border-t border-dashed border-ink-200/70" />
@@ -645,10 +645,15 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
   );
 }
 
-const syncLabel = (status: AmoStatus, now: Date) => {
+// The time of the last pull, in Tashkent: "N minutes ago" would depend on
+// the viewer's computer clock, which is not always right.
+const syncLabel = (status: AmoStatus) => {
   if (!status.last_sync) return "Ulanmoqda…";
-  const ago = Math.max(0, Math.round((now.getTime() - Date.parse(status.last_sync)) / 60000));
-  return ago < 1 ? "Jonli · hozirgina yangilandi" : `Jonli · ${ago} daq oldin`;
+  const at = new Date(Date.parse(status.last_sync) + 5 * 3600e3);
+  const hm = at.toISOString().slice(11, 16);
+  const day = at.toISOString().slice(0, 10);
+  const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+  return `Jonli · ${day === today ? "" : `${Number(day.slice(8, 10))}-${MONTHS[Number(day.slice(5, 7)) - 1].toLowerCase()} `}${hm} da yangilandi`;
 };
 
 const convTone = (c: number | null) =>
