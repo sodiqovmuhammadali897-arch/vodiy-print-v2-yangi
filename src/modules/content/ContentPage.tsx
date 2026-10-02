@@ -217,9 +217,11 @@ function AnalysisView({ a }: { a: Analysis }) {
       </Card>
     );
   }
-  const r = normalizeContentResult(a.result);
+  const parsed = normalizeContentResult(a.result);
+  // Saved before the fix: frames are there but the answer came back empty.
+  const r = parsed && (parsed.tavsiyalar.length || parsed.matnlar.length || parsed.qisqa_xulosa) ? parsed : null;
   if (a.status === "failed" || !r) {
-    return <Card className="text-sm text-rose-600">«{a.file_name}» ni tahlil qilib bo'lmadi: {a.error || "natija to'liq kelmadi — videoni qayta yuboring"}</Card>;
+    return <Card className="text-sm text-rose-600">«{a.file_name}» ni tahlil qilib bo'lmadi: {a.error || "AI javobi to'liq kelmagan — videoni qayta yuklang"}</Card>;
   }
   const copy = async (i: number, text: string) => {
     try {

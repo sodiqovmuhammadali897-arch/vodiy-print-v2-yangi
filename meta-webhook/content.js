@@ -192,6 +192,7 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
         "Baholashda: birinchi 3 soniya (odamlar shu vaqtda o'tib ketadi), ekrandagi matn o'qilishi, mahsulot va logotip ko'rinishi, tasvir sifati/yorug'lik, aniq taklif (narx, muddat, chaqiriq).",
         "Tavsiyalar aniq bo'lsin: qaysi soniyadagi kadr, nimani qo'shish/olib tashlash. Matnlar o'zbek tilida (lotin), tabiiy, emoji me'yorida, oxirida Direct'ga yozishga chaqiriq.",
         "Raqam yoki narxni o'ylab topma: video yoki izohda bo'lmasa, '…dan boshlab' kabi bo'sh joy qoldir.",
+        "Qisqa yoz: har bir izoh 15 so'zgacha, har bir tavsiya bitta gap, har bir post matni 350 belgigacha. Javobni faqat video_tahlili vositasi orqali ber.",
       ].join("\n");
       const products = await catalogHint();
       const content = [
@@ -211,7 +212,14 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
         content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: f.image } });
       }
       const data = await claude({ model: MODEL, max_tokens: 8000, system, messages: [{ role: "user", content }], tools: [RESULT_TOOL], tool_choice: { type: "tool", name: RESULT_TOOL.name } });
-      const result = normalizeResult((data.content || []).find((c) => c.type === "tool_use")?.input);
+      let input = (data.content || []).find((c) => c.type === "tool_use")?.input;
+      // Some answers come wrapped once more: { video_tahlili: {...} }.
+      if (input && typeof input === "object" && !input.umumiy_baho && Object.keys(input).length === 1) {
+        const inner = Object.values(input)[0];
+        if (inner && typeof inner === "object") input = inner;
+      }
+      const result = normalizeResult(input);
+      log.log?.(`Video analysis: stop=${data.stop_reason} out=${data.usage?.output_tokens} keys=${Object.keys(input || {}).join(",")}`);
       if (!result || (!result.tavsiyalar.length && !result.matnlar.length)) {
         throw new Error(data.stop_reason === "max_tokens" ? "Javob juda uzun bo'lib kesildi — qayta yuboring" : "Tahlil natijasi to'liq kelmadi — qayta yuboring");
       }
