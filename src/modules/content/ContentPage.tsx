@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Clapperboard, Copy, History, Lightbulb, Loader2, Mic, Send, Sparkles, Upload } from "lucide-react";
-import { subscribeAll } from "../../lib/firestoreDb";
+import { Check, Clapperboard, Copy, History, Lightbulb, Loader2, Mic, Send, Sparkles, Trash2, Upload } from "lucide-react";
+import { deleteOne, subscribeAll } from "../../lib/firestoreDb";
 import { useAuth } from "../../lib/AuthContext";
 import { normalizeContentResult, type ContentResult } from "../../lib/contentResult";
 
@@ -45,14 +45,19 @@ const when = (iso: string | undefined) => {
   const d = new Date(ms + 5 * 3600e3).toISOString();
   return `${d.slice(8, 10)}.${d.slice(5, 7)} ${d.slice(11, 16)}`;
 };
+// A fresh "processing" row is still being written by the server — deleting
+// it now would only bring it back when the answer lands. Older ones are stuck.
+const busy = (r: Analysis) => r.status === "processing" && Date.now() - Date.parse(r.created_at || "") < 15 * 60e3;
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`rounded-3xl border border-ink-100 bg-surface p-5 shadow-sm ${className}`}>{children}</div>;
 }
 
 export default function ContentPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
+  const canDelete = can("ads", "delete");
   const [rows, setRows] = useState<Analysis[]>([]);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
@@ -70,6 +75,20 @@ export default function ContentPage() {
     if (!f.type.startsWith("video/")) return setError("Bu video fayl emas");
     if (f.size > MAX) return setError(`Video ${Math.round(f.size / 1048576)} MB — 500 MB gacha bo'lishi kerak`);
     setFile(f);
+  };
+
+  const remove = async (r: Analysis) => {
+    if (!window.confirm(`«${r.file_name || "video"}» tahlilini o'chirasizmi? Qaytarib bo'lmaydi.`)) return;
+    setRemoving(r.id);
+    setError(null);
+    try {
+      await deleteOne("content_analyses", r.id);
+      if (selected === r.id) setSelected(null);
+    } catch {
+      setError("O'chirib bo'lmadi — ruxsatingiz yo'q yoki internet uzildi");
+    } finally {
+      setRemoving(null);
+    }
   };
 
   const upload = async () => {
@@ -169,33 +188,42 @@ export default function ContentPage() {
           </div>
           <div className="max-h-[260px] space-y-1 overflow-y-auto">
             {rows.slice(0, 30).map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => setSelected(r.id)}
-                className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition ${current?.id === r.id ? "bg-violet-50 dark:bg-violet-950/40" : "hover:bg-ink-50"}`}
-              >
-                {Array.isArray(r.frames) && (r.frames[2]?.thumb || r.frames[0]?.thumb) ? (
-                  <img src={`data:image/jpeg;base64,${r.frames[2]?.thumb || r.frames[0]?.thumb}`} alt="" className="h-10 w-7 shrink-0 rounded-md object-cover" />
-                ) : (
-                  <span className="inline-flex h-10 w-7 shrink-0 items-center justify-center rounded-md bg-ink-100 text-ink-400">
-                    <Clapperboard className="h-3.5 w-3.5" />
+              <div key={r.id} className={`group flex items-center rounded-xl transition ${current?.id === r.id ? "bg-violet-50 dark:bg-violet-950/40" : "hover:bg-ink-50"}`}>
+                <button type="button" onClick={() => setSelected(r.id)} className="flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2 text-left">
+                  {Array.isArray(r.frames) && (r.frames[2]?.thumb || r.frames[0]?.thumb) ? (
+                    <img src={`data:image/jpeg;base64,${r.frames[2]?.thumb || r.frames[0]?.thumb}`} alt="" className="h-10 w-7 shrink-0 rounded-md object-cover" />
+                  ) : (
+                    <span className="inline-flex h-10 w-7 shrink-0 items-center justify-center rounded-md bg-ink-100 text-ink-400">
+                      <Clapperboard className="h-3.5 w-3.5" />
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-ink-800">{r.file_name || "video"}</span>
+                    <span className="block text-[11px] text-ink-400">
+                      {when(r.created_at)} · {r.source === "telegram" ? "Telegram" : "sayt"} · {r.by}
+                    </span>
                   </span>
+                  {r.status === "done" && normalizeContentResult(r.result) ? (
+                    <span className={`font-display text-sm font-extrabold tabular-nums ${toneText(normalizeContentResult(r.result)!.umumiy_baho)}`}>{normalizeContentResult(r.result)!.umumiy_baho}</span>
+                  ) : r.status === "processing" ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                  ) : (
+                    <span className="text-[11px] font-bold text-rose-500">xato</span>
+                  )}
+                </button>
+                {canDelete && !busy(r) && (
+                  <button
+                    type="button"
+                    title="O'chirish"
+                    aria-label={`«${r.file_name || "video"}» tahlilini o'chirish`}
+                    disabled={removing === r.id}
+                    onClick={() => void remove(r)}
+                    className="mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-300 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:text-rose-600 group-hover:text-ink-400 disabled:opacity-50 dark:hover:bg-rose-950/40"
+                  >
+                    {removing === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </button>
                 )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-ink-800">{r.file_name || "video"}</span>
-                  <span className="block text-[11px] text-ink-400">
-                    {when(r.created_at)} · {r.source === "telegram" ? "Telegram" : "sayt"} · {r.by}
-                  </span>
-                </span>
-                {r.status === "done" && normalizeContentResult(r.result) ? (
-                  <span className={`font-display text-sm font-extrabold tabular-nums ${toneText(normalizeContentResult(r.result)!.umumiy_baho)}`}>{normalizeContentResult(r.result)!.umumiy_baho}</span>
-                ) : r.status === "processing" ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
-                ) : (
-                  <span className="text-[11px] font-bold text-rose-500">xato</span>
-                )}
-              </button>
+              </div>
             ))}
             {!rows.length && <div className="px-2 py-4 text-sm text-ink-400">Hali tahlil yo'q</div>}
           </div>
