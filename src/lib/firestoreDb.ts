@@ -89,6 +89,15 @@ const openHub = (name: string): Hub => {
   return hub;
 };
 
+// Opens the listeners ahead of time (right after sign-in), so the first
+// page that needs the data finds it already loaded.
+export const warmCollections = (names: string[]): void => {
+  for (const n of names) if (SHARED.has(n)) openHub(n);
+};
+
+// Rows of a shared collection already in memory, or null when not loaded yet.
+const loadedRows = (name: string): WithId<DocumentData>[] | null => (SHARED.has(name) ? hubs.get(name)?.rows ?? null : null);
+
 // Called when the signed-in user changes — another user may see other data.
 export const resetCollectionCache = (): void => {
   hubs.forEach((h) => h.stop());
@@ -143,6 +152,9 @@ export const listWhere = async <T>(
   value: unknown,
   options?: ListOptions,
 ): Promise<WithId<T>[]> => {
+  // Already in memory: no round trip (plain values compare like "==").
+  const rows = loadedRows(name);
+  if (rows && (value === null || typeof value !== "object")) return arrange<T>(rows.filter((r) => r[field] === value), options?.orderBy);
   const constraints: QueryConstraint[] = [where(field, "==", value), ...buildOrder(options?.orderBy)];
   const snap = await getDocs(query(collection(db, name), ...constraints));
   return snap.docs.map((d) => mapDoc<T>(d));
@@ -200,6 +212,8 @@ export const getOne = async <T>(
   name: string,
   id: string,
 ): Promise<WithId<T> | null> => {
+  const rows = loadedRows(name);
+  if (rows) return (rows.find((r) => r.id === id) as WithId<T> | undefined) ?? null;
   const snap = await getDoc(doc(db, name, id));
   return snap.exists() ? ({ id: snap.id, ...(snap.data() as T) } as WithId<T>) : null;
 };

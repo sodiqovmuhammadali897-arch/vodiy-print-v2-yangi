@@ -6,12 +6,14 @@ import Topbar from "./Topbar";
 import ErrorBoundary from "../ErrorBoundary";
 import { useAuth } from "../../lib/AuthContext";
 import { useActivityHeartbeat } from "../../lib/activityTracking";
+import { useWarmup } from "../../lib/warmup";
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, staff } = useAuth();
   const location = useLocation();
   useActivityHeartbeat(user?.email?.toLowerCase() || null, staff?.full_name || "");
+  useWarmup();
   return (
     <div className="flex h-screen w-full overflow-hidden bg-ink-50">
       <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />

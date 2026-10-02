@@ -1,34 +1,13 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { lazy } from "react";
 import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 import AdminRoute from "./components/auth/AdminRoute";
 import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
+import { pages } from "./pages";
 
-const SalesPipeline = lazy(() => import("./modules/leads/SalesPipeline"));
-const AdsPage = lazy(() => import("./modules/ads/AdsPage"));
-const ContentPage = lazy(() => import("./modules/content/ContentPage"));
-const Orders = lazy(() => import("./modules/orders/Orders"));
-const OrderDetail = lazy(() => import("./modules/orders/OrderDetail"));
-const OrderWizard = lazy(() => import("./modules/orders/wizard/OrderWizard"));
-const Customers = lazy(() => import("./modules/customers/Customers"));
-const CustomerDetail = lazy(() => import("./modules/customers/CustomerDetail"));
-const Products = lazy(() => import("./modules/products/ProductsPage"));
-const Proposals = lazy(() => import("./modules/proposals/Proposals"));
-const ProposalEditor = lazy(() => import("./modules/proposals/ProposalEditor"));
-const Textile = lazy(() => import("./modules/textile/Textile"));
-const Warehouse = lazy(() => import("./modules/warehouse/Warehouse"));
-const Finance = lazy(() => import("./modules/finance/Finance"));
-const Reports = lazy(() => import("./modules/reports/Reports"));
-const MarginPage = lazy(() => import("./modules/margin/MarginPage"));
-const AiOffice = lazy(() => import("./modules/aioffice/AiOffice"));
-const Production = lazy(() => import("./modules/production/Production"));
-const Pechatnik = lazy(() => import("./modules/production/Pechatnik"));
-const AttendancePage = lazy(() => import("./modules/attendance/AttendancePage"));
-const Tasks = lazy(() => import("./modules/tasks/Tasks"));
-const Settings = lazy(() => import("./modules/settings/Settings"));
+const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, Settings } = pages;
 
 export default function App() {
   return (

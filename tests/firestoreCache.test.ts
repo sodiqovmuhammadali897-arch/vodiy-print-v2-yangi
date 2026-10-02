@@ -86,6 +86,19 @@ describe("shared collection cache", () => {
     expect(await fresh).toEqual([]);
   });
 
+  it("answers lookups from memory once a collection is loaded", async () => {
+    // Not loaded yet: straight to the server.
+    await db.listWhere("order_products", "product_name", "Paket");
+    expect(getDocs).toHaveBeenCalledTimes(1);
+    db.warmCollections(["order_products", "tasks"]);
+    expect(listeners.has("tasks")).toBe(false);
+    listeners.get("order_products")!.next(snap([{ id: "a", product_name: "Paket", position: 2 }, { id: "b", product_name: "Kitob" }, { id: "c", product_name: "Paket", position: 1 }]));
+    expect((await db.listWhere("order_products", "product_name", "Paket", { orderBy: ["position", "asc"] })).map((r) => r.id)).toEqual(["c", "a"]);
+    expect(await db.getOne("order_products", "b")).toEqual({ id: "b", product_name: "Kitob" });
+    expect(await db.getOne("order_products", "zz")).toBeNull();
+    expect(getDocs).toHaveBeenCalledTimes(1);
+  });
+
   it("reads other collections straight from the server", async () => {
     await db.listAll("tasks");
     expect(getDocs).toHaveBeenCalledTimes(1);

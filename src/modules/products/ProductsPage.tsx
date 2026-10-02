@@ -26,8 +26,9 @@ export default function ProductsPage() {
   const [customerView, setCustomerView] = useState(false);
   const showCustomerView = forcedCustomerView || customerView;
 
+  // The spinner is only for the very first load; a reload after saving
+  // keeps the list on screen.
   const load = async (keepSelection = true) => {
-    setLoading(true);
     const data = await listAll<Product>("products", { orderBy: ["name", "asc"] });
     setProducts(data);
     setLoading(false);
