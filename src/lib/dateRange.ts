@@ -1,4 +1,4 @@
-export type DateRangePreset = "today" | "week" | "month" | "year" | "custom";
+export type DateRangePreset = "today" | "week" | "month" | "prev_month" | "year" | "custom";
 
 export type DateRange = {
   preset: DateRangePreset;
@@ -10,24 +10,27 @@ const toISODate = (d: Date): string => d.toISOString().slice(0, 10);
 
 const startOfWeek = (d: Date): Date => {
   const out = new Date(d);
-  const day = (out.getDay() + 6) % 7; // Monday = 0
-  out.setDate(out.getDate() - day);
+  const day = (out.getUTCDay() + 6) % 7; // Monday = 0
+  out.setUTCDate(out.getUTCDate() - day);
   return out;
 };
 
-export const presetRange = (preset: DateRangePreset): { from: string; to: string } => {
-  const now = new Date();
-  const today = toISODate(now);
+// Days are Tashkent days (UTC+5), like inRange below. The UTC getters of a
+// shifted Date give the Tashkent calendar whatever the browser's clock zone.
+const tashkentNow = (now: Date): Date => new Date(now.getTime() + 5 * 3600 * 1000);
+const ymd = (y: number, m: number, d: number): string => toISODate(new Date(Date.UTC(y, m, d)));
+
+export const presetRange = (preset: DateRangePreset, now: Date = new Date()): { from: string; to: string } => {
+  const t = tashkentNow(now);
+  const y = t.getUTCFullYear();
+  const m = t.getUTCMonth();
+  const today = toISODate(t);
   if (preset === "today") return { from: today, to: today };
-  if (preset === "week") return { from: toISODate(startOfWeek(now)), to: today };
-  if (preset === "month") {
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    return { from: toISODate(start), to: today };
-  }
-  if (preset === "year") {
-    const start = new Date(now.getFullYear(), 0, 1);
-    return { from: toISODate(start), to: today };
-  }
+  if (preset === "week") return { from: toISODate(startOfWeek(t)), to: today };
+  if (preset === "month") return { from: ymd(y, m, 1), to: today };
+  // Day 0 of a month is the last day of the one before it.
+  if (preset === "prev_month") return { from: ymd(y, m - 1, 1), to: ymd(y, m, 0) };
+  if (preset === "year") return { from: ymd(y, 0, 1), to: today };
   return { from: today, to: today };
 };
 
@@ -58,6 +61,12 @@ export const inRange = (isoDateOrDatetime: string | null | undefined, range: Dat
 // Returns the immediately preceding period of equal length, for
 // period-over-period growth comparisons.
 export const previousPeriod = (range: DateRange): DateRange => {
+  // A whole month compares with the whole month before it, not with the
+  // last 30 days of it.
+  if (range.preset === "prev_month") {
+    const [y, m] = range.from.split("-").map(Number);
+    return { preset: "custom", from: ymd(y, m - 2, 1), to: ymd(y, m - 1, 0) };
+  }
   const from = new Date(`${range.from}T00:00:00.000Z`);
   const to = new Date(`${range.to}T00:00:00.000Z`);
   const spanMs = to.getTime() - from.getTime() + 24 * 60 * 60 * 1000;

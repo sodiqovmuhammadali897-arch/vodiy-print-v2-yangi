@@ -9,6 +9,7 @@ const PRESETS: { key: DateRangePreset; label: string }[] = [
   { key: "today", label: "Bugun" },
   { key: "week", label: "Bu hafta" },
   { key: "month", label: "Bu oy" },
+  { key: "prev_month", label: "O'tgan oy" },
   { key: "year", label: "Bu yil" },
   { key: "custom", label: "Maxsus" },
 ];
