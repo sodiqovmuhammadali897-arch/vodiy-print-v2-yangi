@@ -1,14 +1,16 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { Suspense, useState } from "react";
 import { Loader } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import ErrorBoundary from "../ErrorBoundary";
 import { useAuth } from "../../lib/AuthContext";
 import { useActivityHeartbeat } from "../../lib/activityTracking";
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, staff } = useAuth();
+  const location = useLocation();
   useActivityHeartbeat(user?.email?.toLowerCase() || null, staff?.full_name || "");
   return (
     <div className="flex h-screen w-full overflow-hidden bg-ink-50">
@@ -24,7 +26,9 @@ export default function Layout() {
                 </div>
               }
             >
-              <Outlet />
+              <ErrorBoundary resetKey={location.pathname}>
+                <Outlet />
+              </ErrorBoundary>
             </Suspense>
           </div>
         </main>

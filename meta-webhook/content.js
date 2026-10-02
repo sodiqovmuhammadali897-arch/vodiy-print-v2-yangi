@@ -104,6 +104,49 @@ const RESULT_TOOL = {
   },
 };
 
+// The model sometimes sends a list as a JSON string or a number as text;
+// saved results always have one shape (src/lib/contentResult.ts mirrors it).
+const parseMaybe = (v) => {
+  if (typeof v !== "string" || !/^\s*[[{]/.test(v)) return v;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
+};
+const score = (v) => {
+  const n = Number(String(v ?? "").replace(",", ".").replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? Math.max(0, Math.min(10, Math.round(n * 10) / 10)) : 0;
+};
+const str = (v) => (v === null || v === undefined ? "" : typeof v === "string" ? v : typeof v === "object" ? JSON.stringify(v) : String(v));
+const normalizeResult = (raw) => {
+  const o = parseMaybe(raw);
+  if (!o || typeof o !== "object") return null;
+  const baholar = {};
+  const scoresIn = parseMaybe(o.baholar);
+  for (const [k, v] of Object.entries(scoresIn && typeof scoresIn === "object" ? scoresIn : {})) {
+    const x = parseMaybe(v);
+    baholar[k] = x && typeof x === "object" ? { ball: score(x.ball), izoh: str(x.izoh) } : { ball: score(x), izoh: "" };
+  }
+  const tips = parseMaybe(o.tavsiyalar);
+  const texts = parseMaybe(o.matnlar);
+  return {
+    umumiy_baho: score(o.umumiy_baho),
+    qisqa_xulosa: str(o.qisqa_xulosa),
+    baholar,
+    tavsiyalar: Array.isArray(tips) ? tips.map(str).filter(Boolean) : typeof tips === "string" ? tips.split(/\n+/).map((x) => x.replace(/^[\s•\-–\d.)]+/, "").trim()).filter(Boolean) : [],
+    matnlar: (Array.isArray(texts) ? texts : typeof texts === "string" && texts.trim() ? [texts] : [])
+      .map((m) => {
+        const x = parseMaybe(m);
+        return x && typeof x === "object" ? { uslub: str(x.uslub), matn: str(x.matn), heshteglar: str(x.heshteglar) } : { uslub: "", matn: str(x), heshteglar: "" };
+      })
+      .filter((m) => m.matn),
+    qayerga: str(o.qayerga),
+    vaqt: str(o.vaqt),
+    reklamaga_mos: o.reklamaga_mos === true || o.reklamaga_mos === "true",
+  };
+};
+
 const fmtTime = (t) => `0:${String(Math.floor(t)).padStart(2, "0")}`;
 
 const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staffFromRequest, log = console } = {}) => {
@@ -167,9 +210,11 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
         content.push({ type: "text", text: `Kadr ${fmtTime(f.t)}:` });
         content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: f.image } });
       }
-      const data = await claude({ model: MODEL, max_tokens: 4000, system, messages: [{ role: "user", content }], tools: [RESULT_TOOL], tool_choice: { type: "tool", name: RESULT_TOOL.name } });
-      const result = (data.content || []).find((c) => c.type === "tool_use")?.input;
-      if (!result) throw new Error("Tahlil natijasi kelmadi");
+      const data = await claude({ model: MODEL, max_tokens: 8000, system, messages: [{ role: "user", content }], tools: [RESULT_TOOL], tool_choice: { type: "tool", name: RESULT_TOOL.name } });
+      const result = normalizeResult((data.content || []).find((c) => c.type === "tool_use")?.input);
+      if (!result || (!result.tavsiyalar.length && !result.matnlar.length)) {
+        throw new Error(data.stop_reason === "max_tokens" ? "Javob juda uzun bo'lib kesildi — qayta yuboring" : "Tahlil natijasi to'liq kelmadi — qayta yuboring");
+      }
       return { info, frames: frames.map((f) => ({ t: f.t, thumb: f.thumb })), result };
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -299,4 +344,4 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
   return { register, handleTelegramVideo, analyze, analyzeFile, formatResult, _test: { probe, frameTimes } };
 };
 
-module.exports = { create, frameTimes, RESULT_TOOL };
+module.exports = { create, frameTimes, RESULT_TOOL, normalizeResult };

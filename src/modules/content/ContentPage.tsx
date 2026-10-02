@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Clapperboard, Copy, History, Lightbulb, Loader2, Send, Sparkles, Upload } from "lucide-react";
 import { subscribeAll } from "../../lib/firestoreDb";
 import { useAuth } from "../../lib/AuthContext";
+import { normalizeContentResult, type ContentResult } from "../../lib/contentResult";
 
 // Kontent: drop a video, the Marketolog agent (meta-webhook/content.js)
 // looks at its frames and answers with a score, what to fix and ready post
 // texts. The same works by sending the video to the bot.
 
-type Score = { ball: number; izoh: string };
 type Analysis = {
   id: string;
   status: "processing" | "done" | "failed";
@@ -22,19 +22,10 @@ type Analysis = {
   error?: string;
   created_at: string;
   frames?: { t: number; thumb: string | null }[];
-  result?: {
-    umumiy_baho: number;
-    qisqa_xulosa: string;
-    baholar: Record<"boshlanish" | "ekrandagi_matn" | "brend" | "sifat" | "taklif", Score>;
-    tavsiyalar: string[];
-    matnlar: { uslub: string; matn: string; heshteglar: string }[];
-    qayerga: string;
-    vaqt: string;
-    reklamaga_mos: boolean;
-  };
+  result?: unknown;
 };
 
-const SCORE_LABELS: [keyof NonNullable<Analysis["result"]>["baholar"], string][] = [
+const SCORE_LABELS: [keyof ContentResult["baholar"], string][] = [
   ["boshlanish", "Boshlanish (0–3 s)"],
   ["ekrandagi_matn", "Ekrandagi matn"],
   ["brend", "Brend va logotip"],
@@ -45,8 +36,10 @@ const MAX = 500 * 1024 * 1024;
 const tone = (n: number) => (n >= 8 ? "#10b981" : n >= 6 ? "#f59e0b" : "#f43f5e");
 const toneText = (n: number) => (n >= 8 ? "text-emerald-600 dark:text-emerald-400" : n >= 6 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400");
 const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
-const when = (iso: string) => {
-  const d = new Date(Date.parse(iso) + 5 * 3600e3).toISOString();
+const when = (iso: string | undefined) => {
+  const ms = Date.parse(String(iso || ""));
+  if (!Number.isFinite(ms)) return "—";
+  const d = new Date(ms + 5 * 3600e3).toISOString();
   return `${d.slice(8, 10)}.${d.slice(5, 7)} ${d.slice(11, 16)}`;
 };
 
@@ -179,21 +172,21 @@ export default function ContentPage() {
                 onClick={() => setSelected(r.id)}
                 className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition ${current?.id === r.id ? "bg-violet-50 dark:bg-violet-950/40" : "hover:bg-ink-50"}`}
               >
-                {r.frames?.[2]?.thumb || r.frames?.[0]?.thumb ? (
-                  <img src={`data:image/jpeg;base64,${(r.frames[2] || r.frames[0]).thumb}`} alt="" className="h-10 w-7 shrink-0 rounded-md object-cover" />
+                {Array.isArray(r.frames) && (r.frames[2]?.thumb || r.frames[0]?.thumb) ? (
+                  <img src={`data:image/jpeg;base64,${r.frames[2]?.thumb || r.frames[0]?.thumb}`} alt="" className="h-10 w-7 shrink-0 rounded-md object-cover" />
                 ) : (
                   <span className="inline-flex h-10 w-7 shrink-0 items-center justify-center rounded-md bg-ink-100 text-ink-400">
                     <Clapperboard className="h-3.5 w-3.5" />
                   </span>
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-ink-800">{r.file_name}</span>
+                  <span className="block truncate text-sm font-semibold text-ink-800">{r.file_name || "video"}</span>
                   <span className="block text-[11px] text-ink-400">
                     {when(r.created_at)} · {r.source === "telegram" ? "Telegram" : "sayt"} · {r.by}
                   </span>
                 </span>
-                {r.status === "done" && r.result ? (
-                  <span className={`font-display text-sm font-extrabold tabular-nums ${toneText(r.result.umumiy_baho)}`}>{r.result.umumiy_baho}</span>
+                {r.status === "done" && normalizeContentResult(r.result) ? (
+                  <span className={`font-display text-sm font-extrabold tabular-nums ${toneText(normalizeContentResult(r.result)!.umumiy_baho)}`}>{normalizeContentResult(r.result)!.umumiy_baho}</span>
                 ) : r.status === "processing" ? (
                   <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
                 ) : (
@@ -224,10 +217,10 @@ function AnalysisView({ a }: { a: Analysis }) {
       </Card>
     );
   }
-  if (a.status === "failed" || !a.result) {
-    return <Card className="text-sm text-rose-600">«{a.file_name}» ni tahlil qilib bo'lmadi: {a.error || "noma'lum xato"}</Card>;
+  const r = normalizeContentResult(a.result);
+  if (a.status === "failed" || !r) {
+    return <Card className="text-sm text-rose-600">«{a.file_name}» ni tahlil qilib bo'lmadi: {a.error || "natija to'liq kelmadi — videoni qayta yuboring"}</Card>;
   }
-  const r = a.result;
   const copy = async (i: number, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -247,7 +240,7 @@ function AnalysisView({ a }: { a: Analysis }) {
               <h3 className="truncate font-display text-[15px] font-bold text-ink-900">{a.file_name}</h3>
             </div>
             <p className="text-xs text-ink-500">
-              {a.duration ? `${a.duration.toFixed(0)} s` : ""}
+              {Number(a.duration) ? `${Number(a.duration).toFixed(0)} s` : ""}
               {a.width ? ` · ${a.width}×${a.height}` : ""}
               {a.size ? ` · ${Math.round(a.size / 1048576)} MB` : ""} · {when(a.created_at)} · {a.by}
               {a.note ? ` · «${a.note}»` : ""}
@@ -264,7 +257,7 @@ function AnalysisView({ a }: { a: Analysis }) {
           </div>
         </div>
         <p className="mt-3 text-sm text-ink-700">{r.qisqa_xulosa}</p>
-        {a.frames && a.frames.length > 0 && (
+        {Array.isArray(a.frames) && a.frames.length > 0 && (
           <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
             {a.frames.map((f) => (
               <div key={f.t} className="relative shrink-0">
