@@ -302,6 +302,10 @@ export default function Reports() {
     [orders],
   );
   const totalDebt = debtOrders.reduce((s, r) => s + r.remaining, 0);
+  // The card follows the chosen period: what is still owed on the orders
+  // placed in it ("O'tgan oy" — what is left of last month's orders).
+  const periodDebtOrders = useMemo(() => debtOrders.filter((r) => inRange(r.order.order_date || r.order.created_at, range) && (!managerFilter || r.order.manager_name === managerFilter)), [debtOrders, range, managerFilter]);
+  const periodDebt = periodDebtOrders.reduce((s, r) => s + r.remaining, 0);
 
   const paymentDiscipline =
     totalRevenue > 0 ? (ordersInRange.reduce((s, o) => s + Number(o.paid_amount || 0), 0) / totalRevenue) * 100 : null;
@@ -691,6 +695,7 @@ export default function Reports() {
       ["Umumiy summa", totalRevenue],
       ["O'rtacha chek", Math.round(avgCheck)],
       ...(canViewFinance ? [["Sof foyda", profit]] as [string, number][] : []),
+      ["Qarzdorlik (shu davr buyurtmalari)", periodDebt],
       ["Umumiy qarzdorlik", totalDebt],
       ["Muddatda bajarilgan", `${onTimeStats.onTime}/${onTimeStats.total}`],
       ["Yangi mijozlar soni", customerSegments.newCount],
@@ -969,10 +974,10 @@ export default function Reports() {
           />
         )}
         <StatCard
-          title="Qarzdorlik"
-          value={formatMoneyShort(totalDebt)}
-          hint={`${debtOrders.length} ta buyurtma`}
-          tone={totalDebt > 0 ? "rose" : "emerald"}
+          title="Qarzdorlik (shu davr)"
+          value={formatMoneyShort(periodDebt)}
+          hint={`${periodDebtOrders.length} ta buyurtma · Umumiy: ${formatMoneyShort(totalDebt)}`}
+          tone={periodDebt > 0 ? "rose" : "emerald"}
           icon={<Wallet className="h-5 w-5" />}
         />
         <StatCard

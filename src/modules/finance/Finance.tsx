@@ -128,15 +128,29 @@ export default function Finance() {
     (s, o) => s + Number(o.delivery_cost || 0),
     0,
   );
-  const debtTotal = orders
-    .filter((o) => o.status !== "cancelled")
-    .reduce(
-      (s, o) =>
-        s +
-        (Number(o.remaining_amount || 0) ||
-          Math.max(0, Number(o.total_amount || 0) - Number(o.paid_amount || 0))),
-      0,
-    );
+  const debtOf = (list: Order[]) =>
+    list
+      .filter((o) => o.status !== "cancelled")
+      .reduce(
+        (s, o) =>
+          s +
+          (Number(o.remaining_amount || 0) ||
+            Math.max(0, Number(o.total_amount || 0) - Number(o.paid_amount || 0))),
+        0,
+      );
+  // Whatever is still owed today: for the period, on the orders placed in
+  // it ("O'tgan oy" — what is left of last month's orders); overall, on all.
+  const debtTotal = debtOf(orders);
+  const periodDebt = debtOf(ordersInRange);
+  const debtCard = (
+    <StatCard
+      title="Qarzdorlik (shu davr)"
+      value={formatMoneyShort(periodDebt)}
+      hint={`${formatMoney(periodDebt)} · Umumiy: ${formatMoney(debtTotal)}`}
+      tone="amber"
+      icon={<Wallet className="h-5 w-5" />}
+    />
+  );
 
   const planProgress = plan && plan.plan_amount > 0 ? (income / plan.plan_amount) * 100 : 0;
 
@@ -184,6 +198,7 @@ export default function Finance() {
           ] as [string, number][])),
       ["Chegirmalar", discountTotal],
       ["Yetkazish xarajati", deliveryTotal],
+      ["Qarzdorlik (shu davr buyurtmalari)", periodDebt],
       ["Umumiy qarzdorlik", debtTotal],
       ["Yangi mijozlar soni", customerSegments.newCount],
       ["Yangi mijozlardan kirim", customerSegments.newRevenue],
@@ -264,13 +279,7 @@ export default function Finance() {
             tone={breakdown.net >= 0 ? "brand" : "rose"}
             icon={<PiggyBank className="h-5 w-5" />}
           />
-          <StatCard
-            title="Umumiy qarzdorlik"
-            value={formatMoneyShort(debtTotal)}
-            hint={formatMoney(debtTotal)}
-            tone="amber"
-            icon={<Wallet className="h-5 w-5" />}
-          />
+          {debtCard}
         </div>
       ) : (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -295,13 +304,7 @@ export default function Finance() {
           tone={profit >= 0 ? "brand" : "rose"}
           icon={<PiggyBank className="h-5 w-5" />}
         />
-        <StatCard
-          title="Umumiy qarzdorlik"
-          value={formatMoneyShort(debtTotal)}
-          hint={formatMoney(debtTotal)}
-          tone="amber"
-          icon={<Wallet className="h-5 w-5" />}
-        />
+        {debtCard}
       </div>
       )}
 
@@ -309,7 +312,7 @@ export default function Finance() {
         <StatCard
           title="To'langan (naqd kirim)"
           value={formatMoneyShort(collected)}
-          hint={`${formatMoney(collected)} · Qarzdorlik: ${formatMoney(debtTotal)}`}
+          hint={`${formatMoney(collected)} · Qarzdorlik (shu davr): ${formatMoney(periodDebt)}`}
           tone="emerald"
           icon={<Wallet className="h-5 w-5" />}
         />
