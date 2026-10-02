@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Undo2, Users } from "lucide-react";
+import { MapPin, PencilLine, Undo2, Users } from "lucide-react";
 import { insertOne, listAll, subscribeWhere, updateOne } from "../../lib/firestoreDb";
 import { useAuth } from "../../lib/AuthContext";
 import type { AttendanceRecord, PersonalSchedule, WorkSchedule } from "../../lib/types";
@@ -7,6 +7,7 @@ import type { Staff } from "../../lib/permissions";
 import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
 import { deriveDisplayStatus, dateCodeOf, formatMinutes, mergeSchedule, withWorkedMinutes } from "../../utils/attendanceCalculations";
 import AsyncState from "../../components/ui/AsyncState";
+import ManualAttendanceModal from "./ManualAttendanceModal";
 
 const STATUS_TONE: Record<string, string> = {
   "Kechikdi": "bg-amber-100 text-amber-800",
@@ -29,6 +30,8 @@ export default function AttendanceAdminTable() {
   const dateCode = dateCodeOf(new Date());
   const { user } = useAuth();
   const [undoing, setUndoing] = useState<string | null>(null);
+  // Email of the person whose day is being filled in by hand ("" = pick one).
+  const [manualFor, setManualFor] = useState<string | null>(null);
 
   // A check-out pressed by mistake (e.g. on someone else's phone): reopen
   // the day so the employee can work on and check out again. Logged.
@@ -121,6 +124,12 @@ export default function AttendanceAdminTable() {
         <SummaryCard label="Kelmaganlar" value={summary.absent} tone="rose" />
       </div>
 
+      <div className="flex justify-end">
+        <button type="button" className="btn-secondary" disabled={!schedule} onClick={() => setManualFor("")}>
+          <PencilLine className="h-4 w-4" /> Qo'lda belgilash
+        </button>
+      </div>
+
       <div className="card overflow-hidden">
         <AsyncState
           loading={loading}
@@ -141,6 +150,7 @@ export default function AttendanceAdminTable() {
                   <th className="table-th">Qo'shimcha</th>
                   <th className="table-th">Holat</th>
                   <th className="table-th">Joylashuv</th>
+                  <th className="table-th" aria-label="Amallar" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
@@ -198,6 +208,17 @@ export default function AttendanceAdminTable() {
                         <span className="text-xs text-ink-400">-</span>
                       )}
                     </td>
+                    <td className="table-td">
+                      <button
+                        type="button"
+                        title="Qo'lda belgilash"
+                        aria-label={`${s.full_name || s.email}: qo'lda belgilash`}
+                        onClick={() => setManualFor(s.email.toLowerCase())}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+                      >
+                        <PencilLine className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -205,6 +226,17 @@ export default function AttendanceAdminTable() {
           </div>
         </AsyncState>
       </div>
+
+      {schedule && (
+        <ManualAttendanceModal
+          open={manualFor !== null}
+          onClose={() => setManualFor(null)}
+          staff={staff}
+          initialEmail={manualFor || ""}
+          today={dateCode}
+          scheduleFor={(email) => mergeSchedule(schedule, personal.get(email))}
+        />
+      )}
     </div>
   );
 }

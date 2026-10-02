@@ -488,7 +488,8 @@ export type AttendanceRecord = {
   earlyLeaveMinutes: number;
   overtimeMinutes: number;
   status: string;
-  authenticationMethod: "selfie" | "hikvision";
+  // "manual" — filled in by an admin (Davomat → Xodimlar → Qo'lda belgilash).
+  authenticationMethod: "selfie" | "hikvision" | "manual";
   checkInLocation: GeoPoint | null;
   checkOutLocation: GeoPoint | null;
   deviceName: string | null;
