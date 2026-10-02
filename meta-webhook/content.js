@@ -14,6 +14,10 @@ const { staffFromRequest } = require("./auth");
 const { emitEvent } = require("./shared");
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+// Speech → text for what is said in the video (OpenAI Whisper). Without
+// the key only the picture is judged.
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const TRANSCRIBE_MODEL = process.env.TRANSCRIBE_MODEL || "whisper-1";
 const MODEL = process.env.CONTENT_MODEL || process.env.ASSISTANT_MODEL || "claude-sonnet-5";
 const TG_MAX = 20 * 1024 * 1024; // Telegram bots can download up to 20 MB
 const UPLOAD_MAX = 500 * 1024 * 1024;
@@ -87,6 +91,7 @@ const RESULT_TOOL = {
           brend: { type: "object", properties: { ball: { type: "number" }, izoh: { type: "string" } }, required: ["ball", "izoh"] },
           sifat: { type: "object", properties: { ball: { type: "number" }, izoh: { type: "string" } }, required: ["ball", "izoh"] },
           taklif: { type: "object", properties: { ball: { type: "number" }, izoh: { type: "string" } }, required: ["ball", "izoh"] },
+          nutq: { type: "object", description: "Gap: birinchi gap qiziqtiradimi, aniqmi, chaqiriq bormi. Faqat gap matni berilgan bo'lsa.", properties: { ball: { type: "number" }, izoh: { type: "string" } }, required: ["ball", "izoh"] },
         },
         required: ["boshlanish", "ekrandagi_matn", "brend", "sifat", "taklif"],
       },
@@ -179,16 +184,45 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
     }
   };
 
+  // The speech with timestamps; null when there is no sound, no key, or
+  // the service fails (the analysis then goes on with the picture only).
+  const transcribe = async (file, dir, info) => {
+    if (!OPENAI_API_KEY || !info.audio) return null;
+    const audio = path.join(dir, "audio.mp3");
+    await run(["-hide_banner", "-loglevel", "error", "-i", file, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "32k", "-y", audio]).catch(() => undefined);
+    if (!fs.existsSync(audio) || fs.statSync(audio).size < 2000) return null;
+    try {
+      const fd = new FormData();
+      fd.append("file", new Blob([fs.readFileSync(audio)], { type: "audio/mpeg" }), "audio.mp3");
+      fd.append("model", TRANSCRIBE_MODEL);
+      fd.append("response_format", "verbose_json");
+      fd.append("prompt", "Vodiy Print, paket, logotip, kraft paket, gift box, buyurtma, Farg'ona, Namangan, Andijon, chegirma, narx, Direct.");
+      const res = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { Authorization: `Bearer ${OPENAI_API_KEY}` }, body: fd, signal: AbortSignal.timeout(120000) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+      const segments = (data.segments || []).map((x) => ({ start: Math.round(Number(x.start || 0) * 10) / 10, end: Math.round(Number(x.end || 0) * 10) / 10, text: String(x.text || "").trim() })).filter((x) => x.text);
+      const text = String(data.text || segments.map((x) => x.text).join(" ")).trim();
+      return text ? { text, language: data.language || null, segments } : null;
+    } catch (err) {
+      log.error("Transcription failed", err.message || err);
+      return { error: String(err.message || err).slice(0, 200) };
+    }
+  };
+
   const analyzeFile = async (file, meta) => {
     const info = await probe(file);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vid-"));
     try {
       const frames = await extractFrames(file, frameTimes(info.duration), dir);
       if (!frames.length) throw new Error("Videodan kadr olib bo'lmadi");
+      const speech = await transcribe(file, dir, info);
+      const heard = speech && speech.text ? speech : null;
       const ratio = info.width && info.height ? (info.height / info.width).toFixed(2) : "?";
       const system = [
         "Sen Vodiy Print (Namangan va Farg'ona; poligrafiya, paket, gift box, suvenir, textil brendlash) kompaniyasining tajribali SMM-marketologisan.",
-        "Senga videodan olingan kadrlar vaqti bilan beriladi (ovozi yo'q — ovozni baholama). Instagram Reels/Stories, lenta va Telegram kanal uchun tahlil qil.",
+        heard
+          ? "Senga videodan olingan kadrlar va videoda aytilgan gap (vaqti bilan, avtomatik yozib olingan — kichik xatolari bo'lishi mumkin) beriladi. Tasvirni ham, gapni ham baholab, nutq bahosini ham ber. Instagram Reels/Stories, lenta va Telegram kanal uchun tahlil qil."
+          : "Senga videodan olingan kadrlar vaqti bilan beriladi (gap matni yo'q — nutq bahosini berma). Instagram Reels/Stories, lenta va Telegram kanal uchun tahlil qil.",
         "Baholashda: birinchi 3 soniya (odamlar shu vaqtda o'tib ketadi), ekrandagi matn o'qilishi, mahsulot va logotip ko'rinishi, tasvir sifati/yorug'lik, aniq taklif (narx, muddat, chaqiriq).",
         "Tavsiyalar aniq bo'lsin: qaysi soniyadagi kadr, nimani qo'shish/olib tashlash. Matnlar o'zbek tilida (lotin), tabiiy, emoji me'yorida, oxirida Direct'ga yozishga chaqiriq.",
         "Raqam yoki narxni o'ylab topma: video yoki izohda bo'lmasa, '…dan boshlab' kabi bo'sh joy qoldir.",
@@ -201,6 +235,7 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
           text: [
             `Fayl: ${meta.file_name || "video"} · uzunligi ${info.duration ? info.duration.toFixed(1) : "?"} s · ${info.width || "?"}×${info.height || "?"} (bo'yi/eni ${ratio}) · ovoz: ${info.audio ? "bor" : "yo'q"}`,
             meta.note ? `Yuboruvchining izohi: ${meta.note}` : "",
+            heard ? `Videoda aytilgan gap:\n${heard.segments.length ? heard.segments.map((x) => `${fmtTime(x.start)}–${fmtTime(x.end)}: ${x.text}`).join("\n") : heard.text}` : "",
             products ? `Kompaniya mahsulotlari: ${products}` : "",
           ]
             .filter(Boolean)
@@ -223,7 +258,7 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
       if (!result || (!result.tavsiyalar.length && !result.matnlar.length)) {
         throw new Error(data.stop_reason === "max_tokens" ? "Javob juda uzun bo'lib kesildi — qayta yuboring" : "Tahlil natijasi to'liq kelmadi — qayta yuboring");
       }
-      return { info, frames: frames.map((f) => ({ t: f.t, thumb: f.thumb })), result };
+      return { info, frames: frames.map((f) => ({ t: f.t, thumb: f.thumb })), result, speech };
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -235,10 +270,12 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
     const base = { source: meta.source, by: meta.by || "", by_email: meta.by_email || "", file_name: meta.file_name || "video", size: meta.size || null, note: meta.note || "", created_at: new Date().toISOString() };
     await ref.set({ ...base, status: "processing" });
     try {
-      const { info, frames, result } = await analyzeFile(file, meta);
-      await ref.set({ ...base, status: "done", duration: info.duration, width: info.width, height: info.height, frames, result, done_at: new Date().toISOString() });
+      const { info, frames, result, speech } = await analyzeFile(file, meta);
+      const transcript = speech && speech.text ? { text: speech.text.slice(0, 5000), language: speech.language, segments: speech.segments.slice(0, 80) } : null;
+      const audio_note = transcript ? null : !info.audio ? "Videoda ovoz yo'q" : !OPENAI_API_KEY ? "Ovoz tahlili sozlanmagan" : speech && speech.error ? `Ovozni matnga aylantirib bo'lmadi: ${speech.error}` : "Videoda gap topilmadi";
+      await ref.set({ ...base, status: "done", duration: info.duration, width: info.width, height: info.height, frames, result, transcript, audio_note, done_at: new Date().toISOString() });
       await emitEvent(db, { agent: "mkt", kind: "report", text: `Video tahlili: ${base.file_name} — ${result.umumiy_baho}/10`, bubble: `Videoni ko'rdim: ${result.umumiy_baho}/10 🎬`, source: "content" });
-      return { id: ref.id, info, result };
+      return { id: ref.id, info, result, transcript, audio_note };
     } catch (err) {
       await ref.set({ ...base, status: "failed", error: String(err.message || err).slice(0, 300) });
       throw err;
@@ -246,7 +283,7 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
   };
 
   // Telegram plain-text answer.
-  const formatResult = ({ info, result }) => {
+  const formatResult = ({ info, result, transcript, audio_note }) => {
     const b = result.baholar || {};
     const line = (name, x) => (x ? `• ${name}: ${x.ball}/10 — ${x.izoh}` : "");
     const parts = [
@@ -258,6 +295,7 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
       line("Brend va logotip", b.brend),
       line("Sifat", b.sifat),
       line("Taklif", b.taklif),
+      line("Gap", b.nutq),
       "",
       "💡 Tavsiyalar:",
       ...(result.tavsiyalar || []).map((t) => `• ${t}`),
@@ -266,7 +304,7 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
       `🕐 ${result.vaqt}`,
       result.reklamaga_mos ? "🎯 Reklamaga ham mos." : "",
       "",
-      "ℹ️ Ovoz tahlil qilinmadi, faqat tasvir.",
+      transcript ? `🗣 Gap: ${transcript.text.length > 300 ? `${transcript.text.slice(0, 299)}…` : transcript.text}` : `ℹ️ ${audio_note || "Ovoz tahlil qilinmadi"} — faqat tasvir baholandi.`,
     ];
     return parts.filter((p, i, a) => p !== "" || (a[i - 1] !== "" && i > 0)).join("\n");
   };

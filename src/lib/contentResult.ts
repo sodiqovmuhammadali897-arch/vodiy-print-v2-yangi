@@ -4,7 +4,7 @@
 // meta-webhook/content.js applies before saving.
 
 export type Score = { ball: number; izoh: string };
-export type ScoreKey = "boshlanish" | "ekrandagi_matn" | "brend" | "sifat" | "taklif";
+export type ScoreKey = "boshlanish" | "ekrandagi_matn" | "brend" | "sifat" | "taklif" | "nutq";
 export type ContentResult = {
   umumiy_baho: number;
   qisqa_xulosa: string;

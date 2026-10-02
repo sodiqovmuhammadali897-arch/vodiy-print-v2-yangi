@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Clapperboard, Copy, History, Lightbulb, Loader2, Send, Sparkles, Upload } from "lucide-react";
+import { Check, Clapperboard, Copy, History, Lightbulb, Loader2, Mic, Send, Sparkles, Upload } from "lucide-react";
 import { subscribeAll } from "../../lib/firestoreDb";
 import { useAuth } from "../../lib/AuthContext";
 import { normalizeContentResult, type ContentResult } from "../../lib/contentResult";
@@ -20,6 +20,8 @@ type Analysis = {
   width?: number;
   height?: number;
   error?: string;
+  transcript?: { text: string; language?: string | null; segments?: { start: number; end: number; text: string }[] } | null;
+  audio_note?: string | null;
   created_at: string;
   frames?: { t: number; thumb: string | null }[];
   result?: unknown;
@@ -31,6 +33,7 @@ const SCORE_LABELS: [keyof ContentResult["baholar"], string][] = [
   ["brend", "Brend va logotip"],
   ["sifat", "Sifat"],
   ["taklif", "Taklif"],
+  ["nutq", "Gap (ovoz)"],
 ];
 const MAX = 500 * 1024 * 1024;
 const tone = (n: number) => (n >= 8 ? "#10b981" : n >= 6 ? "#f59e0b" : "#f43f5e");
@@ -269,7 +272,7 @@ function AnalysisView({ a }: { a: Analysis }) {
             ))}
           </div>
         )}
-        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className={`mt-4 grid grid-cols-2 gap-3 ${r.baholar.nutq ? "md:grid-cols-3 xl:grid-cols-6" : "md:grid-cols-5"}`}>
           {SCORE_LABELS.map(([k, label]) => {
             const s = r.baholar?.[k];
             if (!s) return null;
@@ -286,6 +289,27 @@ function AnalysisView({ a }: { a: Analysis }) {
           })}
         </div>
       </Card>
+
+      {a.transcript?.text && (
+        <Card>
+          <div className="mb-3 flex items-center gap-2 font-display text-[15px] font-bold text-ink-900">
+            <Mic className="h-4 w-4 text-sky-500" /> Videoda aytilgan gap
+            <span className="text-xs font-normal text-ink-400">avtomatik yozib olingan — kichik xatolari bo'lishi mumkin</span>
+          </div>
+          {a.transcript.segments && a.transcript.segments.length ? (
+            <div className="space-y-1.5">
+              {a.transcript.segments.map((sg, i) => (
+                <div key={i} className="flex gap-3 text-sm">
+                  <span className="w-12 shrink-0 font-semibold tabular-nums text-ink-400">{mmss(sg.start)}</span>
+                  <span className="text-ink-800">{sg.text}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-ink-800">{a.transcript.text}</p>
+          )}
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>
@@ -310,7 +334,7 @@ function AnalysisView({ a }: { a: Analysis }) {
               <div className="text-ink-800">{r.vaqt}</div>
             </div>
           </div>
-          <p className="mt-3 text-[11px] text-ink-400">Agent videoning kadrlarini ko'radi; ovoz va gap tahlil qilinmaydi.</p>
+          {!a.transcript?.text && <p className="mt-3 text-[11px] text-ink-400">{a.audio_note || "Ovoz tahlil qilinmadi"} — faqat tasvir baholandi.</p>}
         </Card>
         <Card>
           <div className="mb-3 flex items-center gap-2 font-display text-[15px] font-bold text-ink-900">

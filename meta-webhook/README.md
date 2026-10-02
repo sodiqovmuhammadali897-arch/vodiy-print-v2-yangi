@@ -397,5 +397,8 @@ to 500 MB — nginx has its own location for it) is cut into ~10 frames with
 returns, through a forced tool call, a score per area (hook, on-screen text,
 brand, quality, offer), concrete fixes with timestamps, three post texts
 with hashtags, where and when to post. Results with small frame thumbnails
-go to `content_analyses/{id}` (`processing` → `done` / `failed`). The sound
-is not analysed.
+go to `content_analyses/{id}` (`processing` → `done` / `failed`). With
+`OPENAI_API_KEY` set, the sound track (mono 16 kHz MP3) is transcribed by
+Whisper with timestamps; the speech goes to Claude with the frames, gets its
+own score (`nutq`) and is saved as `transcript`. Without the key, or when
+there is no speech, `audio_note` says why and only the picture is judged.
