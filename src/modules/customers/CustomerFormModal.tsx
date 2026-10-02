@@ -5,6 +5,7 @@ import { nextCustomerNumber } from "../../lib/numbering";
 import { CUSTOMER_SOURCES, CUSTOMER_TYPES, INDUSTRIES, UZBEKISTAN_REGIONS } from "../../lib/orderConstants";
 import { ensureBrandForCustomer } from "../../lib/brandSync";
 import type { Brand, Customer, Manager } from "../../lib/types";
+import { friendlyError } from "../../lib/errors";
 
 type Props = {
   open: boolean;
@@ -132,7 +133,7 @@ export default function CustomerFormModal({
       setSaving(false);
     } catch (e) {
       setSaving(false);
-      setError(e instanceof Error ? e.message : "Xatolik");
+      setError(friendlyError(e, customer ? "mijozni tahrirlash (Mijozlar → Tahrirlash)" : "yangi mijoz qo'shish (Mijozlar → Ko'rish va Tahrirlash)"));
     }
   };
 
