@@ -13,7 +13,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth } from "./firebase";
-import { getOne, upsertOne } from "./firestoreDb";
+import { getOne, resetCollectionCache, upsertOne } from "./firestoreDb";
 import {
   BOOTSTRAP_ADMIN_EMAIL,
   fullPermissions,
@@ -47,7 +47,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [staffLoading, setStaffLoading] = useState(true);
 
   useEffect(() => {
+    let uid: string | null = null;
     const unsub = onAuthStateChanged(auth, (u) => {
+      if ((u?.uid ?? null) !== uid) resetCollectionCache();
+      uid = u?.uid ?? null;
       setUser(u);
       setInitializing(false);
     });

@@ -35,10 +35,100 @@ const buildOrder = (spec?: OrderSpec | OrderSpec[]): QueryConstraint[] => {
   return arr.map(([f, d]) => orderBy(f, d));
 };
 
+// The big shared collections are read whole by nearly every page. Instead
+// of downloading all of them again on each page, one live listener per
+// collection is kept for the session: the first page pays for the download,
+// later pages get the rows at once, and only changed documents come over
+// the wire after that. Own writes show up immediately (latency compensation).
+const SHARED = new Set([
+  "orders",
+  "order_products",
+  "order_payments",
+  "order_costs",
+  "customers",
+  "products",
+  "product_costs",
+  "expenses",
+]);
+
+type Hub = {
+  rows: WithId<DocumentData>[] | null;
+  ready: Promise<WithId<DocumentData>[]>;
+  subscribers: Set<(rows: WithId<DocumentData>[]) => void>;
+  stop: () => void;
+};
+const hubs = new Map<string, Hub>();
+
+const openHub = (name: string): Hub => {
+  const existing = hubs.get(name);
+  if (existing) return existing;
+  let resolve!: (rows: WithId<DocumentData>[]) => void;
+  let reject!: (err: unknown) => void;
+  const ready = new Promise<WithId<DocumentData>[]>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  ready.catch(() => undefined);
+  const hub: Hub = { rows: null, ready, subscribers: new Set(), stop: () => undefined };
+  hubs.set(name, hub);
+  hub.stop = onSnapshot(
+    collection(db, name),
+    (snap) => {
+      hub.rows = snap.docs.map((d) => mapDoc<DocumentData>(d));
+      resolve(hub.rows);
+      hub.subscribers.forEach((fn) => fn(hub.rows!));
+    },
+    (err) => {
+      // No access (or signed out): forget the listener so the next call
+      // asks again instead of serving nothing forever.
+      console.error(`Firestore ${name}:`, err);
+      if (hubs.get(name) === hub) hubs.delete(name);
+      reject(err);
+    },
+  );
+  return hub;
+};
+
+// Called when the signed-in user changes — another user may see other data.
+export const resetCollectionCache = (): void => {
+  hubs.forEach((h) => h.stop());
+  hubs.clear();
+};
+
+// Firestore's order: by type first, then by value; a query ordered by a
+// field leaves out documents that do not have it.
+const typeRank = (v: unknown): number =>
+  v === null ? 0 : typeof v === "boolean" ? 1 : typeof v === "number" ? 2 : typeof v === "string" ? 4 : typeof (v as { toMillis?: unknown }).toMillis === "function" ? 3 : 5;
+const compareValues = (a: unknown, b: unknown): number => {
+  const ra = typeRank(a);
+  const rb = typeRank(b);
+  if (ra !== rb) return ra - rb;
+  if (ra === 3) return (a as { toMillis: () => number }).toMillis() - (b as { toMillis: () => number }).toMillis();
+  if (ra === 5) return 0;
+  return a! < b! ? -1 : a! > b! ? 1 : 0;
+};
+const arrange = <T>(rows: WithId<DocumentData>[], spec?: OrderSpec | OrderSpec[]): WithId<T>[] => {
+  if (!spec) return rows.slice() as WithId<T>[];
+  const arr = Array.isArray(spec[0]) ? (spec as OrderSpec[]) : [spec as OrderSpec];
+  return rows
+    .filter((r) => arr.every(([f]) => r[f] !== undefined))
+    .sort((a, b) => {
+      for (const [f, dir] of arr) {
+        const c = compareValues(a[f], b[f]);
+        if (c) return dir === "desc" ? -c : c;
+      }
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    }) as WithId<T>[];
+};
+
 export const listAll = async <T>(
   name: string,
   options?: ListOptions,
 ): Promise<WithId<T>[]> => {
+  if (SHARED.has(name)) {
+    const hub = openHub(name);
+    return arrange<T>(hub.rows ?? (await hub.ready), options?.orderBy);
+  }
   const constraints = buildOrder(options?.orderBy);
   const q = constraints.length
     ? query(collection(db, name), ...constraints)
@@ -65,6 +155,15 @@ export const subscribeAll = <T>(
   onData: (rows: WithId<T>[]) => void,
   options?: ListOptions,
 ): Unsubscribe => {
+  if (SHARED.has(name)) {
+    const hub = openHub(name);
+    const fn = (rows: WithId<DocumentData>[]) => onData(arrange<T>(rows, options?.orderBy));
+    hub.subscribers.add(fn);
+    if (hub.rows) fn(hub.rows);
+    return () => {
+      hub.subscribers.delete(fn);
+    };
+  }
   const constraints = buildOrder(options?.orderBy);
   const q = constraints.length
     ? query(collection(db, name), ...constraints)
