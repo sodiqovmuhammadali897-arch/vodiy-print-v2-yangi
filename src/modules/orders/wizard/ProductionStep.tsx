@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
 import type { Product, TextileCompany } from "../../../lib/types";
+import type { Staff } from "../../../lib/permissions";
 import { listAll } from "../../../lib/firestoreDb";
 import { DESIGNER_STATUSES, DELIVERY_TYPES, PAYMENT_TYPES } from "../../../lib/orderConstants";
 import { formatMoney } from "../../../lib/format";
@@ -16,7 +17,7 @@ type Props = {
   payments: WizardPayment[];
   setPayments: (updater: (prev: WizardPayment[]) => WizardPayment[]) => void;
   textileCompanies: TextileCompany[];
-  managerNames: string[];
+  staff: Staff[];
   historyPrices: Record<string, number>;
 };
 
@@ -36,8 +37,24 @@ const emptyPayment: WizardPayment = {
 
 export default function ProductionStep({
   payload, onPayloadChange, products, setProducts, payments, setPayments,
-  textileCompanies, managerNames, historyPrices,
+  textileCompanies, staff, historyPrices,
 }: Props) {
+  // These roles are staff (Sozlamalar → Xodimlar), not the sales managers
+  // with a monthly plan. Production lists those with Ishlab chiqarish or
+  // Pechatnik access; a name saved earlier stays selectable.
+  const names = (list: Staff[]) => list.map((s) => s.full_name || s.email).sort((a, b) => a.localeCompare(b));
+  const allStaff = names(staff);
+  const productionPeople = names(staff.filter((s) => s.permissions?.production?.view || s.permissions?.pechatnik?.view));
+  const options = (list: string[], current: string) => (
+    <>
+      <option value="">-- tanlang --</option>
+      {(current && !list.includes(current) ? [current, ...list] : list).map((m) => (
+        <option key={m} value={m}>
+          {m}
+        </option>
+      ))}
+    </>
+  );
   // The Mahsulotlar catalog, for the product picker and tier prices.
   const [catalog, setCatalog] = useState<Product[]>([]);
   useEffect(() => {
@@ -93,10 +110,9 @@ export default function ProductionStep({
             </div>
           )}
           <div>
-            <label className="label">Ishlab chiqarish menejeri</label>
+            <label className="label">Ishlab chiqarish mas'uli</label>
             <select className="input" value={payload.production_manager} onChange={(e) => onPayloadChange({ production_manager: e.target.value })}>
-              <option value="">-- tanlang --</option>
-              {managerNames.map((m) => <option key={m} value={m}>{m}</option>)}
+              {options(productionPeople.length ? productionPeople : allStaff, payload.production_manager)}
             </select>
           </div>
           <div>
@@ -111,17 +127,15 @@ export default function ProductionStep({
             </select>
           </div>
           <div>
-            <label className="label">Logistika menejeri</label>
+            <label className="label">Logistika mas'uli</label>
             <select className="input" value={payload.logistics_manager} onChange={(e) => onPayloadChange({ logistics_manager: e.target.value })}>
-              <option value="">-- tanlang --</option>
-              {managerNames.map((m) => <option key={m} value={m}>{m}</option>)}
+              {options(allStaff, payload.logistics_manager)}
             </select>
           </div>
           <div>
             <label className="label">Sifat nazorati (QC)</label>
             <select className="input" value={payload.qc_manager} onChange={(e) => onPayloadChange({ qc_manager: e.target.value })}>
-              <option value="">-- tanlang --</option>
-              {managerNames.map((m) => <option key={m} value={m}>{m}</option>)}
+              {options(allStaff, payload.qc_manager)}
             </select>
           </div>
         </div>

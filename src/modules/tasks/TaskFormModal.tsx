@@ -29,6 +29,8 @@ const WEEKDAYS = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Sh
 const todayISO = () => new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10);
 const customerLabel = (c: Customer) => [c.first_name, c.last_name].filter(Boolean).join(" ") || c.company || c.phone;
 
+const ALL = "__all__";
+
 export default function TaskFormModal({ open, onClose, task, staff, onSaved, preset = null }: Props) {
   const { user, staff: currentStaff } = useAuth();
   const [title, setTitle] = useState("");
@@ -112,52 +114,57 @@ export default function TaskFormModal({ open, onClose, task, staff, onSaved, pre
     setSaving(true);
     setError(null);
     try {
-      const assignee = staff.find((s) => s.email === assignedToEmail);
       const me = (user?.email || "").toLowerCase();
       const meName = currentStaff?.full_name || user?.email || "";
-      const base = {
+      const baseFor = (email: string) => ({
         title: title.trim(),
         description: description.trim(),
-        assigned_to_email: assignedToEmail,
-        assigned_to_name: assignee?.full_name || assignedToEmail,
+        assigned_to_email: email,
+        assigned_to_name: staff.find((s) => s.email === email)?.full_name || email,
         due_date: dueDate || null,
         priority,
         ...links(),
-      };
+      });
+      // "Hamma xodimlarga": everyone but the one giving it gets their own
+      // copy (own status, reminders and rating).
+      const targets = assignedToEmail === ALL ? staff.map((s) => s.email).filter((e) => e.toLowerCase() !== me) : [assignedToEmail];
       if (task) {
-        await updateOne("tasks", task.id, base);
+        await updateOne("tasks", task.id, baseFor(assignedToEmail));
       } else {
-        let templateId: string | null = null;
-        if (repeat !== "none") {
-          const rep: TaskRepeat =
-            repeat === "weekly" ? { type: "weekly", weekday } : repeat === "monthly" ? { type: "monthly", day: monthDay } : { type: "daily" };
-          const dueIn = dueDate ? Math.max(0, Math.round((Date.parse(dueDate) - Date.parse(todayISO())) / 86400000)) : 0;
-          const tpl = await insertOne("task_templates", {
-            title: base.title,
-            description: base.description,
-            assigned_to_email: base.assigned_to_email,
-            assigned_to_name: base.assigned_to_name,
+        for (const email of targets) {
+          const base = baseFor(email);
+          let templateId: string | null = null;
+          if (repeat !== "none") {
+            const rep: TaskRepeat =
+              repeat === "weekly" ? { type: "weekly", weekday } : repeat === "monthly" ? { type: "monthly", day: monthDay } : { type: "daily" };
+            const dueIn = dueDate ? Math.max(0, Math.round((Date.parse(dueDate) - Date.parse(todayISO())) / 86400000)) : 0;
+            const tpl = await insertOne("task_templates", {
+              title: base.title,
+              description: base.description,
+              assigned_to_email: base.assigned_to_email,
+              assigned_to_name: base.assigned_to_name,
+              assigned_by_email: me,
+              assigned_by_name: meName,
+              priority,
+              repeat: rep,
+              due_in_days: dueIn,
+              active: true,
+              // The first one is created right now, below.
+              last_created_date: todayISO(),
+            });
+            templateId = tpl.id;
+          }
+          await insertOne("tasks", {
+            ...base,
             assigned_by_email: me,
             assigned_by_name: meName,
-            priority,
-            repeat: rep,
-            due_in_days: dueIn,
-            active: true,
-            // The first one is created right now, below.
-            last_created_date: todayISO(),
+            status: "new",
+            started_at: null,
+            completed_at: null,
+            template_id: templateId,
+            history: [{ status: "new", at: new Date().toISOString(), by_name: meName, by_email: me }],
           });
-          templateId = tpl.id;
         }
-        await insertOne("tasks", {
-          ...base,
-          assigned_by_email: me,
-          assigned_by_name: meName,
-          status: "new",
-          started_at: null,
-          completed_at: null,
-          template_id: templateId,
-          history: [{ status: "new", at: new Date().toISOString(), by_name: meName, by_email: me }],
-        });
       }
       setSaving(false);
       onSaved();
@@ -198,6 +205,7 @@ export default function TaskFormModal({ open, onClose, task, staff, onSaved, pre
             <label className="label">Xodim *</label>
             <select className="input" value={assignedToEmail} onChange={(e) => setAssignedToEmail(e.target.value)}>
               <option value="">-- tanlang --</option>
+              {!task && staff.length > 1 && <option value={ALL}>👥 Hamma xodimlarga ({staff.filter((s) => s.email.toLowerCase() !== (user?.email || "").toLowerCase()).length} kishi)</option>}
               {staff.map((s) => (
                 <option key={s.email} value={s.email}>
                   {s.full_name || s.email}
