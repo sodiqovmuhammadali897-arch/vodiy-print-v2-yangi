@@ -4,6 +4,7 @@ import type { CompanySettings, Product } from "../../lib/types";
 import type { QuantityQuote } from "../../lib/priceCalculations";
 import { sortTiers } from "../../lib/priceTiers";
 import { formatDate, formatMoney } from "../../lib/format";
+import { sortedSizes } from "../../lib/orderConstants";
 
 type Props = {
   product: Product;
@@ -82,6 +83,16 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
                 </span>
               )}
             </div>
+            {product.sizes?.length > 0 && (
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-xs text-ink-600">Razmerlar:</span>
+                {sortedSizes(product.sizes).map((s) => (
+                  <span key={s} className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

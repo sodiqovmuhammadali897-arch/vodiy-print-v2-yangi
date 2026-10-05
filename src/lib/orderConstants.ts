@@ -414,3 +414,13 @@ export const UZBEKISTAN_REGIONS = [
   "Sirdaryo",
   "Surxondaryo",
 ] as const;
+
+// A product's Textil sizes in the usual S → 3XL order (they are saved in
+// the order they were clicked); unknown ones go last.
+export const sortedSizes = (sizes: string[] | null | undefined): string[] => {
+  const rank = (s: string) => {
+    const i = (TEXTILE_SIZES as readonly string[]).indexOf(s);
+    return i < 0 ? TEXTILE_SIZES.length : i;
+  };
+  return [...(sizes || [])].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+};

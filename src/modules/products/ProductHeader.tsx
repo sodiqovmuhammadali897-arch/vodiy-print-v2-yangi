@@ -1,5 +1,6 @@
 import { Archive, Copy, ImageOff, Pencil, Power, RotateCcw, Trash2 } from "lucide-react";
 import type { Product, ProductVendor } from "../../lib/types";
+import { sortedSizes } from "../../lib/orderConstants";
 
 type Props = {
   product: Product;
@@ -54,6 +55,15 @@ export default function ProductHeader({
               </span>
             </div>
             <p className="mt-1 text-sm text-ink-500">{product.category || "-"} mahsulotlari</p>
+            {product.sizes?.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Razmerlar">
+                {sortedSizes(product.sizes).map((s) => (
+                  <span key={s} className="rounded-md bg-ink-100 px-2 py-0.5 text-xs font-bold text-ink-700">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
