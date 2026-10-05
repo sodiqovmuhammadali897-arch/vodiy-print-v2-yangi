@@ -156,7 +156,7 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
         <div className="mt-6 rounded-lg border-l-4 border-rose-600 bg-rose-50/50 p-4">
           <div className="text-sm font-bold text-rose-600">ESLATMA!</div>
           <div className="mt-1 text-sm text-ink-700">
-            Ushbu narxlar {formatDate(validUntil)}gacha amal qiladi.
+            Ushbu narxlar {formatDate(validUntil)}-gacha amal qiladi.
           </div>
         </div>
 

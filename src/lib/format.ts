@@ -13,26 +13,24 @@ export const formatMoneyShort = (n: number | null | undefined): string => {
   return sign + Math.round(a).toString();
 };
 
-export const formatDate = (iso: string | null | undefined): string => {
-  if (!iso) return "-";
+// "05.10.2026" — the browser's own "uz-UZ" format came out as
+// "2026 M10 05", which also went onto customer price sheets.
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const dayOf = (iso: string): string | null => {
+  // A plain date is a calendar day already, not a UTC midnight.
+  const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (plain) return `${plain[3]}.${plain[2]}.${plain[1]}`;
   const d = new Date(iso);
-  return d.toLocaleDateString("uz-UZ", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  });
+  return Number.isNaN(d.getTime()) ? null : `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`;
 };
+
+export const formatDate = (iso: string | null | undefined): string => (iso && dayOf(iso)) || "-";
 
 export const formatDateTime = (iso: string | null | undefined): string => {
   if (!iso) return "-";
   const d = new Date(iso);
-  return d.toLocaleString("uz-UZ", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  if (Number.isNaN(d.getTime())) return "-";
+  return `${dayOf(iso)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 };
 
 const UZ_MONTHS = [

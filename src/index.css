@@ -132,3 +132,12 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.35s ease-out both;
 }
+
+/* html2canvas (PNG/PDF export) finds the text baseline by measuring this
+   1×1 image placed next to a line of text. Tailwind's img { display: block }
+   moves it onto its own line, so every exported label was drawn a few
+   pixels too low — size chips, logo letters, footer text under its icons.
+   Only html2canvas's helper image matches; real images keep their style. */
+img[src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"] {
+  display: inline;
+}
