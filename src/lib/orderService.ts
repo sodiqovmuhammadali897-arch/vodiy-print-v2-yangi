@@ -3,11 +3,11 @@ import { nextOrderNumber } from "./numbering";
 import { computeOrderTotals } from "./orderCalculations";
 import { formatMoney } from "./format";
 import {
-  countWhere,
   deleteWhere,
   getOne,
   insertMany,
   insertOne,
+  listWhere,
   updateOne,
 } from "./firestoreDb";
 
@@ -206,8 +206,11 @@ export const maybePromoteCustomer = async (customerId: string) => {
   const customer = await getOne<{ customer_type: string }>("customers", customerId);
   const type = customer?.customer_type;
   if (type === "regular" || type === "vip") return;
-  const count = await countWhere("orders", "customer_id", customerId);
-  if (count >= 2) {
+  // A repeat customer came back on another day: several orders placed
+  // together (one per product) are still a first visit.
+  const orders = await listWhere<{ order_date?: string | null; created_at?: string | null }>("orders", "customer_id", customerId);
+  const days = new Set(orders.map((o) => String(o.order_date || o.created_at || "").slice(0, 10)).filter(Boolean));
+  if (days.size >= 2) {
     await updateOne("customers", customerId, { customer_type: "regular" });
   }
 };

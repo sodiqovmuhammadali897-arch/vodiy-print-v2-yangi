@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -80,6 +80,9 @@ const inCurrentMonth = (iso: string | null | undefined) => {
 
 export default function Orders() {
   const navigate = useNavigate();
+  // Set by the order wizard after one order per product was saved.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const created = (searchParams.get("created") || "").split(",").filter(Boolean);
   const { user, staff, can } = useAuth();
   const canEdit = can("orders", "edit");
   const canDelete = can("orders", "delete");
@@ -434,6 +437,17 @@ export default function Orders() {
           </button>
         )}
       </div>
+
+      {created.length > 0 && (
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <span>
+            <b>{created.length} ta buyurtma saqlandi</b> — har bir mahsulot alohida: {created.join(", ")}
+          </span>
+          <button type="button" className="shrink-0 font-semibold hover:underline" onClick={() => setSearchParams({}, { replace: true })}>
+            Yopish
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
         <StatCard title="Jami buyurtmalar" value={`${stats.total} ta`} tone="brand" icon={<Package className="h-5 w-5" />} />

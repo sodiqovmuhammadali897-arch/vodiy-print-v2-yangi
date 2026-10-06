@@ -14,6 +14,7 @@ import { listAll, getOne } from "../../../lib/firestoreDb";
 import type { Brand, Customer, Manager, Order, OrderFile, OrderProduct, OrderPayment, OrderStatus, TextileCompany } from "../../../lib/types";
 import { ORDER_STATUSES } from "../../../lib/orderConstants";
 import { saveOrder } from "../../../lib/orderService";
+import { splitOrder } from "../../../lib/orderSplit";
 import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
 import { computeOrderTotals, discountShare } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
@@ -283,6 +284,30 @@ export default function OrderWizard() {
     }
     setSaving(true);
     savingRef.current = true;
+    // A new order with several products: one order per product, each with
+    // its own VP number, all for the same customer.
+    if (isNew && filteredProducts.length > 1) {
+      const parts = splitOrder({ ...payload, is_draft: asDraft }, filteredProducts, payments);
+      const saved: string[] = [];
+      for (const part of parts) {
+        const r = await saveOrder(part.payload, part.products, part.payments);
+        if ("error" in r) {
+          setSaving(false);
+          savingRef.current = false;
+          setError(
+            saved.length
+              ? `${saved.join(", ")} saqlandi, «${part.payload.title}» saqlanmadi: ${r.error}. Qolganini Buyurtmalar ro'yxatidan tekshiring.`
+              : r.error,
+          );
+          return;
+        }
+        saved.push(r.order_number);
+      }
+      setSaving(false);
+      savingRef.current = false;
+      navigate(`/orders?created=${encodeURIComponent(saved.join(","))}`, { replace: true });
+      return;
+    }
     const res = await saveOrder(
       {
         ...payload,
@@ -446,6 +471,14 @@ export default function OrderWizard() {
           )}
         </div>
       </div>
+
+      {isNew && products.filter((p) => p.product_name.trim() || p.quantity > 0).length > 1 && (
+        <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm text-brand-800">
+          Har bir mahsulot alohida buyurtma bo'lib saqlanadi —{" "}
+          <b>{products.filter((p) => p.product_name.trim() || p.quantity > 0).length} ta buyurtma</b>, har biri o'z raqami bilan, mijoz bitta.
+          Chegirma va to'lov summalarga qarab bo'linadi, yetkazish birinchisiga yoziladi.
+        </div>
+      )}
 
       <div className="text-right text-sm text-ink-500">
         Umumiy: <span className="font-semibold text-ink-800">{formatMoney(totals.total)}</span>
