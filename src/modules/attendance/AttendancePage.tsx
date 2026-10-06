@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { CalendarCheck, Gauge, Users } from "lucide-react";
+import { BarChart3, CalendarCheck, Gauge, Users } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import EmployeeAttendanceCard from "./EmployeeAttendanceCard";
 import KpiPanel from "./KpiPanel";
 import AttendanceAdminTable from "./AttendanceAdminTable";
+import AttendanceAnalytics from "./AttendanceAnalytics";
 
-type Tab = "mine" | "kpi" | "team";
+type Tab = "mine" | "kpi" | "team" | "stats";
 
 export default function AttendancePage() {
   const { isAdmin } = useAuth();
@@ -15,7 +16,10 @@ export default function AttendancePage() {
     { key: "mine", label: "Mening davomatim", icon: <CalendarCheck className="h-4 w-4" /> },
     { key: "kpi", label: "KPI", icon: <Gauge className="h-4 w-4" /> },
     ...(isAdmin
-      ? [{ key: "team" as Tab, label: "Jamoa holati", icon: <Users className="h-4 w-4" /> }]
+      ? [
+          { key: "team" as Tab, label: "Jamoa holati", icon: <Users className="h-4 w-4" /> },
+          { key: "stats" as Tab, label: "Tahlil", icon: <BarChart3 className="h-4 w-4" /> },
+        ]
       : []),
   ];
 
@@ -52,6 +56,7 @@ export default function AttendancePage() {
       )}
       {tab === "kpi" && <KpiPanel />}
       {tab === "team" && isAdmin && <AttendanceAdminTable />}
+      {tab === "stats" && isAdmin && <AttendanceAnalytics />}
     </div>
   );
 }

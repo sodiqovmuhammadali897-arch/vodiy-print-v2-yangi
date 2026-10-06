@@ -162,6 +162,13 @@ export const listWhere = async <T>(
 
 export type Unsubscribe = () => void;
 
+// Documents whose `field` lies between `from` and `to`, both included —
+// e.g. attendance by dateCode for a period.
+export const listRange = async <T>(name: string, field: string, from: string, to: string): Promise<WithId<T>[]> => {
+  const snap = await getDocs(query(collection(db, name), where(field, ">=", from), where(field, "<=", to)));
+  return snap.docs.map((d) => mapDoc<T>(d));
+};
+
 export const subscribeAll = <T>(
   name: string,
   onData: (rows: WithId<T>[]) => void,

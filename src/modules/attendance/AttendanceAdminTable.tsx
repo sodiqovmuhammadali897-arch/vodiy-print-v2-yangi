@@ -8,6 +8,7 @@ import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanc
 import { deriveDisplayStatus, dateCodeOf, formatMinutes, mergeSchedule, withWorkedMinutes } from "../../utils/attendanceCalculations";
 import AsyncState from "../../components/ui/AsyncState";
 import ManualAttendanceModal from "./ManualAttendanceModal";
+import TodayTimeline from "./TodayTimeline";
 
 const STATUS_TONE: Record<string, string> = {
   "Kechikdi": "bg-amber-100 text-amber-800",
@@ -100,6 +101,7 @@ export default function AttendanceAdminTable() {
       return {
         staff: s,
         record,
+        schedule: own,
         hours: `${own.workStart}–${own.workEnd}`,
         personal: personal.has(s.email.toLowerCase()),
         status: deriveDisplayStatus(record, own, null, dateCode),
@@ -123,6 +125,8 @@ export default function AttendanceAdminTable() {
         <SummaryCard label="Kech qolganlar" value={summary.late} tone="amber" />
         <SummaryCard label="Kelmaganlar" value={summary.absent} tone="rose" />
       </div>
+
+      {!loading && rows.length > 0 && <TodayTimeline rows={rows} />}
 
       <div className="flex justify-end">
         <button type="button" className="btn-secondary" disabled={!schedule} onClick={() => setManualFor("")}>
