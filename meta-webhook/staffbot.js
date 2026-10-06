@@ -95,6 +95,9 @@ const create = (db, { priceTools }) => {
   };
   const mayAsk = (s) => s.role === "admin" || s.bot_ask === true;
   const canProducts = (s) => s.role === "admin" || Boolean(s.permissions && s.permissions.products && s.permissions.products.view);
+  // Own KPI only with the "KPI va bonus" permission (a manager account
+  // needs it even when made admin) — same rule as the site.
+  const canKpi = (s) => (s.role === "admin" && !s.report_manager_id) || Boolean(s.permissions && s.permissions.kpi && s.permissions.kpi.view);
 
   const scheduleOf = async (email) => {
     const col = db.collection("work_schedules");
@@ -209,6 +212,7 @@ const create = (db, { priceTools }) => {
         };
       },
     };
+    if (!canKpi(s)) delete t.my_kpi;
     if (canProducts(s)) {
       const price = priceTools(ctx).product_price_sheet;
       t.product_price = ({ product, quantity, format = "text" }) => price({ product, quantity, format });
@@ -254,7 +258,7 @@ const create = (db, { priceTools }) => {
       `Bugun: ${todayCode()} (Toshkent vaqti).`,
       "Faqat quyidagi mavzularda, faqat vositalar (tools) qaytargan ma'lumot bilan javob berasan:",
       names.includes("product_price") ? "• mahsulot narxlari (mijozga aytiladigan narx, tiraj bo'yicha)" : "",
-      "• xodimning o'z vazifalari, o'z davomati, o'z KPI bali",
+      names.includes("my_kpi") ? "• xodimning o'z vazifalari, o'z davomati, o'z KPI bali" : "• xodimning o'z vazifalari va o'z davomati (KPI bali so'ralsa: bu botda ko'rsatilmaydi, adminga murojaat qilsin)",
       names.includes("my_sales") ? "• xodimning o'z savdosi, oylik rejasi va o'z mijozlari qarzi" : "",
       "Qoidalar:",
       "- Raqamni o'ylab topma, faqat vositadan ol. Vosita topa olmasa, shuni ayt.",
@@ -355,7 +359,7 @@ const create = (db, { priceTools }) => {
     return true;
   };
 
-  return { handlePrivateMessage, _test: { toolsFor, mayAsk, workingDays, systemPrompt } };
+  return { handlePrivateMessage, _test: { toolsFor, mayAsk, canKpi, workingDays, systemPrompt } };
 };
 
 module.exports = { create, TOOL_DEFS };

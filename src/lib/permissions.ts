@@ -13,7 +13,8 @@ export type ModuleKey =
   | "reports"
   | "attendance"
   | "tasks"
-  | "ads";
+  | "ads"
+  | "kpi";
 
 export type PermissionAction = "view" | "edit" | "delete";
 
@@ -76,7 +77,15 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   // Reklama (Targetolog agent): view = see the page; edit = marketolog,
   // reviews proposals before the admin approves them.
   { key: "ads", label: "Reklama va Kontent (marketolog)" },
+  // Off by default: the employee's own KPI score and bonus (Davomat va
+  // KPI → KPI, the bot's KPI answer, the monthly bonus report in Telegram).
+  { key: "kpi", label: "KPI va bonus (o'zinikini ko'rish)" },
 ];
+
+// Whether this account sees its own KPI and bonus. A manager account (even
+// one made admin for access) needs the KPI permission ticked explicitly.
+export const canSeeOwnKpi = (staff: Pick<Staff, "role" | "permissions" | "report_manager_id"> | null): boolean =>
+  !!staff && ((staff.role === "admin" && !staff.report_manager_id) || !!staff.permissions?.kpi?.view);
 
 export const emptyPermissions = (): StaffPermissions => {
   const out = {} as StaffPermissions;

@@ -6,16 +6,20 @@ import KpiPanel from "./KpiPanel";
 import AttendanceAdminTable from "./AttendanceAdminTable";
 import AttendanceAnalytics from "./AttendanceAnalytics";
 import MyBonus from "../kpi/MyBonus";
+import { canSeeOwnKpi } from "../../lib/permissions";
 
 type Tab = "mine" | "kpi" | "team" | "stats";
 
 export default function AttendancePage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, staff } = useAuth();
+  // KPI and bonus are hidden from employees until an admin ticks "KPI va
+  // bonus" for them (Sozlamalar → Xodimlar).
+  const showKpi = canSeeOwnKpi(staff);
   const [tab, setTab] = useState<Tab>("mine");
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "mine", label: "Mening davomatim", icon: <CalendarCheck className="h-4 w-4" /> },
-    { key: "kpi", label: "KPI", icon: <Gauge className="h-4 w-4" /> },
+    ...(showKpi ? [{ key: "kpi" as Tab, label: "KPI", icon: <Gauge className="h-4 w-4" /> }] : []),
     ...(isAdmin
       ? [
           { key: "team" as Tab, label: "Jamoa holati", icon: <Users className="h-4 w-4" /> },
@@ -55,7 +59,7 @@ export default function AttendancePage() {
           <EmployeeAttendanceCard />
         </div>
       )}
-      {tab === "kpi" && (
+      {tab === "kpi" && showKpi && (
         <div className="space-y-4">
           <MyBonus />
           <KpiPanel />

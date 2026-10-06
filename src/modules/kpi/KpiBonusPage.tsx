@@ -9,6 +9,7 @@ import { COMPONENTS, DEFAULT_BONUS_SETTINGS, so, type BonusSettings, type BonusW
 import Modal from "../../components/ui/Modal";
 import { useBonusMonth, type BonusRow } from "./useBonusMonth";
 import MyBonus from "./MyBonus";
+import { canSeeOwnKpi } from "../../lib/permissions";
 
 // KPI va bonus (admin): each manager's bonus fund for the month (the
 // bonuses written on their orders) × their KPI score = what is paid.
@@ -34,8 +35,9 @@ export function ScoreBar({ row, weights }: { row: BonusRow; weights: BonusWeight
 
 // An admin account linked to a manager sees only its own bonus here.
 export default function KpiBonusRoute() {
-  const { isManagerAccount } = useAuth();
-  return isManagerAccount ? <MyBonus /> : <KpiBonusPage />;
+  const { isManagerAccount, staff } = useAuth();
+  if (!isManagerAccount) return <KpiBonusPage />;
+  return canSeeOwnKpi(staff) ? <MyBonus /> : <div className="card p-6 text-sm text-ink-500">KPI va bonusni ko'rish uchun ruxsat yo'q.</div>;
 }
 
 function KpiBonusPage() {

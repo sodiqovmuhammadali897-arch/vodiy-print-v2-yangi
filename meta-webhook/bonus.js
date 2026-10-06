@@ -1,7 +1,8 @@
 // KPI va bonus → Telegram. When the admin approves a manager's month on the
 // site (kpi_months/{YYYY-MM}_{managerId}, status "approved"), the manager
 // gets their bonus report in the bot's private chat; when it is marked
-// "paid", a short "paid" note. Each notice is claimed once in the document
+// "paid", a short "paid" note — only if the manager may see their KPI
+// (the "KPI va bonus" permission). Each notice is claimed once in the document
 // (notified_at / paid_notified_at), so restarts never send it twice, and
 // only recent changes are sent, so a first start doesn't replay history.
 const { telegram } = require("./telegram");
@@ -46,10 +47,12 @@ const reportText = (k) => {
 const create = (db) => {
   let unwatch = null;
 
+  // Only accounts allowed to see their KPI (staff.permissions.kpi.view).
   const chatsOf = async (managerId) =>
     (await db.collection("staff").where("report_manager_id", "==", managerId).get()).docs
-      .map((d) => d.data().telegram_chat_id)
-      .filter(Boolean);
+      .map((d) => d.data())
+      .filter((s) => s.telegram_chat_id && s.permissions && s.permissions.kpi && s.permissions.kpi.view)
+      .map((s) => s.telegram_chat_id);
 
   // Sets `field` unless already set; true if this call won.
   const claim = (ref, field) =>

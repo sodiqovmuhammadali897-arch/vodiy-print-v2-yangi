@@ -167,7 +167,8 @@ service cloud.firestore {
     // only their own (staff.report_manager_id); only a non-manager admin
     // writes.
     function ownManager(managerId) {
-      return isManagerAccount() && staffDoc().report_manager_id == managerId;
+      return isManagerAccount() && staffDoc().report_manager_id == managerId &&
+        ('kpi' in staffDoc().permissions) && staffDoc().permissions.kpi.view == true;
     }
     match /order_bonuses/{id} {
       allow read: if (isAdmin() && !isManagerAccount()) || ownManager(resource.data.manager_id);
