@@ -21,6 +21,7 @@ const loaders = {
   Finance: () => import("./modules/finance/Finance"),
   Reports: () => import("./modules/reports/Reports"),
   MarginPage: () => import("./modules/margin/MarginPage"),
+  KpiBonusPage: () => import("./modules/kpi/KpiBonusPage"),
   AiOffice: () => import("./modules/aioffice/AiOffice"),
   Production: () => import("./modules/production/Production"),
   Pechatnik: () => import("./modules/production/Pechatnik"),

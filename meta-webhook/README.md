@@ -402,3 +402,14 @@ go to `content_analyses/{id}` (`processing` → `done` / `failed`). With
 Whisper with timestamps; the speech goes to Claude with the frames, gets its
 own score (`nutq`) and is saved as `transcript`. Without the key, or when
 there is no speech, `audio_note` says why and only the picture is judged.
+
+## KPI va bonus — reports to managers (`bonus.js`)
+
+The site's KPI va bonus page keeps each manager's month in
+`kpi_months/{YYYY-MM}_{managerId}` (bonus fund from `order_bonuses`, CRM mark,
+and — once the admin approves — a frozen `snapshot` of the scores and payout).
+The server watches approved and paid months: on approval the manager (every
+staff account with that `report_manager_id` and a linked Telegram chat) gets
+the month's report — turnover vs plan, fund, each KPI part and the payout; on
+"To'landi" a short paid note. Each notice is claimed once (`notified_at`,
+`paid_notified_at`), and only changes from the last three days are sent.

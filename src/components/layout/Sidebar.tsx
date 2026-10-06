@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles, Bot, Percent, Megaphone, Clapperboard } from "lucide-react";
+import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles, Bot, Percent, Megaphone, Clapperboard, Coins } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import { canViewMargin } from "../../lib/rolePermissions";
 import type { ModuleKey } from "../../lib/permissions";
@@ -19,6 +19,7 @@ const navItems = [
   { to: "/warehouse", label: "Ombor", icon: Warehouse, module: "warehouse" as ModuleKey },
   { to: "/finance", label: "Moliya", icon: Wallet, module: "finance" as ModuleKey },
   { to: "/margin", label: "Marja", icon: Percent, module: "finance" as ModuleKey, adminOnly: true, costOnly: true },
+  { to: "/kpi", label: "KPI va bonus", icon: Coins, module: "reports" as ModuleKey, adminOnly: true, costOnly: true },
   { to: "/reports", label: "Hisobot", icon: BarChart3, module: "reports" as ModuleKey },
   { to: "/ai-office", label: "AI Ofis", icon: Bot, module: "reports" as ModuleKey, adminOnly: true },
   { to: "/attendance", label: "Davomat va KPI", icon: Fingerprint, module: "attendance" as ModuleKey },

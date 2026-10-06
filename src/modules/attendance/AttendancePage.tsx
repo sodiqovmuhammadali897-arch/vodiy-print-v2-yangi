@@ -5,6 +5,7 @@ import EmployeeAttendanceCard from "./EmployeeAttendanceCard";
 import KpiPanel from "./KpiPanel";
 import AttendanceAdminTable from "./AttendanceAdminTable";
 import AttendanceAnalytics from "./AttendanceAnalytics";
+import MyBonus from "../kpi/MyBonus";
 
 type Tab = "mine" | "kpi" | "team" | "stats";
 
@@ -54,7 +55,12 @@ export default function AttendancePage() {
           <EmployeeAttendanceCard />
         </div>
       )}
-      {tab === "kpi" && <KpiPanel />}
+      {tab === "kpi" && (
+        <div className="space-y-4">
+          <MyBonus />
+          <KpiPanel />
+        </div>
+      )}
       {tab === "team" && isAdmin && <AttendanceAdminTable />}
       {tab === "stats" && isAdmin && <AttendanceAnalytics />}
     </div>

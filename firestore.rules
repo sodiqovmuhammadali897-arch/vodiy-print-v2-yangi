@@ -162,6 +162,22 @@ service cloud.firestore {
       allow read, write: if isAdmin() && !isManagerAccount();
     }
 
+    // KPI va bonus: the bonus the admin writes on an order and each
+    // manager's month (CRM mark, approved snapshot, paid). A manager reads
+    // only their own (staff.report_manager_id); only a non-manager admin
+    // writes.
+    function ownManager(managerId) {
+      return isManagerAccount() && staffDoc().report_manager_id == managerId;
+    }
+    match /order_bonuses/{id} {
+      allow read: if (isAdmin() && !isManagerAccount()) || ownManager(resource.data.manager_id);
+      allow write: if isAdmin() && !isManagerAccount();
+    }
+    match /kpi_months/{id} {
+      allow read: if (isAdmin() && !isManagerAccount()) || ownManager(resource.data.manager_id);
+      allow write: if isAdmin() && !isManagerAccount();
+    }
+
     // Which company produces a product, and its lead time — operational
     // info, not pricing (cost stays exclusively in product_costs above), so
     // it's visible to the same audience as the product itself.
