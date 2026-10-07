@@ -314,6 +314,9 @@ export type Proposal = {
   subtotal: number;
   discount: number;
   total: number;
+  // false — the items are alternatives the customer picks one of, so the
+  // sheet shows no grand total. Missing on older proposals = shown.
+  show_total?: boolean;
   valid_until: string | null;
   note: string;
   created_at: string;

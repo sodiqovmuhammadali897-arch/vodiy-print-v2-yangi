@@ -96,7 +96,7 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
           </tbody>
         </table>
 
-        <div className="mt-6 grid grid-cols-2 gap-4">
+        <div className={`mt-6 grid gap-4 ${proposal.show_total !== false ? "grid-cols-2" : "grid-cols-1"}`}>
           <div className="rounded-xl bg-emerald-50 p-4">
             <div className="text-sm font-bold text-emerald-700">To'lov rekvizitlari</div>
             {company?.bank_name && (
@@ -106,19 +106,21 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
               <div className="text-sm text-ink-600">Hisob/INN: {company.bank_account}</div>
             )}
           </div>
-          <div className="rounded-xl bg-emerald-600 p-5 text-white">
-            <div className="text-xs font-semibold uppercase tracking-wide opacity-90">
-              Umumiy
-            </div>
-            <div className="mt-1 font-display text-2xl font-extrabold">
-              {formatMoney(proposal.total)}
-            </div>
-            {proposal.discount > 0 && (
-              <div className="mt-1 text-xs opacity-90">
-                Chegirma: {formatMoney(proposal.discount)}
+          {proposal.show_total !== false && (
+            <div className="rounded-xl bg-emerald-600 p-5 text-white">
+              <div className="text-xs font-semibold uppercase tracking-wide opacity-90">
+                Umumiy
               </div>
-            )}
-          </div>
+              <div className="mt-1 font-display text-2xl font-extrabold">
+                {formatMoney(proposal.total)}
+              </div>
+              {proposal.discount > 0 && (
+                <div className="mt-1 text-xs opacity-90">
+                  Chegirma: {formatMoney(proposal.discount)}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="mt-6 text-base font-bold text-ink-900">Buyurtma uchun rahmat!</div>

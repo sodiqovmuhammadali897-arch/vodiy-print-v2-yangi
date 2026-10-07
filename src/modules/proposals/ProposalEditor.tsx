@@ -60,6 +60,7 @@ export default function ProposalEditor() {
     subtotal: 0,
     discount: 0,
     total: 0,
+    show_total: true,
     valid_until: null,
     note: "",
     created_at: new Date().toISOString(),
@@ -176,6 +177,7 @@ export default function ProposalEditor() {
       subtotal: proposal.subtotal,
       discount: proposal.discount,
       total: proposal.total,
+      show_total: proposal.show_total !== false,
       valid_until: proposal.valid_until,
       note: proposal.note,
     };
@@ -453,9 +455,19 @@ export default function ProposalEditor() {
               <div className="text-ink-500">
                 Chegirma: <span className="font-semibold text-rose-600">-{formatMoney(proposal.discount)}</span>
               </div>
-              <div className="text-lg font-bold text-ink-900">
+              <div className={`text-lg font-bold ${proposal.show_total !== false ? "text-ink-900" : "text-ink-400 line-through"}`}>
                 Umumiy: {formatMoney(proposal.total)}
               </div>
+              <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-ink-700">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={proposal.show_total !== false}
+                  onChange={(e) => setProposal((p) => ({ ...p, show_total: e.target.checked }))}
+                />
+                Umumiy summani taklifda ko'rsatish
+              </label>
+              <p className="text-xs text-ink-400">Mahsulotlar variant bo'lsa (mijoz bittasini tanlaydi) — belgini olib tashlang</p>
             </div>
           </div>
 
