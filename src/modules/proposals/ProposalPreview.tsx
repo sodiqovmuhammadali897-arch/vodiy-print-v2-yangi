@@ -1,11 +1,25 @@
 import { forwardRef } from "react";
-import { Mail, MapPin, Phone } from "lucide-react";
+import { ClipboardList, Mail, MapPin, Phone } from "lucide-react";
 import type { Brand, CompanySettings, Customer, Proposal } from "../../lib/types";
 import { formatMoney } from "../../lib/format";
 
 // A plain "YYYY-MM-DD" date, matching the reference design exactly —
 // formatDate()'s localized "20-avg, 2026" style doesn't match it.
 const isoDate = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : "-");
+
+// The note, line by line. "1) …" / "1. …" lines are numbered points; when
+// the number matches a row of the table, that product's name heads the
+// point so the customer sees which item it is about.
+type NoteLine = { n: number | null; text: string };
+const noteLines = (note: string): NoteLine[] =>
+  note
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const m = /^(\d{1,2})\s*[).]\s*(.*)$/.exec(l);
+      return m ? { n: Number(m[1]), text: m[2] } : { n: null, text: l };
+    });
 
 type Props = {
   proposal: Proposal;
@@ -123,12 +137,37 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
           )}
         </div>
 
-        <div className="mt-6 text-base font-bold text-ink-900">Buyurtma uchun rahmat!</div>
-
-        {proposal.note && (
-          <div className="mt-4 rounded-xl bg-ink-50 p-4 text-sm text-ink-700">
-            <div className="whitespace-pre-line">{proposal.note}</div>
-          </div>
+        {proposal.note?.trim() && (
+          <section className="mt-7">
+            {/* Margins, not gap — html2canvas (PNG/PDF export) mishandles gap. */}
+            <div className="flex items-center">
+              <span className="mr-2 flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white">
+                <ClipboardList className="h-4 w-4" />
+              </span>
+              <span className="text-sm font-extrabold uppercase tracking-wider text-emerald-700">Mahsulotlar haqida ma'lumot</span>
+              <span className="ml-3 h-px flex-1 bg-emerald-200" />
+            </div>
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-white px-4 py-1">
+              {noteLines(proposal.note).map((l, i) => {
+                const item = l.n !== null ? proposal.items[l.n - 1] : undefined;
+                return (
+                  <div key={i} className={`flex items-start py-3 ${i ? "border-t border-emerald-100" : ""}`}>
+                    {l.n !== null ? (
+                      <span className="mr-3 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
+                        {l.n}
+                      </span>
+                    ) : (
+                      <span className="mr-3 mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                    )}
+                    <div className="min-w-0 text-sm leading-relaxed">
+                      {item?.name && <div className="font-bold text-ink-900">{item.name}</div>}
+                      <div className="text-ink-700">{l.text}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {proposal.valid_until && (
@@ -142,18 +181,24 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
 
         <div className="mt-8 h-[2px] w-full bg-emerald-600" />
 
-        <div className="mt-4 flex items-end justify-end gap-3">
-          {company?.stamp_url && (
-            <img src={company.stamp_url} alt="" className="h-16 w-16 object-contain opacity-80" />
-          )}
-          <div className="text-right">
-            {company?.signature_url && (
-              <img src={company.signature_url} alt="" className="ml-auto h-12 object-contain" />
+        <div className="mt-4 flex items-end justify-between">
+          <div className="pb-1">
+            <div className="font-display text-xl font-extrabold text-emerald-600">Buyurtma uchun rahmat!</div>
+            <div className="mt-1 text-xs text-ink-500">Hamkorligingizdan mamnunmiz</div>
+          </div>
+          <div className="flex items-end">
+            {company?.stamp_url && (
+              <img src={company.stamp_url} alt="" className="mr-3 h-16 w-16 object-contain opacity-80" />
             )}
-            <div className="font-bold text-ink-900">
-              {company?.director_name || "—"} — Rahbar
+            <div className="text-right">
+              {company?.signature_url && (
+                <img src={company.signature_url} alt="" className="ml-auto h-12 object-contain" />
+              )}
+              <div className="font-bold text-ink-900">
+                {company?.director_name || "—"} — Rahbar
+              </div>
+              <div className="mt-1 text-xs text-ink-400">Imzo</div>
             </div>
-            <div className="mt-1 text-xs text-ink-400">Imzo</div>
           </div>
         </div>
 
