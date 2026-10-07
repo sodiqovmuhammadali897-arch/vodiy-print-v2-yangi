@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeBonus, DEFAULT_BONUS_SETTINGS, managerOrders, planScore, suggestPct, taskScore } from "../src/lib/managerBonus";
+import { computeBonus, DEFAULT_BONUS_SETTINGS, goalPlan, managerOrders, monthWorkDays, planScore, short, suggestPct, taskScore } from "../src/lib/managerBonus";
 import type { Order } from "../src/lib/types";
 
 const W = DEFAULT_BONUS_SETTINGS.weights;
@@ -73,5 +73,49 @@ describe("manager bonus", () => {
       "2026-10",
     );
     expect(list.map((x) => x.id)).toEqual(["a", "d"]);
+  });
+});
+
+describe("goal calculator", () => {
+  const base = {
+    goal: 10_000_000,
+    rate: 5,
+    scores: { plan: 25, tasks: 80, attendance: 82, crm: 70 },
+    weights: W,
+    turnover: 38e6,
+    workDays: 26,
+    daysDone: 6,
+    avgCheck: 3.7e6,
+    conversion: 20,
+  };
+
+  it("works out the turnover a goal takes", () => {
+    const g = goalPlan(base)!;
+    // KPI with the plan met: 50 + 20 + 12.3 + 7 = 89.3 %.
+    expect(g.kpi).toBeCloseTo(89.3, 1);
+    expect(g.required / 1e6).toBeCloseTo(224, 0);
+    expect(g.left / 1e6).toBeCloseTo(186, 0);
+    expect(g.expectedByNow / 1e6).toBeCloseTo(51.7, 1);
+    expect(g.gap).toBeLessThan(0);
+    expect(g.perDay! / 1e6).toBeCloseTo(9.3, 1);
+    expect(g.orders).toBe(51);
+    expect(g.leads).toBe(255);
+    expect(g.allPerfect / 1e6).toBeCloseTo(200, 0);
+    expect(g.gains.map((x) => x.key)).toEqual(["tasks", "crm", "attendance"]);
+    expect(g.gains[0].saves / 1e6).toBeCloseTo(11.9, 1);
+  });
+
+  it("needs a goal and a rate", () => {
+    expect(goalPlan({ ...base, goal: 0 })).toBeNull();
+    expect(goalPlan({ ...base, rate: 0 })).toBeNull();
+    expect(goalPlan({ ...base, avgCheck: null })!.orders).toBeNull();
+  });
+
+  it("counts working days of a month", () => {
+    // October 2026: 31 days, 4 Sundays → 27 working days; before the 7th: 1–6 minus Sunday the 4th.
+    expect(monthWorkDays("2026-10", "2026-10-07", [0])).toEqual({ total: 27, done: 5 });
+    expect(short(224e6)).toBe("224 mln");
+    expect(short(9.3e6)).toBe("9,3 mln");
+    expect(short(850_000)).toBe("850 ming");
   });
 });

@@ -5,6 +5,7 @@ import { currentMonth } from "../../lib/salesPeriod";
 import { COMPONENTS, computeBonus, so } from "../../lib/managerBonus";
 import { useBonusMonth } from "./useBonusMonth";
 import { OrdersOfManager, ScoreBar } from "./KpiBonusPage";
+import GoalPanel from "./GoalPanel";
 
 // A manager's own bonus for a month — live while the month is open, the
 // approved numbers after. Shown on Davomat va KPI → KPI for accounts linked
@@ -99,6 +100,11 @@ export default function MyBonus() {
                 </div>
               );
             })}
+            {r.goalPlan && (
+              <div className="sm:col-span-2">
+                <GoalPanel row={r} />
+              </div>
+            )}
             <div className="card p-4 sm:col-span-2">
               <h3 className="font-display text-sm font-bold text-ink-900">Bonus fondi — buyurtmalar</h3>
               <div className="mt-1 overflow-x-auto">

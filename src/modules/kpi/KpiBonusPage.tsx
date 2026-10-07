@@ -5,10 +5,11 @@ import { upsertOne } from "../../lib/firestoreDb";
 import { useAuth } from "../../lib/AuthContext";
 import { exportCsv } from "../../lib/exportCsv";
 import { currentMonth } from "../../lib/salesPeriod";
-import { COMPONENTS, DEFAULT_BONUS_SETTINGS, so, type BonusSettings, type BonusWeights, type KpiMonth } from "../../lib/managerBonus";
+import { COMPONENTS, DEFAULT_BONUS_SETTINGS, short, so, type BonusSettings, type BonusWeights, type KpiMonth } from "../../lib/managerBonus";
 import Modal from "../../components/ui/Modal";
 import { useBonusMonth, type BonusRow } from "./useBonusMonth";
 import MyBonus from "./MyBonus";
+import GoalPanel from "./GoalPanel";
 import { canSeeOwnKpi } from "../../lib/permissions";
 
 // KPI va bonus (admin): each manager's bonus fund for the month (the
@@ -191,13 +192,25 @@ function KpiBonusPage() {
                       <FragmentRow key={r.manager.id}>
                         <tr className={expanded ? "bg-ink-50/50" : ""}>
                           <td className="table-td w-8 pr-0">
-                            <button type="button" onClick={() => setOpen(expanded ? null : r.manager.id)} className="rounded p-1 text-ink-400 hover:bg-ink-100" aria-label="Buyurtmalarni ko'rsatish">
+                            <button type="button" onClick={() => setOpen(expanded ? null : r.manager.id)} className="rounded p-1 text-ink-400 hover:bg-ink-100" aria-label="Maqsad va buyurtmalarni ko'rsatish">
                               {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </button>
                           </td>
                           <td className="table-td">
                             <div className="font-semibold text-ink-900">{r.manager.name}</div>
                             {!r.staff && <div className="text-[11px] text-amber-600">xodim profili bog'lanmagan</div>}
+                            {r.goalPlan ? (
+                              <button type="button" onClick={() => setOpen(r.manager.id)} className="mt-0.5 block text-left text-[11px] text-ink-500 hover:underline">
+                                🎯 {short(r.goal!)} → {short(r.goalPlan.required)} oborot ·{" "}
+                                <b className={r.goalPlan.gap >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                                  {r.goalPlan.gap >= 0 ? "▲" : "▼"} {short(Math.abs(r.goalPlan.gap))}
+                                </b>
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => setOpen(r.manager.id)} className="mt-0.5 block text-[11px] text-brand-700 hover:underline">
+                                + maqsad qo'yish
+                              </button>
+                            )}
                           </td>
                           <td className="table-td whitespace-nowrap text-right">{so(r.turnover)}</td>
                           <td className="table-td text-right">
@@ -266,7 +279,12 @@ function KpiBonusPage() {
                         {expanded && (
                           <tr>
                             <td colSpan={11} className="bg-ink-50/50 px-6 pb-4 pt-1">
-                              <OrdersOfManager row={r} />
+                              <div className="space-y-4 pt-2">
+                                <GoalPanel row={r} onSave={(goal) => write(r, { goal })} />
+                                <div className="rounded-2xl border border-ink-100 bg-surface px-4 py-2">
+                                  <OrdersOfManager row={r} />
+                                </div>
+                              </div>
                             </td>
                           </tr>
                         )}
@@ -445,6 +463,11 @@ function SettingsModal({ open, onClose, settings, onSaved }: { open: boolean; on
           <label className="block">
             <span className="label">Reja ustamasi chegarasi, %</span>
             <input className="input" inputMode="numeric" value={draft.plan_cap} onChange={(e) => setDraft((d) => ({ ...d, plan_cap: num(e.target.value) }))} />
+          </label>
+          <label className="col-span-2 block">
+            <span className="label">Maqsad kalkulyatori: standart bonus foizi, %</span>
+            <input className="input" inputMode="decimal" value={draft.default_rate ?? 5} onChange={(e) => setDraft((d) => ({ ...d, default_rate: Number(e.target.value.replace(",", ".").replace(/[^\d.]/g, "")) || 0 }))} />
+            <span className="mt-1 block text-xs text-ink-500">Menejerning oxirgi 3 oyda bonus tarixi bo'lmasa, oborotdan shu foiz bonus deb hisoblanadi.</span>
           </label>
         </div>
         <div>
