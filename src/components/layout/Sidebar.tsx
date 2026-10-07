@@ -2,7 +2,8 @@ import { NavLink } from "react-router-dom";
 import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles, Bot, Percent, Megaphone, Clapperboard, Coins } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import { canViewMargin } from "../../lib/rolePermissions";
-import type { ModuleKey } from "../../lib/permissions";
+import { canSeeOwnKpi, type ModuleKey } from "../../lib/permissions";
+import type { useAuth as UseAuth } from "../../lib/AuthContext";
 
 const navItems = [
   { to: "/dashboard", label: "Bosh sahifa", icon: LayoutDashboard, module: "dashboard" as ModuleKey },
@@ -22,9 +23,22 @@ const navItems = [
   { to: "/kpi", label: "KPI va bonus", icon: Coins, module: "reports" as ModuleKey, adminOnly: true, costOnly: true },
   { to: "/reports", label: "Hisobot", icon: BarChart3, module: "reports" as ModuleKey },
   { to: "/ai-office", label: "AI Ofis", icon: Bot, module: "reports" as ModuleKey, adminOnly: true },
-  { to: "/attendance", label: "Davomat va KPI", icon: Fingerprint, module: "attendance" as ModuleKey },
+  { to: "/attendance", label: "Davomat va KPI", icon: Fingerprint, module: "attendance" as ModuleKey, kpiToo: true },
   { to: "/tasks", label: "Vazifalar", icon: ClipboardList, module: "tasks" as ModuleKey, everyone: true },
 ];
+
+// The pages an account can open, in sidebar order. "Davomat va KPI" also
+// opens for an account that only has "KPI va bonus" — the KPI tab lives there.
+export function visibleNav(auth: ReturnType<typeof UseAuth>) {
+  const { isAdmin, can, staff } = auth;
+  return navItems.filter((item) =>
+    "costOnly" in item && item.costOnly
+      ? canViewMargin(auth)
+      : isAdmin ||
+        (!("adminOnly" in item && item.adminOnly) &&
+          (("everyone" in item && item.everyone) || can(item.module, "view") || ("kpiToo" in item && item.kpiToo && canSeeOwnKpi(staff)))),
+  );
+}
 
 type Props = {
   mobileOpen: boolean;
@@ -33,12 +47,8 @@ type Props = {
 
 export default function Sidebar({ mobileOpen, onCloseMobile }: Props) {
   const auth = useAuth();
-  const { isAdmin, can } = auth;
-  const visibleItems = navItems.filter((item) =>
-    "costOnly" in item && item.costOnly
-      ? canViewMargin(auth)
-      : isAdmin || (!("adminOnly" in item && item.adminOnly) && (("everyone" in item && item.everyone) || can(item.module, "view"))),
-  );
+  const { isAdmin } = auth;
+  const visibleItems = visibleNav(auth);
 
   return (
     <>

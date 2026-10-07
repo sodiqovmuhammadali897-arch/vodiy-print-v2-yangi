@@ -63,7 +63,11 @@ service cloud.firestore {
       // leads-only staff can read orders too — the Sotuv bo'limi board
       // shows the live production stage of orders spawned from their own
       // won leads.
-      allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view') || can('leads', 'edit');
+      // A manager account with KPI va bonus reads its own sales (by its
+      // Managerlar name) for Mening bonusim, even without Buyurtmalar.
+      allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view') || can('leads', 'edit') ||
+        (isManagerAccount() && ownManager(staffDoc().report_manager_id) &&
+         resource.data.manager_name == get(/databases/$(database)/documents/managers/$(staffDoc().report_manager_id)).data.name);
       // A won lead auto-creates its draft order — leads-only staff need
       // create access for that single insert, nothing more.
       allow create: if can('orders', 'edit') || can('leads', 'edit');

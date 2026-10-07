@@ -64,22 +64,28 @@ export default function Dashboard() {
     const load = async () => {
       setLoading(true);
       const today = new Date();
-      const [allOrders, planRow, holidaysData, paymentRows, expenseRows, managerRows] = await Promise.all([
-        canOrders ? listAll<Order>("orders", { orderBy: ["created_at", "desc"] }) : Promise.resolve([]),
-        getOne<MonthlyPlan>("monthly_plans", planId(today.getFullYear(), today.getMonth() + 1)),
-        listAll<Holiday>("holidays"),
-        canOrders ? listAll<OrderPayment>("order_payments") : Promise.resolve([]),
-        canFinance ? listAll<Expense>("expenses") : Promise.resolve([]),
-        canOrders ? listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }).catch(() => []) : Promise.resolve([]),
-      ]);
-      if (cancelled) return;
-      setOrders(allOrders);
-      setCompanyPlan(planRow?.plan_amount ?? 0);
-      setHolidays(holidaysData);
-      setPayments(paymentRows);
-      setExpenses(expenseRows);
-      setManagers(managerRows);
-      setLoading(false);
+      // Each query falls back on its own, so one permission error can't
+      // leave the page spinning.
+      const safe = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
+      try {
+        const [allOrders, planRow, holidaysData, paymentRows, expenseRows, managerRows] = await Promise.all([
+          canOrders ? safe(listAll<Order>("orders", { orderBy: ["created_at", "desc"] }), []) : Promise.resolve([]),
+          safe(getOne<MonthlyPlan>("monthly_plans", planId(today.getFullYear(), today.getMonth() + 1)), null),
+          safe(listAll<Holiday>("holidays"), []),
+          canOrders ? safe(listAll<OrderPayment>("order_payments"), []) : Promise.resolve([]),
+          canFinance ? safe(listAll<Expense>("expenses"), []) : Promise.resolve([]),
+          canOrders ? safe(listAll<Manager>("managers", { orderBy: ["created_at", "asc"] }), []) : Promise.resolve([]),
+        ]);
+        if (cancelled) return;
+        setOrders(allOrders);
+        setCompanyPlan(planRow?.plan_amount ?? 0);
+        setHolidays(holidaysData);
+        setPayments(paymentRows);
+        setExpenses(expenseRows);
+        setManagers(managerRows);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
     void load();
     return () => {

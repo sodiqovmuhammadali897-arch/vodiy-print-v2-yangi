@@ -86,7 +86,13 @@ export function useBonusMonth(month: string, only: { managerId: string; email: s
         const [managers, staff, orders, bonuses, tasks, attendance, leaves, holidays, general, personal, kpiSettings, bonusSettings, months, amo] = await Promise.all([
           listAll<Manager>("managers"),
           listAll<Staff>("staff"),
-          listAll<Order>("orders"),
+          only
+            ? // Without Buyurtmalar the rules still let a manager read its own
+              // orders, queried by its Managerlar name.
+              listAll<Order>("orders").catch(() =>
+                getOne<Manager>("managers", only.managerId).then((m) => (m ? listWhere<Order>("orders", "manager_name", m.name) : [])),
+              )
+            : listAll<Order>("orders"),
           only
             ? listWhere<OrderBonus>("order_bonuses", "manager_id", only.managerId)
             : Promise.all(window3.map((m) => listWhere<OrderBonus>("order_bonuses", "month", m))).then((x) => x.flat()),

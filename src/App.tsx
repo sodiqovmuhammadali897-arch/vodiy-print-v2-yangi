@@ -76,7 +76,7 @@ export default function App() {
             <Route path="/pechatnik" element={<Pechatnik />} />
           </Route>
 
-          <Route element={<PermissionRoute module="attendance" />}>
+          <Route element={<PermissionRoute module="attendance" kpi />}>
             <Route path="/attendance" element={<AttendancePage />} />
           </Route>
 
