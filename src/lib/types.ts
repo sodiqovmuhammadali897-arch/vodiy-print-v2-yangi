@@ -401,6 +401,9 @@ export type Manager = {
   id: string;
   name: string;
   monthly_plan: number;
+  // Bonus as % of turnover (KPI va bonus); orders with a hand-written
+  // bonus keep theirs. Carries into every month without its own rate.
+  bonus_rate?: number | null;
   avatar_url: string;
   created_at: string;
 };

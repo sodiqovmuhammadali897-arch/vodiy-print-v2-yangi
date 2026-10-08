@@ -62,6 +62,10 @@ export type KpiMonth = {
   // The manager's own target for the month: how much bonus they aim to
   // earn (so'm). Set by the admin for now; never changes the admin's plan.
   goal?: number | null;
+  // This month's plan (turnover) and bonus rate, set on KPI va bonus; when
+  // missing, the manager's standing monthly_plan / bonus_rate apply.
+  plan?: number | null;
+  rate?: number | null;
   status: KpiMonthStatus;
   snapshot?: (BonusResult & { turnover: number; plan: number; fund: number; weights: BonusWeights }) | null;
   approved_at?: string;

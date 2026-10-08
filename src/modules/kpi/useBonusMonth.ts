@@ -33,7 +33,11 @@ export type BonusRow = {
   turnover: number;
   plan: number;
   fund: number;
-  unpriced: number; // orders of the month with no bonus written
+  bonusRate: number | null; // manager's % of turnover this month, if set
+  fundByRate: number; // part of the fund from bonusRate
+  fundManual: number; // part of the fund written by hand on orders
+  ratedOrders: number;
+  unpriced: number; // orders of the month with no bonus at all
   tasks: ReturnType<typeof taskScore>;
   attendancePct: number | null;
   kpiMonth: KpiMonth | null;
@@ -41,8 +45,8 @@ export type BonusRow = {
   frozen: boolean; // approved/paid: numbers come from the snapshot
   // Maqsad kalkulyatori: the goal set for the month and what it takes.
   goal: number | null;
-  rate: number; // bonus as % of turnover, last 3 months (else the default)
-  rateFromHistory: boolean;
+  rate: number; // bonus as % of turnover: the manager's rate, else last 3 months, else the default
+  rateSource: "manager" | "history" | "default";
   avgCheck: number | null;
   conversion: number | null; // amoCRM, last 3 months
   goalPlan: GoalPlan | null;
@@ -122,9 +126,17 @@ export function useBonusMonth(month: string, only: { managerId: string; email: s
           const email = linked?.email.toLowerCase() || "";
           const mine = managerOrders(orders, manager.name, month);
           const own = new Map(mine.filter((o) => bonusByOrder.has(o.id)).map((o) => [o.id, bonusByOrder.get(o.id)!]));
+          const kpiMonth = monthById.get(manager.id) || null;
           const turnover = mine.reduce((t, o) => t + Number(o.total_amount || 0), 0);
-          const fund = [...own.values()].reduce((t, b) => t + Number(b.amount || 0), 0);
-          const plan = Number(manager.monthly_plan || 0);
+          // Fund: a hand-written bonus where there is one, else the
+          // manager's % of the order.
+          const setRate = kpiMonth?.rate ?? manager.bonus_rate ?? null;
+          const bonusRate = setRate !== null && Number(setRate) > 0 ? Number(setRate) : null;
+          const fundManual = [...own.values()].reduce((t, b) => t + Number(b.amount || 0), 0);
+          const rated = bonusRate ? mine.filter((o) => !own.has(o.id)) : [];
+          const fundByRate = rated.reduce((t, o) => t + Math.round((Number(o.total_amount || 0) * bonusRate!) / 100), 0);
+          const fund = fundManual + fundByRate;
+          const plan = Number(kpiMonth?.plan ?? manager.monthly_plan ?? 0) || 0;
           const t = taskScore(email ? tasks.filter((x) => String(x.assigned_to_email || "").toLowerCase() === email) : [], month, today);
           const att = email
             ? buildAnalytics({
@@ -141,7 +153,6 @@ export function useBonusMonth(month: string, only: { managerId: string; email: s
                 weights: kpiSettings?.weights || DEFAULT_KPI_WEIGHTS,
               }).staff[0]
             : null;
-          const kpiMonth = monthById.get(manager.id) || null;
           const frozen = !!kpiMonth?.snapshot && kpiMonth.status !== "open";
           const live = computeBonus(
             fund,
@@ -158,8 +169,8 @@ export function useBonusMonth(month: string, only: { managerId: string; email: s
           const priced = recent.filter((o) => bonusByOrder.has(o.id));
           const pricedTotal = priced.reduce((t, o) => t + Number(o.total_amount || 0), 0);
           const pricedBonus = priced.reduce((t, o) => t + Number(bonusByOrder.get(o.id)!.amount || 0), 0);
-          const rateFromHistory = pricedTotal > 0 && pricedBonus > 0;
-          const rate = rateFromHistory ? (pricedBonus / pricedTotal) * 100 : Number(s.default_rate ?? 5);
+          const rateSource = bonusRate ? "manager" : pricedTotal > 0 && pricedBonus > 0 ? "history" : "default";
+          const rate = bonusRate ?? (rateSource === "history" ? (pricedBonus / pricedTotal) * 100 : Number(s.default_rate ?? 5));
           const avgCheck = recent.length ? recent.reduce((t, o) => t + Number(o.total_amount || 0), 0) / recent.length : null;
           const amoMine = amo.filter(
             (a) => window3.includes(a.month) && ((linked?.amo_user_id && a.amo_user_id === linked.amo_user_id) || (email && String(a.staff_email || "").toLowerCase() === email)),
@@ -175,7 +186,7 @@ export function useBonusMonth(month: string, only: { managerId: string; email: s
           return {
             goal,
             rate,
-            rateFromHistory,
+            rateSource,
             avgCheck,
             conversion,
             goalPlan: plan_,
@@ -186,7 +197,11 @@ export function useBonusMonth(month: string, only: { managerId: string; email: s
             turnover: frozen ? kpiMonth!.snapshot!.turnover : turnover,
             plan: frozen ? kpiMonth!.snapshot!.plan : plan,
             fund: frozen ? kpiMonth!.snapshot!.fund : fund,
-            unpriced: mine.length - own.size,
+            bonusRate,
+            fundByRate,
+            fundManual,
+            ratedOrders: rated.length,
+            unpriced: bonusRate ? 0 : mine.length - own.size,
             tasks: t,
             attendancePct: att?.kpiPct ?? null,
             kpiMonth,

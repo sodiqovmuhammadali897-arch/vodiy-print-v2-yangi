@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Download, Loader2, Lock, Settings2, Unlock, Wallet } from "lucide-react";
-import { upsertOne } from "../../lib/firestoreDb";
+import { updateOne, upsertOne } from "../../lib/firestoreDb";
 import { useAuth } from "../../lib/AuthContext";
 import { exportCsv } from "../../lib/exportCsv";
 import { currentMonth } from "../../lib/salesPeriod";
@@ -10,10 +10,12 @@ import Modal from "../../components/ui/Modal";
 import { useBonusMonth, type BonusRow } from "./useBonusMonth";
 import MyBonus from "./MyBonus";
 import GoalPanel from "./GoalPanel";
+import PlanRatePanel, { type PlanRateSave } from "./PlanRatePanel";
 import { canSeeOwnKpi } from "../../lib/permissions";
 
-// KPI va bonus (admin): each manager's bonus fund for the month (the
-// bonuses written on their orders) × their KPI score = what is paid.
+// KPI va bonus (admin): each manager's bonus fund for the month (their %
+// of turnover, or the bonus written by hand on an order) × their KPI
+// score = what is paid.
 
 const pct = (n: number | null | undefined, digits = 0) => (n === null || n === undefined ? "—" : `${n.toFixed(digits).replace(".", ",")}%`);
 const STATUS: Record<KpiMonth["status"], { label: string; cls: string }> = {
@@ -87,10 +89,26 @@ function KpiBonusPage() {
     void write(row, { crm_score: v });
   };
 
+  // Reja va bonus foizi: this month's own values; "keyingi oylarga ham"
+  // also makes them the manager's standing plan and rate.
+  const savePlanRate = async (row: BonusRow, v: PlanRateSave) => {
+    if (v.carry) {
+      try {
+        await updateOne("managers", row.manager.id, { monthly_plan: v.plan || 0, bonus_rate: v.rate });
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "Saqlab bo'lmadi");
+        return;
+      }
+    }
+    await write(row, { plan: v.plan, rate: v.rate });
+  };
+
   const approve = (row: BonusRow) =>
     write(row, {
       status: "approved",
       snapshot: { ...row.result, turnover: row.turnover, plan: row.plan, fund: row.fund, weights: settings.weights },
+      plan: row.plan || null,
+      rate: row.bonusRate,
       approved_at: new Date().toISOString(),
       approved_by: me,
     });
@@ -129,7 +147,7 @@ function KpiBonusPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink-900">KPI va bonus</h1>
-          <p className="text-sm text-ink-500">Bonus fondi — buyurtmalarga yozilgan bonuslar; to'lanadi = fond × KPI ball</p>
+          <p className="text-sm text-ink-500">Bonus fondi — oborot × menejer foizi (yoki buyurtmaga qo'lda yozilgan bonus); to'lanadi = fond × KPI ball</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input type="month" className="input w-auto" value={month} max={currentMonth()} onChange={(e) => e.target.value && setMonth(e.target.value)} aria-label="Oy" />
@@ -167,7 +185,7 @@ function KpiBonusPage() {
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Tile label="Oborot" value={so(totals.turnover)} />
-            <Tile label="Bonus fondi" value={so(totals.fund)} hint="buyurtmalarga yozilgan" />
+            <Tile label="Bonus fondi" value={so(totals.fund)} hint="oborot × foiz + qo'lda yozilgan" />
             <Tile label="To'lanadi" value={so(totals.payout)} hint="KPI ballga qarab" strong />
           </div>
 
@@ -199,6 +217,15 @@ function KpiBonusPage() {
                           <td className="table-td">
                             <div className="font-semibold text-ink-900">{r.manager.name}</div>
                             {!r.staff && <div className="text-[11px] text-amber-600">xodim profili bog'lanmagan</div>}
+                            <button
+                              type="button"
+                              onClick={() => setOpen(r.manager.id)}
+                              className={`mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${r.plan > 0 || r.bonusRate ? "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}`}
+                            >
+                              {r.plan > 0 || r.bonusRate
+                                ? `Reja ${r.plan > 0 ? short(r.plan) : "—"} · ${r.bonusRate ? `${String(r.bonusRate).replace(".", ",")}%` : "foiz yo'q"}`
+                                : "+ reja va foiz qo'yish"}
+                            </button>
                             {r.goalPlan ? (
                               <button type="button" onClick={() => setOpen(r.manager.id)} className="mt-0.5 block text-left text-[11px] text-ink-500 hover:underline">
                                 🎯 {short(r.goal!)} → {short(r.goalPlan.required)} oborot ·{" "}
@@ -215,7 +242,13 @@ function KpiBonusPage() {
                           <td className="table-td whitespace-nowrap text-right">{so(r.turnover)}</td>
                           <td className="table-td text-right">
                             <div className="whitespace-nowrap font-semibold text-ink-900">{so(r.fund)}</div>
-                            {r.unpriced > 0 && !r.frozen && <div className="text-[11px] text-amber-600">{r.unpriced} ta buyurtmada bonus yo'q</div>}
+                            {!r.frozen && r.bonusRate ? (
+                              <div className="text-[11px] text-ink-500">
+                                oborotdan {String(r.bonusRate).replace(".", ",")}%{r.bonuses.size ? ` + ${r.bonuses.size} ta qo'lda` : ""}
+                              </div>
+                            ) : (
+                              r.unpriced > 0 && !r.frozen && <div className="text-[11px] text-amber-600">foiz yo'q · {r.unpriced} ta buyurtmada bonus yo'q</div>
+                            )}
                           </td>
                           <td className={`table-td text-right font-semibold ${s.plan === 0 ? "text-rose-600" : ""}`}>
                             {r.plan > 0 ? pct((r.turnover / r.plan) * 100) : <span className="text-[11px] font-normal text-amber-600">reja yo'q</span>}
@@ -280,6 +313,7 @@ function KpiBonusPage() {
                           <tr>
                             <td colSpan={11} className="bg-ink-50/50 px-6 pb-4 pt-1">
                               <div className="space-y-4 pt-2">
+                                <PlanRatePanel row={r} month={month} onSave={(v) => savePlanRate(r, v)} />
                                 <GoalPanel row={r} onSave={(goal) => write(r, { goal })} />
                                 <div className="rounded-2xl border border-ink-100 bg-surface px-4 py-2">
                                   <OrdersOfManager row={r} />
@@ -368,7 +402,15 @@ export function OrdersOfManager({ row, admin = true }: { row: BonusRow; admin?: 
               <td className="py-2 pr-3 text-right">{b?.margin === null || b?.margin === undefined ? "—" : `${b.margin}%`}</td>
               <td className="py-2 pr-3 text-right font-semibold">
                 {b ? (
-                  so(b.amount)
+                  <>
+                    {so(b.amount)}
+                    {admin && row.bonusRate ? <div className="text-[10px] font-normal text-ink-400">qo'lda</div> : null}
+                  </>
+                ) : row.bonusRate ? (
+                  <>
+                    {so(Math.round((Number(o.total_amount || 0) * row.bonusRate) / 100))}
+                    {admin && <div className="text-[10px] font-normal text-ink-400">{String(row.bonusRate).replace(".", ",")}%</div>}
+                  </>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-xs font-normal text-amber-600">
                     <AlertTriangle className="h-3 w-3" /> yozilmagan

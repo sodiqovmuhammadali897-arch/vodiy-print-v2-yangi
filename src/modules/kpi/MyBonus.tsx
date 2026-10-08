@@ -31,7 +31,7 @@ export default function MyBonus() {
 
   const detail: Record<string, string> = r
     ? {
-        plan: r.plan > 0 ? `Oborot ${so(r.turnover)} / reja ${so(r.plan)}. ${settings.plan_floor}% dan past bo'lsa bu qism 0.` : "Reja kiritilmagan — admin Managerlar bo'limida qo'yadi.",
+        plan: r.plan > 0 ? `Oborot ${so(r.turnover)} / reja ${so(r.plan)}. ${settings.plan_floor}% dan past bo'lsa bu qism 0.` : "Reja kiritilmagan — admin qo'yadi.",
         tasks: r.tasks.total ? `${r.tasks.total} ta vazifadan ${r.tasks.onTime} tasi muddatida${r.tasks.late ? `, ${r.tasks.late} tasi kechikkan` : ""}.` : "Bu oy hisoblanadigan vazifa yo'q.",
         attendance: "Davomat KPI'sidan: kelish, vaqtida kelish, ishlangan soat.",
         crm: r.result.scores.crm === null ? "Oy oxirida admin qo'yadi." : "Admin qo'ygan baho (amoCRM'da muddati o'tgan vazifa va javobsiz lid yo'qligi).",

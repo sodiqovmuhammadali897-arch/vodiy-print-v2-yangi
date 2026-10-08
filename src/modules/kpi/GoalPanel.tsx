@@ -106,7 +106,11 @@ export default function GoalPanel({ row, onSave }: { row: BonusRow; onSave?: (go
               />
             </div>
             <p className="mt-2 text-[11px] text-ink-400">
-              Bonus foizi — {row.rateFromHistory ? "oxirgi 3 oyda buyurtmalarga yozilgan bonuslar o'rtachasi" : "tarix yo'q, standart foiz (Ulushlar sozlamasi)"}; KPI'da reja qismi bajarilgan deb olinadi.
+              Bonus foizi — {row.rateSource === "manager"
+                ? "menejerga qo'yilgan foiz"
+                : row.rateSource === "history"
+                  ? "oxirgi 3 oyda buyurtmalarga yozilgan bonuslar o'rtachasi"
+                  : "tarix yo'q, standart foiz (Ulushlar sozlamasi)"}; KPI'da reja qismi bajarilgan deb olinadi.
             </p>
           </>
         )}
