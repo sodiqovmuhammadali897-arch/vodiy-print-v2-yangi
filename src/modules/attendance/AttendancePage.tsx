@@ -5,13 +5,13 @@ import EmployeeAttendanceCard from "./EmployeeAttendanceCard";
 import KpiPanel from "./KpiPanel";
 import AttendanceAdminTable from "./AttendanceAdminTable";
 import AttendanceAnalytics from "./AttendanceAnalytics";
-import MyBonus from "../kpi/MyBonus";
+import MyKpi from "../kpi/MyKpi";
 import { canSeeOwnKpi } from "../../lib/permissions";
 
 type Tab = "mine" | "kpi" | "team" | "stats";
 
 export default function AttendancePage() {
-  const { isAdmin, staff } = useAuth();
+  const { isAdmin, staff, isManagerAccount } = useAuth();
   // KPI and bonus are hidden from employees until an admin ticks "KPI va
   // bonus" for them (Sozlamalar → Xodimlar).
   const showKpi = canSeeOwnKpi(staff);
@@ -61,8 +61,8 @@ export default function AttendancePage() {
       )}
       {tab === "kpi" && showKpi && (
         <div className="space-y-4">
-          <MyBonus />
-          <KpiPanel />
+          {/* A sales manager's KPI is its sales and money in (MyKpi). */}
+          {isManagerAccount ? <MyKpi /> : <KpiPanel />}
         </div>
       )}
       {tab === "team" && isAdmin && <AttendanceAdminTable />}

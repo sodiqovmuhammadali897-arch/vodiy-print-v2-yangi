@@ -67,8 +67,10 @@ const chief = marketing ? require("./chief").create(db, { route: groups.route, a
 if (chief) chief.register(app);
 // Task notifications in employees' private chats — see tasks.js.
 const tasks = process.env.TELEGRAM_BOT_TOKEN ? require("./tasks").create(db) : null;
-// KPI va bonus reports to managers when a month is approved — see bonus.js.
+// KPI reports to managers when a month is approved — see bonus.js.
 const bonus = process.env.TELEGRAM_BOT_TOKEN ? require("./bonus").create(db) : null;
+// KPI sums (sales, money in) per manager, live — see salesKpi.js.
+const salesKpi = require("./salesKpi").create(db, { notify: Boolean(process.env.TELEGRAM_BOT_TOKEN) });
 // amoCRM, read only — see amocrm.js; feeds the "amoCRM tahlil" tab.
 const amocrm = require("./amocrm").create(db);
 // Targetolog — Meta ads with marketolog → admin approval; see targetolog.js.
@@ -354,6 +356,7 @@ app.listen(PORT, () => {
   if (chief) void chief.start().catch((err) => console.error("Bosh agent start failed", err));
   if (tasks) tasks.start();
   if (bonus) bonus.start();
+  salesKpi.start();
   void amocrm.start().catch((err) => console.error("amoCRM start failed", err));
   if (targetolog) void targetolog.start().catch((err) => console.error("Targetolog start failed", err));
 });

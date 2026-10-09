@@ -403,13 +403,24 @@ Whisper with timestamps; the speech goes to Claude with the frames, gets its
 own score (`nutq`) and is saved as `transcript`. Without the key, or when
 there is no speech, `audio_note` says why and only the picture is judged.
 
-## KPI va bonus — reports to managers (`bonus.js`)
+## KPI — live sums and reports to managers (`salesKpi.js`, `bonus.js`)
 
-The site's KPI va bonus page keeps each manager's month in
-`kpi_months/{YYYY-MM}_{managerId}` (bonus fund from `order_bonuses`, CRM mark,
-and — once the admin approves — a frozen `snapshot` of the scores and payout).
-The server watches approved and paid months: on approval the manager (every
-staff account with that `report_manager_id` and a linked Telegram chat) gets
-the month's report — turnover vs plan, fund, each KPI part and the payout; on
-"To'landi" a short paid note. Each notice is claimed once (`notified_at`,
-`paid_notified_at`), and only changes from the last three days are sent.
+A sales manager's KPI has two parts (see `src/lib/salesKpi.ts`): a share
+(7,5% by default) of every order entered in the month, and a share (2%) of
+the money that came in that month on their orders — the second only when
+attendance and amoCRM tasks are at or above the threshold (80%).
+
+`salesKpi.js` listens to `orders`, `order_payments` and `managers` and keeps
+`kpi_sales/{YYYY-MM}_{managerId}` current for this month and the last: the
+month's sales and orders, the payments in, and what is still owed. The site
+reads these documents live. With the bot token set, every new order and
+payment also sends the manager a short note with what it adds (only to
+staff accounts with that `report_manager_id`, a linked Telegram chat and
+the "KPI" permission; only for orders/payments created in the last day).
+
+The admin approves a month on the site (`kpi_months/{YYYY-MM}_{managerId}`
+gets a frozen `snapshot`). `bonus.js` watches approved and paid months: on
+approval the manager gets the month's report — sales vs plan, both parts and
+the payout; on "To'landi" a short paid note. Each notice is claimed once
+(`notified_at`, `paid_notified_at`), and only changes from the last three
+days are sent.

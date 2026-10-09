@@ -63,11 +63,7 @@ service cloud.firestore {
       // leads-only staff can read orders too — the Sotuv bo'limi board
       // shows the live production stage of orders spawned from their own
       // won leads.
-      // A manager account with KPI va bonus reads its own sales (by its
-      // Managerlar name) for Mening bonusim, even without Buyurtmalar.
-      allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view') || can('leads', 'edit') ||
-        (isManagerAccount() && ownManager(staffDoc().report_manager_id) &&
-         resource.data.manager_name == get(/databases/$(database)/documents/managers/$(staffDoc().report_manager_id)).data.name);
+      allow read: if can('orders', 'view') || can('production', 'view') || can('pechatnik', 'view') || can('leads', 'edit');
       // A won lead auto-creates its draft order — leads-only staff need
       // create access for that single insert, nothing more.
       allow create: if can('orders', 'edit') || can('leads', 'edit');
@@ -181,6 +177,12 @@ service cloud.firestore {
     match /kpi_months/{id} {
       allow read: if (isAdmin() && !isManagerAccount()) || ownManager(resource.data.manager_id);
       allow write: if isAdmin() && !isManagerAccount();
+    }
+    // KPI sums per manager and month, written by the server
+    // (meta-webhook/salesKpi.js).
+    match /kpi_sales/{id} {
+      allow read: if (isAdmin() && !isManagerAccount()) || ownManager(resource.data.manager_id);
+      allow write: if false;
     }
 
     // Which company produces a product, and its lead time — operational

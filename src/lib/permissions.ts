@@ -79,7 +79,7 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "ads", label: "Reklama va Kontent (marketolog)" },
   // Off by default: the employee's own KPI score and bonus (Davomat va
   // KPI → KPI, the bot's KPI answer, the monthly bonus report in Telegram).
-  { key: "kpi", label: "KPI va bonus (o'zinikini ko'rish)" },
+  { key: "kpi", label: "KPI (o'zinikini ko'rish)" },
 ];
 
 // Whether this account sees its own KPI and bonus. A manager account (even

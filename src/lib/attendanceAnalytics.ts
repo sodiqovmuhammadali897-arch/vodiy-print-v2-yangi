@@ -46,6 +46,12 @@ export type StaffSummary = {
   avgArrivalOffset: number | null;
   attendancePct: number | null;
   kpiPct: number | null;
+  // Time on the job against the schedule: a missed day loses the whole
+  // day, a late arrival or early leave its minutes (today counts as soon
+  // as it happens). Off days, holidays and approved leave are left out.
+  lostMinutes: number;
+  presenceNormMinutes: number;
+  presencePct: number | null;
 };
 
 export type DayTotals = { date: string; onTime: number; late: number; absent: number; avgOffset: number | null; off: boolean };
@@ -65,6 +71,16 @@ export type PeriodTotals = {
 };
 
 export type Analytics = { days: string[]; staff: StaffSummary[]; daily: DayTotals[]; totals: PeriodTotals };
+
+const presence = (counted: DayCell[], daily: number) => {
+  const presenceNormMinutes = counted.length * daily;
+  const lostMinutes = counted.reduce((sum, c) => sum + (c.kind === "absent" ? daily : Math.min(daily, c.lateMinutes + c.earlyMinutes)), 0);
+  return {
+    lostMinutes,
+    presenceNormMinutes,
+    presencePct: presenceNormMinutes > 0 ? Math.round(((presenceNormMinutes - lostMinutes) / presenceNormMinutes) * 1000) / 10 : null,
+  };
+};
 
 const hmToMin = (hm: string | null | undefined): number => {
   const [h, m] = String(hm || "0:0").split(":").map(Number);
@@ -166,6 +182,7 @@ export const buildAnalytics = (input: {
       avgArrivalOffset: avg(present.map((c) => c.arrivalOffset!)),
       attendancePct: counted.length ? Math.round((present.length / counted.length) * 100) : null,
       kpiPct: counted.length && kpi.maxScore ? Math.round((kpi.score / kpi.maxScore) * 100) : null,
+      ...presence(counted, daily),
     };
   });
 

@@ -95,7 +95,7 @@ const create = (db, { priceTools }) => {
   };
   const mayAsk = (s) => s.role === "admin" || s.bot_ask === true;
   const canProducts = (s) => s.role === "admin" || Boolean(s.permissions && s.permissions.products && s.permissions.products.view);
-  // Own KPI only with the "KPI va bonus" permission (a manager account
+  // Own KPI only with the "KPI" permission (a manager account
   // needs it even when made admin) — same rule as the site.
   const canKpi = (s) => (s.role === "admin" && !s.report_manager_id) || Boolean(s.permissions && s.permissions.kpi && s.permissions.kpi.view);
 

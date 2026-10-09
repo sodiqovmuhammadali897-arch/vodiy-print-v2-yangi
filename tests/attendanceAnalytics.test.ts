@@ -116,4 +116,21 @@ describe("attendance analytics", () => {
     expect(offsetLabel(0)).toBe("aynan vaqtida");
     expect(offsetLabel(null)).toBe("—");
   });
+  it("counts time on the job against the schedule", () => {
+    // 8-hour days. Thu on time, Fri 30 min late and 60 min early, Sat
+    // missed, Mon (today, 11:00) in at 09:20 — late minutes count now.
+    const a = buildAnalytics({
+      ...base,
+      staff: [{ email: "a@x.uz" }],
+      personal: new Map(),
+      records: [
+        rec("a@x.uz", "2026-10-01", "09:00", "18:00"),
+        rec("a@x.uz", "2026-10-02", "09:30", "17:00", { lateMinutes: 30, earlyLeaveMinutes: 60 }),
+        rec("a@x.uz", "2026-10-05", "09:20", null, { lateMinutes: 20 }),
+      ],
+    }).staff[0];
+    expect(a.presenceNormMinutes).toBe(4 * 480);
+    expect(a.lostMinutes).toBe(90 + 480 + 20);
+    expect(a.presencePct).toBeCloseTo(69.3, 1);
+  });
 });

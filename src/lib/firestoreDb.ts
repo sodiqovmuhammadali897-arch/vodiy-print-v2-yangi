@@ -198,12 +198,17 @@ export const subscribeWhere = <T>(
   value: unknown,
   onData: (rows: WithId<T>[]) => void,
   options?: ListOptions,
+  onError?: (err: Error) => void,
 ): Unsubscribe => {
   const constraints: QueryConstraint[] = [where(field, "==", value), ...buildOrder(options?.orderBy)];
   const q = query(collection(db, name), ...constraints);
-  return onSnapshot(q, (snap) => {
-    onData(snap.docs.map((d) => mapDoc<T>(d)));
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      onData(snap.docs.map((d) => mapDoc<T>(d)));
+    },
+    onError,
+  );
 };
 
 export const subscribeOne = <T>(

@@ -1,47 +1,41 @@
-// KPI va bonus → Telegram. When the admin approves a manager's month on the
+// KPI → Telegram. When the admin approves a manager's month on the
 // site (kpi_months/{YYYY-MM}_{managerId}, status "approved"), the manager
 // gets their bonus report in the bot's private chat; when it is marked
 // "paid", a short "paid" note — only if the manager may see their KPI
-// (the "KPI va bonus" permission). Each notice is claimed once in the document
+// (the "KPI" permission). Each notice is claimed once in the document
 // (notified_at / paid_notified_at), so restarts never send it twice, and
 // only recent changes are sent, so a first start doesn't replay history.
 const { telegram } = require("./telegram");
 
 const FRESH_MS = 3 * 24 * 3600 * 1000;
 const MONTHS = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"];
-const PARTS = [
-  ["plan", "Reja"],
-  ["tasks", "Vazifalar"],
-  ["attendance", "Davomat"],
-  ["crm", "CRM tartibi"],
-];
-
-const money = (n) => `${Math.round(Number(n) || 0).toLocaleString("ru-RU").replace(/ |,/g, " ")} so'm`;
+const money = (n) => `${Math.round(Number(n) || 0).toLocaleString("ru-RU").replace(/[\s\u00a0\u202f,]/g, " ")} so'm`;
 const monthName = (m) => `${MONTHS[Number(String(m).slice(5, 7)) - 1] || m} ${String(m).slice(0, 4)}`;
 const fresh = (iso) => Boolean(iso) && Date.now() - Date.parse(iso) < FRESH_MS;
-// 84.75 → "84,75", 41 → "41", 22.5 → "22,5".
-const num = (n) => (n === null || n === undefined ? "—" : String(Math.round(Number(n) * 100) / 100).replace(".", ","));
+// 7.5 → "7,5%"; null → "—".
+const pct = (n) => (n === null || n === undefined ? "—" : `${String(Math.round(Number(n) * 10) / 10).replace(".", ",")}%`);
 
+// The approved month (src/lib/salesKpi.ts KpiSnapshot): sales % of the
+// orders, plus collect % of the money in when attendance and amoCRM held.
 const reportText = (k) => {
   const s = k.snapshot || {};
-  const w = s.weights || {};
-  const planPct = s.plan > 0 ? Math.round((s.turnover / s.plan) * 100) : null;
-  const lines = [
-    `🏆 ${monthName(k.month)} — bonus hisobotingiz`,
+  const planPct = s.plan > 0 ? Math.round((s.sales / s.plan) * 100) : null;
+  const why = [];
+  if (s.attendance_pct !== null && s.attendance_pct !== undefined && s.attendance_pct < s.threshold) why.push(`davomat ${pct(s.attendance_pct)}`);
+  if (s.amo_pct !== null && s.amo_pct !== undefined && s.amo_pct < s.threshold) why.push(`amoCRM ${pct(s.amo_pct)}`);
+  return [
+    `🏆 ${monthName(k.month)} — KPI hisobotingiz`,
     "",
-    `Oborot: ${money(s.turnover)}${planPct !== null ? ` (reja ${money(s.plan)}, ${planPct}%)` : ""}`,
-    `Bonus fondi: ${money(s.fund)}`,
+    `Sotuv: ${money(s.sales)}${planPct !== null ? ` (reja ${money(s.plan)}, ${planPct}%)` : ""}`,
+    `➕ ${pct(s.sales_rate)}: ${money(s.sales_bonus)}`,
     "",
-    `KPI ball: ${num(s.total)}%`,
-    ...PARTS.map(([key, label]) => {
-      const score = s.scores ? s.scores[key] : null;
-      const pts = s.points ? s.points[key] : null;
-      return score === null || score === undefined ? `• ${label}: hisobga olinmadi` : `• ${label}: ${Math.round(score)}% → ${num(pts)} / ${w[key] ?? "—"}`;
-    }),
+    `Kirim: ${money(s.collected)}`,
+    s.eligible ? `➕ ${pct(s.collect_rate)}: ${money(s.collect_bonus)}` : `➕ ${pct(s.collect_rate)}: 0 — ${why.join(", ") || "shart bajarilmadi"} (${s.threshold}% dan past)`,
+    "",
+    `Davomat: ${pct(s.attendance_pct)} · amoCRM: ${pct(s.amo_pct)}`,
     "",
     `💰 To'lanadi: ${money(s.payout)}`,
-  ];
-  return lines.join("\n");
+  ].join("\n");
 };
 
 const create = (db) => {

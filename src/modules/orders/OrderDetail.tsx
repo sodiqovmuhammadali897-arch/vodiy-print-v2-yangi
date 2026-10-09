@@ -58,7 +58,6 @@ import { useOrderScope } from "../../lib/orderScope";
 import RequireCustomerModal from "./RequireCustomerModal";
 import OrderPaymentModal from "./OrderPaymentModal";
 import LinkedTasksCard from "../tasks/LinkedTasksCard";
-import OrderBonusCard from "./OrderBonusCard";
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -800,8 +799,6 @@ export default function OrderDetail() {
           </ul>
         </div>
       )}
-
-      <OrderBonusCard order={order} products={products} />
 
       <LinkedTasksCard
         field="order_id"

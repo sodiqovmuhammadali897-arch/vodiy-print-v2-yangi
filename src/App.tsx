@@ -7,7 +7,7 @@ import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
 import { pages } from "./pages";
 
-const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, KpiBonusPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, Settings } = pages;
+const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, Settings } = pages;
 
 export default function App() {
   return (
@@ -87,7 +87,7 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/ai-office" element={<AiOffice />} />
             <Route path="/margin" element={<MarginPage />} />
-            <Route path="/kpi" element={<KpiBonusPage />} />
+            <Route path="/kpi" element={<KpiPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
