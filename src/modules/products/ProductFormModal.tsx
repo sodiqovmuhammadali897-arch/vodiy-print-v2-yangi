@@ -408,10 +408,10 @@ export default function ProductFormModal({
               />
             </div>
             <div>
-              <label className="label">Qog'oz qalinligi</label>
+              <label className="label">{isTextile ? "Material qalinligi" : "Qog'oz qalinligi"}</label>
               <input
                 className="input"
-                placeholder="130 gr"
+                placeholder={isTextile ? "170 gr" : "130 gr"}
                 value={form.paperWeight}
                 onChange={(e) => setForm((f) => ({ ...f, paperWeight: e.target.value }))}
               />

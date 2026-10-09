@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { weightLabel } from "./ProductSpecs";
 import { ImageOff, Mail, MapPin, Phone, Send } from "lucide-react";
 import type { CompanySettings, Product } from "../../lib/types";
 import type { QuantityQuote } from "../../lib/priceCalculations";
@@ -24,7 +25,7 @@ const ProductCustomerPrice = forwardRef<HTMLDivElement, Props>(
     if (product.size_spec) specRows.push(["O'lcham", product.size_spec]);
     if (product.material) specRows.push(["Material", product.material]);
     if (product.print_type) specRows.push(["Bosma turi", product.print_type]);
-    if (product.paper_weight) specRows.push(["Qog'oz qalinligi", product.paper_weight]);
+    if (product.paper_weight) specRows.push([weightLabel(product.category), product.paper_weight]);
     if (product.lamination) specRows.push(["Laminatsiya", product.lamination]);
     if (product.packaging) specRows.push(["Qadoqlash", product.packaging]);
 

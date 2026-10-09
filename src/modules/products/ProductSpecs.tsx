@@ -3,6 +3,9 @@ import type { Product } from "../../lib/types";
 
 type Props = { product: Product };
 
+// Textile is cloth, not paper: the same field is the fabric's weight.
+export const weightLabel = (category: string | null | undefined) => (category === "Textil" ? "Material qalinligi" : "Qog'oz qalinligi");
+
 export default function ProductSpecs({ product }: Props) {
   const rows: [string, string][] = [
     ["Mahsulot turi", product.category || "-"],
@@ -11,7 +14,7 @@ export default function ProductSpecs({ product }: Props) {
   if (product.size_spec) rows.push(["O'lcham", product.size_spec]);
   if (product.material) rows.push(["Material", product.material]);
   if (product.print_type) rows.push(["Bosma turi", product.print_type]);
-  if (product.paper_weight) rows.push(["Qog'oz qalinligi", product.paper_weight]);
+  if (product.paper_weight) rows.push([weightLabel(product.category), product.paper_weight]);
   if (product.lamination) rows.push(["Laminatsiya", product.lamination]);
   if (product.packaging) rows.push(["Qadoqlash", product.packaging]);
   if (product.sizes?.length) rows.push(["Razmerlar", product.sizes.join(", ")]);
