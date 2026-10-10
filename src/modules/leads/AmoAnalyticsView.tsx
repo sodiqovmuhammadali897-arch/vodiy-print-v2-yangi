@@ -3,6 +3,7 @@ import { AlertTriangle, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, C
 import { subscribeOne, subscribeWhere } from "../../lib/firestoreDb";
 import { formatMoneyShort, initialsOf } from "../../lib/format";
 import { tashkentDay } from "../../lib/salesPeriod";
+import type { AmoTaskDoc } from "../../lib/salesKpi";
 import {
   conversion,
   formatAvgCall,
@@ -128,6 +129,7 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
   const [prevRows, setPrevRows] = useState<AmoStat[]>([]);
   const [nowRows, setNowRows] = useState<AmoStat[]>([]);
   const [mine, setMine] = useState<AmoStat[]>([]);
+  const [tasks, setTasks] = useState<AmoTaskDoc[]>([]);
   const [now, setNow] = useState(new Date());
   const prev = shiftMonth(month, -1);
 
@@ -152,6 +154,12 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
     if (isAdmin || !email) return;
     return subscribeWhere<AmoStat>("amo_stats", "staff_email", email, setMine);
   }, [isAdmin, email]);
+  // amoCRM tasks right now (meta-webhook/amoTasks.js): this month's docs.
+  useEffect(() => {
+    if (isAdmin) return subscribeWhere<AmoTaskDoc>("amo_tasks", "month", thisMonth, setTasks, undefined, () => setTasks([]));
+    if (!email) return;
+    return subscribeWhere<AmoTaskDoc>("amo_tasks", "staff_email", email, (r) => setTasks(r.filter((x) => x.month === thisMonth)), undefined, () => setTasks([]));
+  }, [isAdmin, email, thisMonth]);
 
   const isCurrent = month === thisMonth;
   const cur = isAdmin ? rows : mine.filter((r) => r.month === month);
@@ -407,6 +415,8 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
           </div>
         </Card>
       )}
+
+      {isCurrent && <TasksToday rows={tasks.filter((r) => !(isAdmin && userFilter !== "all" && String(r.amo_user_id) !== userFilter))} colorIndex={colorIndex} />}
 
       {(isAdmin || people.length > 1) && (
         <Card className="overflow-hidden !p-0">
@@ -803,5 +813,82 @@ function ConnectionPanel({ status, thisMonth }: { status: AmoStatus; thisMonth: 
         </div>
       )}
     </div>
+  );
+}
+
+// Bugun · zadachalar: per manager, how today's amoCRM tasks stand, what is
+// left over from earlier days, what is due tomorrow and what was put off.
+function TasksToday({ rows, colorIndex }: { rows: AmoTaskDoc[]; colorIndex: Map<number, number> }) {
+  const list = rows
+    .filter((r) => r.today_due || r.past_open || r.tomorrow_due || r.postponed_today || r.due)
+    .sort((a, b) => b.past_open + b.today_open + b.postponed_today - (a.past_open + a.today_open + a.postponed_today) || a.name.localeCompare(b.name));
+  if (!list.length) return null;
+  const cell = (n: number, tone: "bad" | "warn" | "good" | "plain" = "plain") => (
+    <span
+      className={`inline-flex min-w-[2rem] justify-center rounded-lg px-2 py-0.5 font-bold tabular-nums ${
+        !n
+          ? "text-ink-300"
+          : tone === "bad"
+            ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
+            : tone === "warn"
+              ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+              : tone === "good"
+                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                : "text-ink-800"
+      }`}
+    >
+      {n}
+    </span>
+  );
+  return (
+    <Card className="overflow-hidden !p-0">
+      <div className="px-5 pt-5">
+        <CardTitle
+          icon={<CalendarClock className="h-4 w-4" />}
+          title="Bugun · amoCRM zadachalar"
+          hint="Kechadan qolgan — muddati o'tgan, bajarilmagan. Surilgan — bugungi zadacha bajarilmasdan boshqa kunga ko'chirilgan (KPI'da kechikkan). Har 2 daqiqada yangilanadi."
+        />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-y border-ink-100 bg-ink-50/60 text-[11px] uppercase tracking-wider text-ink-500">
+              <th className="px-5 py-2.5 text-left font-semibold">Menejer</th>
+              <th className="px-3 py-2.5 text-center font-semibold">Kechadan qolgan</th>
+              <th className="px-3 py-2.5 text-center font-semibold">Bugun</th>
+              <th className="px-3 py-2.5 text-center font-semibold">Bajarildi</th>
+              <th className="px-3 py-2.5 text-center font-semibold">Qoldi</th>
+              <th className="px-3 py-2.5 text-center font-semibold">Surilgan</th>
+              <th className="px-3 py-2.5 text-center font-semibold">Ertaga</th>
+              <th className="px-3 py-2.5 text-center font-semibold">Zadachasiz lid</th>
+              <th className="px-5 py-2.5 text-right font-semibold">Oy · vaqtida</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-ink-100">
+            {list.map((r) => (
+              <tr key={r.amo_user_id} className="transition hover:bg-ink-50/60">
+                <td className="whitespace-nowrap px-5 py-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={r.name} i={colorIndex.get(r.amo_user_id) || 0} size={30} />
+                    <span className="font-semibold text-ink-900">{r.name}</span>
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-center">{cell(r.past_open || 0, "bad")}</td>
+                <td className="px-3 py-3 text-center">{cell(r.today_due || 0)}</td>
+                <td className="px-3 py-3 text-center">{cell((r.today_due || 0) - (r.today_open || 0), "good")}</td>
+                <td className="px-3 py-3 text-center">{cell(r.today_open || 0, "warn")}</td>
+                <td className="px-3 py-3 text-center">{cell(r.postponed_today || 0, "bad")}</td>
+                <td className="px-3 py-3 text-center">{cell(r.tomorrow_due || 0)}</td>
+                <td className="px-3 py-3 text-center">{cell(r.no_task_leads || 0, "warn")}</td>
+                <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums">
+                  {r.pct === null ? <span className="text-ink-400">—</span> : <b className={r.pct >= 80 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600"}>{String(r.pct).replace(".", ",")}%</b>}
+                  {r.due > 0 && <span className="ml-1 text-xs text-ink-400">{r.on_time}/{r.due}</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }

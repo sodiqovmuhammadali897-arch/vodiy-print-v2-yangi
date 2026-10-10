@@ -42,8 +42,11 @@ export type AmoTaskDoc = {
   late: number;
   pct: number | null;
   overdue_open: number;
+  past_open: number; // open, deadline on an earlier day
   today_due: number;
   today_open: number;
+  tomorrow_due: number;
+  postponed_today: number; // moved off today to a later day, undone
   no_task_leads: number;
   updated_at?: string;
 };

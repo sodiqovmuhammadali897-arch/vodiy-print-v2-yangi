@@ -342,11 +342,45 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
         pageAll("tasks", { "filter[updated_at][from]": Math.floor(monthStartMs(prevMonth(monthOf(now))) / 1000) }, "tasks"),
       ]);
       for (const t of [...open, ...recent]) tasks.set(Number(t.id), T.toTask(t));
-      return open.length + recent.length;
+      return [];
     }
     const rows = await pageAll("tasks", { "filter[updated_at][from]": Math.floor(since / 1000) }, "tasks");
-    for (const t of rows) tasks.set(Number(t.id), T.toTask(t));
-    return rows.length;
+    const moved = [];
+    for (const t of rows) {
+      const next = T.toTask(t);
+      const prev = tasks.get(next.id);
+      if (T.postponed(prev, next, now)) moved.push({ task: next, prevDue: prev.due });
+      tasks.set(next.id, next);
+    }
+    return moved;
+  };
+
+  // A task put off to a later day: late in its month's KPI, and the
+  // manager and the admins hear about it now.
+  const onPostponed = async (moved, now) => {
+    if (!moved.length) return;
+    const byMonth = new Map();
+    for (const { task, prevDue } of moved) {
+      const had = misses.get(task.id);
+      const entry = { month: had ? had.month : T.monthOf(prevDue), user: task.user, due: had ? had.due : prevDue, postponed: true, at: now, to: task.due };
+      misses.set(task.id, entry);
+      if (!byMonth.has(entry.month)) byMonth.set(entry.month, {});
+      byMonth.get(entry.month)[task.id] = { user: entry.user, due: entry.due, postponed: true, at: now, to: task.due };
+    }
+    for (const [month, ids] of byMonth) await db.collection("amo_task_misses").doc(month).set({ month, ids }, { merge: true });
+    if (!notify) return;
+    const leadName = (t) => (t.entity === "leads" && leads.has(t.entityId) ? leads.get(t.entityId).name : null);
+    const admins = [...staffInfo.values()].filter((i) => i.admin && i.chat);
+    for (const { task, prevDue } of moved) {
+      const email = staffByUser.get(task.user);
+      const info = email && staffInfo.get(email);
+      const name = (users.get(task.user) || {}).name || (info && info.name) || `#${task.user}`;
+      if (info && info.chat) await notify("sendMessage", { chat_id: info.chat, text: T.postponeText(task, prevDue, leadName(task), now) }).catch((err) => log.error("amoCRM postpone notice failed", err.message));
+      for (const a of admins) {
+        if (info && a.chat === info.chat) continue;
+        await notify("sendMessage", { chat_id: a.chat, text: T.adminPostponeText(name, task, prevDue, leadName(task)) }).catch(() => undefined);
+      }
+    }
   };
 
   const loadMisses = async (now) => {
@@ -354,7 +388,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     for (const month of [prevMonth(cur), cur]) {
       const snap = await db.collection("amo_task_misses").doc(month).get();
       const ids = (snap.exists && snap.data().ids) || {};
-      for (const [id, m] of Object.entries(ids)) misses.set(Number(id), { month, user: Number(m.user || 0), due: Number(m.due || 0) });
+      for (const [id, m] of Object.entries(ids)) misses.set(Number(id), { month, user: Number(m.user || 0), due: Number(m.due || 0), postponed: Boolean(m.postponed), at: Number(m.at || 0), to: Number(m.to || 0) });
     }
     missesLoaded = true;
   };
@@ -501,9 +535,10 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       const changed = await writeStats(now);
       let taskDocs = 0;
       try {
-        await pullTasks(tasksSince, now);
+        const moved = await pullTasks(tasksSince, now);
         tasksSince = startedAt;
         if (!missesLoaded) await loadMisses(now);
+        await onPostponed(moved, now);
         await recordMisses(now);
         taskDocs = await writeTasks(now);
         await remind(now);

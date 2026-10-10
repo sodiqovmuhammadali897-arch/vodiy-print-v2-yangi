@@ -4,17 +4,24 @@
 // time"; done later, or still open when the deadline passed, is "late".
 // The server remembers every task it has seen open past its deadline
 // (amo_task_misses/{YYYY-MM}), so moving the deadline afterwards does not
-// clear it: it stays late in the month it was first missed.
+// clear it: it stays late in the month it was first missed. The same goes
+// for an open task moved to a later day before its deadline passed (put
+// off instead of done): it counts late, and the manager and the admins
+// are told at once.
 
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Tashkent
 const WON = 142;
 const LOST = 143;
 const GRACE_MS = 60 * 1000;
 const TYPES = { 1: "Qo'ng'iroq", 2: "Uchrashuv", 3: "Xat" };
+const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentyabr", "oktyabr", "noyabr", "dekabr"];
 
 const dayOf = (ms) => new Date(ms + TZ_OFFSET_MS).toISOString().slice(0, 10);
 const monthOf = (ms) => dayOf(ms).slice(0, 7);
 const hmOf = (ms) => new Date(ms + TZ_OFFSET_MS).toISOString().slice(11, 16);
+const nextDay = (day) => new Date(Date.parse(`${day}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
+// "2026-10-11" → "11-oktyabr".
+const dayLabel = (day) => `${Number(day.slice(8, 10))}-${MONTHS[Number(day.slice(5, 7)) - 1]}`;
 
 const toTask = (t) => ({
   id: Number(t.id),
@@ -39,7 +46,24 @@ const newMisses = (tasks, misses, now) => {
   return out;
 };
 
-const empty = () => ({ due: 0, on_time: 0, late: 0, pct: null, overdue_open: 0, today_due: 0, today_open: 0, no_task_leads: 0 });
+// An open task whose deadline was today or earlier, now moved to a later
+// day without being done.
+const postponed = (prev, next, now) =>
+  Boolean(prev && next && !prev.done && !next.done && prev.due && next.due && dayOf(next.due) > dayOf(prev.due) && dayOf(prev.due) <= dayOf(now));
+
+const empty = () => ({
+  due: 0,
+  on_time: 0,
+  late: 0,
+  pct: null,
+  overdue_open: 0,
+  past_open: 0, // open, deadline on an earlier day ("kechadan qolgan")
+  today_due: 0,
+  today_open: 0,
+  tomorrow_due: 0,
+  postponed_today: 0, // moved off today (or an earlier day) today
+  no_task_leads: 0,
+});
 
 // Per amoCRM user, the month's task numbers. `misses`: task id → { month }.
 // Current-state counts (overdue now, today, leads without a task) only for
@@ -52,6 +76,7 @@ function computeTasks(month, { tasks, misses, leads = [], now }) {
   };
   const isCurrent = monthOf(now) === month;
   const today = dayOf(now);
+  const tomorrow = nextDay(today);
   for (const t of tasks) {
     const missed = misses.get(t.id);
     const home = missed ? missed.month : t.due ? monthOf(t.due) : null;
@@ -63,9 +88,14 @@ function computeTasks(month, { tasks, misses, leads = [], now }) {
     }
     if (isCurrent && !t.done && t.due) {
       if (t.due <= now) of(t.user).overdue_open++;
+      if (dayOf(t.due) < today) of(t.user).past_open++;
       if (dayOf(t.due) === today) of(t.user).today_open++;
     }
     if (isCurrent && t.due && dayOf(t.due) === today) of(t.user).today_due++;
+    if (isCurrent && t.due && dayOf(t.due) === tomorrow) of(t.user).tomorrow_due++;
+  }
+  if (isCurrent) {
+    for (const m of misses.values()) if (m.postponed && m.at && dayOf(m.at) === today && m.user) of(m.user).postponed_today++;
   }
   // Every open lead should have its next step: count those that have none.
   if (isCurrent) {
@@ -115,10 +145,23 @@ function eveningText(tasks, now, leadName) {
   return [`🌆 Bugun bajarilmay qolgan zadachalar: ${open.length} ta (${todays.length} tadan)`, ...list(open, leadName), "", "Muddatida bajarilmagan zadacha KPI'da kechikkan bo'lib hisoblanadi."].join("\n");
 }
 
+// Right away, when a task is put off to a later day.
+function postponeText(t, prevDue, leadName, now = Date.now()) {
+  const what = leadName ? `«${leadName}» bo'yicha` : `«${label(t, null)}»`;
+  const was = dayOf(prevDue) === dayOf(now) ? "bugungi" : `${dayLabel(dayOf(prevDue))}dagi`;
+  return [
+    `⚠️ ${what} ${was} zadachani bajarmasdan ${dayLabel(dayOf(t.due))}ga surdingiz.`,
+    "Mijoz bilan gaplashgan bo'lsangiz, zadachani natija bilan yoping va keyingisini oching — surilgan zadacha KPI'da kechikkan bo'lib hisoblanadi.",
+  ].join("\n");
+}
+function adminPostponeText(name, t, prevDue, leadName) {
+  return `⚠️ ${name}: ${leadName ? `«${leadName}» — ` : ""}${dayLabel(dayOf(prevDue))}dagi zadacha bajarilmasdan ${dayLabel(dayOf(t.due))}ga surildi.`;
+}
+
 // 18:05 — one line per manager for the admin.
 function adminText(rows) {
   if (!rows.length) return null;
   return ["📊 Bugun amoCRM zadachalari", ...rows.map((r) => `• ${r.name}: ${r.open ? `${r.open} ta qoldi` : "hammasi bajarildi ✅"} (${r.total} tadan)${r.noTask ? `, zadachasiz lid: ${r.noTask}` : ""}`)].join("\n");
 }
 
-module.exports = { toTask, newMisses, computeTasks, morningText, eveningText, adminText, dayOf, monthOf, hmOf };
+module.exports = { toTask, newMisses, postponed, computeTasks, morningText, eveningText, adminText, postponeText, adminPostponeText, dayOf, monthOf, hmOf, dayLabel };
