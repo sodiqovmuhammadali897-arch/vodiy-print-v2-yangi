@@ -6,11 +6,17 @@
 // into amoCRM with its duration). Nothing is written back to amoCRM, no
 // chat or call content is read, and no lead is created in the ERP.
 //
+// Tasks (zadachalar) are pulled too, for the KPI: per manager and month,
+// amo_tasks/{YYYY-MM}_{amoUserId} — how many came due, how many were done
+// on time (see amoTasks.js) — and, with the Telegram bot on, each manager
+// gets the day's tasks at 09:00 and what is left of them at 18:00.
+//
 // The raw data stays in this process's memory (it is reloaded from amoCRM
 // on start); Firestore only gets the counts, one doc per manager per month
 // (amo_stats/{YYYY-MM}_{amoUserId}), so a manager can be allowed to read
 // just their own doc and the page reads a handful of docs, not thousands.
 const crypto = require("crypto");
+const T = require("./amoTasks");
 
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Tashkent
 const WON = 142;
@@ -55,6 +61,7 @@ const toLead = (l, sources) => {
     status: Number(l.status_id || 0),
     pipeline: Number(l.pipeline_id || 0),
     user: Number(l.responsible_user_id || 0),
+    name: String(l.name || "").slice(0, 120),
     price: Number(l.price || 0),
     loss: loss ? loss.name : null,
     source: (l.source_id && sources.get(Number(l.source_id))) || (tag && tag.name) || "Noma'lum",
@@ -170,7 +177,7 @@ function nextMonth(month) {
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
 }
 
-const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env.AMO_TOKEN, fetchImpl = fetch, log = console } = {}) => {
+const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env.AMO_TOKEN, fetchImpl = fetch, log = console, notify = null } = {}) => {
   const host = hostOf(subdomain);
   const enabled = Boolean(host && token);
   const users = new Map(); // id → { id, name, email }
@@ -184,6 +191,13 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   let metaAt = 0;
   let staffAt = 0;
   let staffByUser = new Map();
+  let staffInfo = new Map(); // email → { chat, admin }
+  const tasks = new Map();
+  let tasksSince = 0;
+  let tasksError = null;
+  const misses = new Map(); // task id → { month, user, due }
+  let missesLoaded = false;
+  let reminders = null; // { morning: "YYYY-MM-DD", evening: … }
   let timer = null;
   let running = false;
   const written = new Map(); // doc id → JSON last written
@@ -250,10 +264,12 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     const snap = await db.collection("staff").get();
     const byEmail = new Map();
     const byId = new Map();
+    staffInfo = new Map();
     for (const d of snap.docs) {
       const s = d.data();
       const email = String(s.email || d.id).toLowerCase();
       byEmail.set(email, email);
+      staffInfo.set(email, { chat: s.telegram_chat_id || null, admin: s.role === "admin" && !s.report_manager_id, name: s.full_name || email });
       if (s.amo_user_id) byId.set(Number(s.amo_user_id), email);
     }
     staffByUser = new Map();
@@ -317,6 +333,113 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     return n;
   };
 
+  // Every open task, plus everything changed since last month began; then
+  // only what changed. A failure here never stops the lead/call sync.
+  const pullTasks = async (since, now) => {
+    if (!since) {
+      const [open, recent] = await Promise.all([
+        pageAll("tasks", { "filter[is_completed]": 0 }, "tasks"),
+        pageAll("tasks", { "filter[updated_at][from]": Math.floor(monthStartMs(prevMonth(monthOf(now))) / 1000) }, "tasks"),
+      ]);
+      for (const t of [...open, ...recent]) tasks.set(Number(t.id), T.toTask(t));
+      return open.length + recent.length;
+    }
+    const rows = await pageAll("tasks", { "filter[updated_at][from]": Math.floor(since / 1000) }, "tasks");
+    for (const t of rows) tasks.set(Number(t.id), T.toTask(t));
+    return rows.length;
+  };
+
+  const loadMisses = async (now) => {
+    const cur = monthOf(now);
+    for (const month of [prevMonth(cur), cur]) {
+      const snap = await db.collection("amo_task_misses").doc(month).get();
+      const ids = (snap.exists && snap.data().ids) || {};
+      for (const [id, m] of Object.entries(ids)) misses.set(Number(id), { month, user: Number(m.user || 0), due: Number(m.due || 0) });
+    }
+    missesLoaded = true;
+  };
+
+  // Remember open tasks past their deadline, so a later deadline change
+  // doesn't erase the miss.
+  const recordMisses = async (now) => {
+    const cur = monthOf(now);
+    const keep = new Set([cur, prevMonth(cur)]);
+    const byMonth = new Map();
+    for (const m of T.newMisses(tasks.values(), misses, now)) {
+      misses.set(m.id, m);
+      if (!keep.has(m.month)) continue;
+      if (!byMonth.has(m.month)) byMonth.set(m.month, {});
+      byMonth.get(m.month)[m.id] = { user: m.user, due: m.due };
+    }
+    for (const [month, ids] of byMonth) await db.collection("amo_task_misses").doc(month).set({ month, ids }, { merge: true });
+  };
+
+  const writeTasks = async (now) => {
+    const cur = monthOf(now);
+    const list = [...tasks.values()];
+    const leadList = [...leads.values()];
+    const batch = db.batch();
+    let changed = 0;
+    for (const month of [cur, prevMonth(cur)]) {
+      for (const [user, s] of T.computeTasks(month, { tasks: list, misses, leads: leadList, now })) {
+        if (!user) continue;
+        const id = `${month}_${user}`;
+        const doc = { month, amo_user_id: user, name: (users.get(user) || {}).name || `#${user}`, staff_email: staffByUser.get(user) || null, ...s };
+        const json = JSON.stringify(doc);
+        if (written.get(`t:${id}`) === json) continue;
+        batch.set(db.collection("amo_tasks").doc(id), { ...doc, updated_at: new Date(now).toISOString() });
+        written.set(`t:${id}`, json);
+        changed++;
+      }
+    }
+    if (changed) await batch.commit();
+    return changed;
+  };
+
+  // 09:00 and 18:00 Tashkent: each manager's tasks in their private chat;
+  // 18:05 a one-line-per-manager summary to the admins. Sent once a day
+  // (amo_meta/reminders), and not at all if the server was down past the
+  // slot by more than two hours.
+  const SLOTS = [
+    { key: "morning", from: "09:00", to: "11:00" },
+    { key: "evening", from: "18:00", to: "20:00" },
+  ];
+  const remind = async (now) => {
+    if (!notify) return;
+    if (!reminders) {
+      const snap = await db.collection("amo_meta").doc("reminders").get();
+      reminders = snap.exists ? snap.data() : {};
+    }
+    const today = T.dayOf(now);
+    const hm = T.hmOf(now);
+    const slot = SLOTS.find((s) => hm >= s.from && hm < s.to && reminders[s.key] !== today);
+    if (!slot) return;
+    reminders[slot.key] = today;
+    await db.collection("amo_meta").doc("reminders").set({ [slot.key]: today }, { merge: true });
+    const leadName = (t) => (t.entity === "leads" && leads.has(t.entityId) ? leads.get(t.entityId).name : null);
+    const byUser = new Map();
+    for (const t of tasks.values()) {
+      if (!byUser.has(t.user)) byUser.set(t.user, []);
+      byUser.get(t.user).push(t);
+    }
+    const summary = slot.key === "evening" ? T.computeTasks(T.monthOf(now), { tasks: [...tasks.values()], misses, leads: [...leads.values()], now }) : null;
+    const rows = [];
+    for (const [user, list] of byUser) {
+      const email = staffByUser.get(user);
+      const info = email && staffInfo.get(email);
+      const text = slot.key === "morning" ? T.morningText(list, now, leadName) : T.eveningText(list, now, leadName);
+      if (text && info && info.chat) await notify("sendMessage", { chat_id: info.chat, text }).catch((err) => log.error("amoCRM reminder failed", err.message));
+      if (summary && summary.has(user)) {
+        const s = summary.get(user);
+        if (s.today_due) rows.push({ name: (users.get(user) || {}).name || `#${user}`, total: s.today_due, open: s.today_open, noTask: s.no_task_leads });
+      }
+    }
+    const adminMsg = summary ? T.adminText(rows) : null;
+    if (adminMsg) {
+      for (const info of staffInfo.values()) if (info.admin && info.chat) await notify("sendMessage", { chat_id: info.chat, text: adminMsg }).catch(() => undefined);
+    }
+  };
+
   const writeStats = async (now) => {
     const cur = monthOf(now);
     const months = [cur, prevMonth(cur)];
@@ -376,6 +499,19 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       leadsSince = startedAt;
       notesSince = startedAt;
       const changed = await writeStats(now);
+      let taskDocs = 0;
+      try {
+        await pullTasks(tasksSince, now);
+        tasksSince = startedAt;
+        if (!missesLoaded) await loadMisses(now);
+        await recordMisses(now);
+        taskDocs = await writeTasks(now);
+        await remind(now);
+        tasksError = null;
+      } catch (err) {
+        tasksError = String(err.message || err).slice(0, 300);
+        log.error("amoCRM tasks sync failed", tasksError);
+      }
       const month = monthOf(now);
       const all = [...leads.values(), ...[...unsorted.values()].filter((u) => !leads.has(u.id))];
       const newestLead = all.reduce((m, l) => (!m || l.created > m.created ? l : m), null);
@@ -395,6 +531,9 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
         calls_loaded: calls.size,
         calls_this_month: [...calls.values()].filter((c) => monthOf(c.at) === month).length,
         stats_docs_written: changed,
+        tasks_loaded: tasks.size,
+        task_docs_written: taskDocs,
+        tasks_error: tasksError,
         users_count: users.size,
         stages_count: Object.keys(statuses).length,
         server_time: new Date().toISOString(),
@@ -421,7 +560,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   };
   const stop = () => clearInterval(timer);
 
-  return { start, stop, tick, enabled, _test: { leads, calls, users, statuses } };
+  return { start, stop, tick, enabled, _test: { leads, calls, users, statuses, tasks, misses } };
 };
 
 module.exports = { create, computeStats, hostOf, toLead, toCall };

@@ -5,7 +5,7 @@ import type { Staff } from "../../lib/permissions";
 import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
 import { buildAnalytics, type StaffSummary } from "../../lib/attendanceAnalytics";
 import { dateCodeOf } from "../../utils/attendanceCalculations";
-import { computeKpi, DEFAULT_SALES_KPI, ratesFor, type KpiMonth, type KpiResult, type Rates, type SalesKpiDoc, type SalesKpiSettings } from "../../lib/salesKpi";
+import { computeKpi, DEFAULT_SALES_KPI, ratesFor, type AmoTaskDoc, type KpiMonth, type KpiResult, type Rates, type SalesKpiDoc, type SalesKpiSettings } from "../../lib/salesKpi";
 
 // One month of KPI, per manager: the server's live sums (kpi_sales), the
 // month's plan and rates, attendance worked out here, and the result. The
@@ -22,6 +22,7 @@ export type KpiRow = {
   rates: Rates;
   attendance: StaffSummary | null;
   attendancePct: number | null;
+  amo: AmoTaskDoc | null; // amoCRM tasks of the linked employee
   amoPct: number | null;
   result: KpiResult;
   frozen: boolean; // approved/paid: numbers come from the snapshot
@@ -46,6 +47,7 @@ type Base = {
   holidays: Holiday[];
   general: WorkSchedule;
   personal: Map<string, PersonalSchedule>;
+  amo: AmoTaskDoc[];
 };
 
 export function useKpiMonth(month: string, only: { managerId: string; email: string } | null) {
@@ -62,7 +64,7 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
       try {
         const from = `${month}-01`;
         const to = monthEnd(month);
-        const [managers, staff, months, settings, attendance, leaves, holidays, general, personal] = await Promise.all([
+        const [managers, staff, months, settings, attendance, leaves, holidays, general, personal, amo] = await Promise.all([
           only ? getOne<Manager>("managers", only.managerId).then((m) => (m ? [m] : [])) : listAll<Manager>("managers"),
           only ? Promise.resolve([] as Staff[]) : listAll<Staff>("staff"),
           only ? listWhere<KpiMonth>("kpi_months", "manager_id", only.managerId) : listWhere<KpiMonth>("kpi_months", "month", month),
@@ -74,6 +76,7 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
           listAll<Holiday>("holidays").catch(() => [] as Holiday[]),
           getWorkSchedule(),
           listPersonalSchedules().catch(() => new Map<string, PersonalSchedule>()),
+          (only ? listWhere<AmoTaskDoc>("amo_tasks", "staff_email", only.email) : listWhere<AmoTaskDoc>("amo_tasks", "month", month)).catch(() => [] as AmoTaskDoc[]),
         ]);
         if (cancelled) return;
         setBase({
@@ -86,6 +89,7 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
           holidays,
           general,
           personal,
+          amo: amo.filter((a) => a.month === month),
         });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Ma'lumotlarni yuklab bo'lmadi");
@@ -135,7 +139,9 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
         const rates = ratesFor(manager, kpiMonth, base.settings);
         const attendance = st ? byEmail.get(st.email.toLowerCase()) || null : null;
         const attendancePct = month > today.slice(0, 7) ? null : attendance?.presencePct ?? null;
-        const amoPct = null; // amoCRM tasks: next stage
+        const email = st?.email.toLowerCase() || "";
+        const amo = st ? base.amo.find((a) => (st.amo_user_id && a.amo_user_id === Number(st.amo_user_id)) || (a.staff_email || "").toLowerCase() === email) || null : null;
+        const amoPct = amo?.pct ?? null;
         const snap = kpiMonth?.status !== "open" ? kpiMonth?.snapshot : null;
         const live = computeKpi({
           sales: s?.sales || 0,
@@ -168,6 +174,7 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
           rates: snap ? { plan: snap.plan, sales_rate: snap.sales_rate, collect_rate: snap.collect_rate } : rates,
           attendance,
           attendancePct: snap ? snap.attendance_pct : attendancePct,
+          amo,
           amoPct: snap ? snap.amo_pct : amoPct,
           result,
           frozen: !!snap,

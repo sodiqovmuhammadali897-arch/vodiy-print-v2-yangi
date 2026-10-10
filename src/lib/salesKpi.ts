@@ -28,6 +28,26 @@ export type SalesKpiDoc = {
   updated_at: string;
 };
 
+// amo_tasks/{YYYY-MM}_{amoUserId} (meta-webhook/amoTasks.js): the month's
+// amoCRM tasks of one user — came due, done on time, late — and the state
+// right now (current month only).
+export type AmoTaskDoc = {
+  id: string;
+  month: string;
+  amo_user_id: number;
+  name: string;
+  staff_email: string | null;
+  due: number;
+  on_time: number;
+  late: number;
+  pct: number | null;
+  overdue_open: number;
+  today_due: number;
+  today_open: number;
+  no_task_leads: number;
+  updated_at?: string;
+};
+
 export type KpiSnapshot = {
   plan: number;
   sales: number;

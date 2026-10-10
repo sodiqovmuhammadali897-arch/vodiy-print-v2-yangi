@@ -113,8 +113,28 @@ export default function MyKpi() {
               </div>
               <div className="card p-4">
                 <div className="text-[11px] font-bold uppercase tracking-wide text-ink-500">amoCRM zadachalar</div>
-                <div className="mt-1 font-display text-2xl font-extrabold tabular-nums text-ink-400">{pct(r.amoPct)}</div>
-                <p className="mt-2 text-xs text-ink-500">Tez kunda ulanadi: amoCRM'dagi zadachalar vaqtida bajarilgani shu yerda hisoblanadi.</p>
+                <div className={`mt-1 font-display text-2xl font-extrabold tabular-nums ${r.amoPct === null ? "text-ink-400" : r.result.amoOk ? "text-ink-900" : "text-rose-600"}`}>{pct(r.amoPct)}</div>
+                {r.amoPct !== null && (
+                  <div className="mt-2">
+                    <Gauge value={r.amoPct} threshold={settings.threshold} color={r.result.amoOk ? "bg-emerald-500" : "bg-rose-500"} />
+                  </div>
+                )}
+                {r.amo ? (
+                  <>
+                    <p className="mt-2 text-xs text-ink-500">
+                      {r.amo.due ? `${r.amo.due} ta zadachadan ${r.amo.on_time} tasi vaqtida bajarildi.` : "Bu oy muddati kelgan zadacha yo'q."}
+                    </p>
+                    {!r.frozen && (r.amo.today_due > 0 || r.amo.overdue_open > 0 || r.amo.no_task_leads > 0) && (
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+                        {r.amo.today_due > 0 && <span className="rounded-md bg-ink-100 px-1.5 py-0.5 text-ink-700">bugun: {r.amo.today_due - r.amo.today_open}/{r.amo.today_due}</span>}
+                        {r.amo.overdue_open > 0 && <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">muddati o'tgan: {r.amo.overdue_open}</span>}
+                        {r.amo.no_task_leads > 0 && <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">zadachasiz lid: {r.amo.no_task_leads}</span>}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-ink-500">amoCRM ma'lumoti yo'q — admin xodim profilida amoCRM foydalanuvchisini tanlashi kerak.</p>
+                )}
               </div>
             </div>
           </div>
@@ -137,7 +157,14 @@ function Part({ title, value, note, strike }: { title: string; value: string; no
 
 // Close to losing (or already lost) the collect part: say so.
 function Warning({ row, threshold }: { row: KpiRow; threshold: number }) {
-  if (row.frozen || row.attendancePct === null) return null;
+  if (row.frozen) return null;
+  if (!row.result.amoOk)
+    return (
+      <div className="mt-4 rounded-xl bg-rose-50 px-3 py-2.5 text-[13px] text-rose-700 dark:bg-rose-900/30 dark:text-rose-200">
+        ⚠️ amoCRM zadachalari {threshold}% dan past — kirim bonusi ({so(row.result.collectPotential)}) hozircha berilmaydi. Zadachalarni muddatida yoping.
+      </div>
+    );
+  if (row.attendancePct === null) return null;
   if (!row.result.attendanceOk)
     return (
       <div className="mt-4 rounded-xl bg-rose-50 px-3 py-2.5 text-[13px] text-rose-700 dark:bg-rose-900/30 dark:text-rose-200">

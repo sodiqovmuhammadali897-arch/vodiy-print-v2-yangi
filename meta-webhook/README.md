@@ -368,6 +368,21 @@ ERP leads. The Instagram agent still thanks the customer and sends the
 number to the managers' topic. Set `ERP_LEADS=on` in the server env to bring
 ERP leads back.
 
+### Tasks (zadachalar) for the KPI (`amoTasks.js`)
+
+Every sync also pulls amoCRM tasks (all open ones and everything changed
+since last month began, then only changes). Per user and month it writes
+`amo_tasks/{YYYY-MM}_{amoUserId}`: tasks that came due, done on time, late,
+the on-time %, and — for the current month — overdue open tasks, today's
+tasks and open leads with no task. The KPI's collect part needs this % at
+or above the threshold. A task seen open past its deadline is remembered in
+`amo_task_misses/{YYYY-MM}`, so moving its deadline later doesn't clear it.
+
+With `TELEGRAM_BOT_TOKEN` set, each employee linked to an amoCRM user (staff
+`amo_user_id`, or the same email) with a Telegram chat gets the day's tasks
+at 09:00 and what is still open at 18:00; admins get a one-line-per-manager
+summary in the evening. Each slot is sent once a day (`amo_meta/reminders`).
+
 ## Targetolog agent (`targetolog.js`)
 
 Facebook/Instagram ads through the Meta Marketing API (`META_ADS_TOKEN` with

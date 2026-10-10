@@ -231,7 +231,20 @@ function KpiPage() {
                               </span>
                             )}
                           </td>
-                          <td className="table-td whitespace-nowrap">{r.amoPct === null ? <span className="text-xs text-ink-400">tez kunda</span> : <Cond ok={r.result.amoOk} value={pct(r.amoPct)} threshold={settings.threshold} />}</td>
+                          <td className="table-td whitespace-nowrap">
+                            {r.amoPct === null ? (
+                              <span className="text-xs text-ink-400" title="Xodim profilida amoCRM foydalanuvchisi tanlanmagan yoki bu oy zadacha yo'q">
+                                {r.amo ? "zadacha yo'q" : "—"}
+                              </span>
+                            ) : (
+                              <Cond ok={r.result.amoOk} value={pct(r.amoPct)} threshold={settings.threshold} />
+                            )}
+                            {r.amo && r.amo.due > 0 && (
+                              <div className="text-[11px] text-ink-400">
+                                {r.amo.on_time}/{r.amo.due} vaqtida{!r.frozen && r.amo.overdue_open ? ` · ${r.amo.overdue_open} ochiq` : ""}
+                              </div>
+                            )}
+                          </td>
                           <td className={`table-td whitespace-nowrap text-right font-semibold ${r.result.eligible ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600"}`}>
                             {r.result.eligible ? `+${num(r.result.collectBonus)}` : "0"}
                             <div className="text-[11px] font-normal text-ink-400">

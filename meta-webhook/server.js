@@ -72,7 +72,7 @@ const bonus = process.env.TELEGRAM_BOT_TOKEN ? require("./bonus").create(db) : n
 // KPI sums (sales, money in) per manager, live — see salesKpi.js.
 const salesKpi = require("./salesKpi").create(db, { notify: Boolean(process.env.TELEGRAM_BOT_TOKEN) });
 // amoCRM, read only — see amocrm.js; feeds the "amoCRM tahlil" tab.
-const amocrm = require("./amocrm").create(db);
+const amocrm = require("./amocrm").create(db, { notify: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null });
 // Targetolog — Meta ads with marketolog → admin approval; see targetolog.js.
 const targetolog = groups ? require("./targetolog").create(db, { route: groups.route }) : null;
 // Marketolog video tahlili — see content.js (bot + site upload).

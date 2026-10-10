@@ -223,6 +223,15 @@ service cloud.firestore {
       allow read: if isAdmin() || (isStaff() && resource.data.staff_email == email());
       allow write: if false;
     }
+    // amoCRM tasks per manager and month (meta-webhook/amocrm.js), for the
+    // KPI; the missed-task memory is server-only.
+    match /amo_tasks/{id} {
+      allow read: if isAdmin() || (isStaff() && resource.data.staff_email == email());
+      allow write: if false;
+    }
+    match /amo_task_misses/{id} {
+      allow read, write: if false;
+    }
     match /amo_meta/{id} {
       allow read: if isStaff();
       allow write: if false;
