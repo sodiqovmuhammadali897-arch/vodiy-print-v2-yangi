@@ -78,6 +78,9 @@ describe("amoCRM tasks", () => {
     const s = T.computeTasks("2026-10", { tasks: [moved, task(22, "2026-10-11T12:00", false, "2026-10-09T10:00")], misses, now }).get(7);
     expect([s.due, s.late, s.postponed_today, s.tomorrow_due]).toEqual([1, 1, 1, 2]);
     expect(T.postponeText(moved, prev.due, "Asia Tekstil", now)).toContain("⚠️ «Asia Tekstil» bo'yicha bugungi zadachani bajarmasdan 11-oktyabrga surdingiz.");
-    expect(T.adminPostponeText("Nuriddin", moved, prev.due, "Asia Tekstil")).toBe("⚠️ Nuriddin: «Asia Tekstil» — 10-oktyabrdagi zadacha bajarilmasdan 11-oktyabrga surildi.");
+    expect(T.adminPostponeText("Nuriddin", moved, prev.due, "Aziz Karimov, +998 90 123 45 67")).toBe(
+      "⚠️ Nuriddin: Aziz Karimov, +998 90 123 45 67 — 10-oktyabrdagi zadacha (qo'ng'iroq) bajarilmasdan 11-oktyabrga surildi.",
+    );
+    expect(T.adminPostponeText("Nuriddin", { ...moved, text: "Narxni aytish" }, prev.due, null)).toBe("⚠️ Nuriddin: 10-oktyabrdagi zadacha «Narxni aytish» bajarilmasdan 11-oktyabrga surildi.");
   });
 });

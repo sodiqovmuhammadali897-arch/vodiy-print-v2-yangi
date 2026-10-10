@@ -154,8 +154,9 @@ function postponeText(t, prevDue, leadName, now = Date.now()) {
     "Mijoz bilan gaplashgan bo'lsangiz, zadachani natija bilan yoping va keyingisini oching — surilgan zadacha KPI'da kechikkan bo'lib hisoblanadi.",
   ].join("\n");
 }
-function adminPostponeText(name, t, prevDue, leadName) {
-  return `⚠️ ${name}: ${leadName ? `«${leadName}» — ` : ""}${dayLabel(dayOf(prevDue))}dagi zadacha bajarilmasdan ${dayLabel(dayOf(t.due))}ga surildi.`;
+function adminPostponeText(name, t, prevDue, who) {
+  const what = t.text ? ` «${t.text}»` : TYPES[t.type] ? ` (${TYPES[t.type].toLowerCase()})` : "";
+  return `⚠️ ${name}: ${who ? `${who} — ` : ""}${dayLabel(dayOf(prevDue))}dagi zadacha${what} bajarilmasdan ${dayLabel(dayOf(t.due))}ga surildi.`;
 }
 
 // 18:05 — one line per manager for the admin.

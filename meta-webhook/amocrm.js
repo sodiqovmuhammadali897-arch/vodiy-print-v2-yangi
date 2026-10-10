@@ -11,6 +11,10 @@
 // on time (see amoTasks.js) — and, with the Telegram bot on, each manager
 // gets the day's tasks at 09:00 and what is left of them at 18:00.
 //
+// For those Telegram notes the server also looks up the customer (the
+// lead's main contact: name and phone) when a task is named in a message;
+// that stays in memory and in the message, never in Firestore.
+//
 // The raw data stays in this process's memory (it is reloaded from amoCRM
 // on start); Firestore only gets the counts, one doc per manager per month
 // (amo_stats/{YYYY-MM}_{amoUserId}), so a manager can be allowed to read
@@ -49,9 +53,23 @@ const callKey = (note) => {
   return `e${note.entity_type || ""}${note.entity_id || note.id}`;
 };
 
+// "+998901234567" → "+998 90 123 45 67"; anything else as written.
+const phoneLabel = (v) => {
+  const d = String(v || "").replace(/\D/g, "");
+  const n = d.length === 9 ? `998${d}` : d;
+  return n.length === 12 && n.startsWith("998") ? `+998 ${n.slice(3, 5)} ${n.slice(5, 8)} ${n.slice(8, 10)} ${n.slice(10, 12)}` : String(v || "").trim();
+};
+
+const toContact = (c) => {
+  const phone = ((c.custom_fields_values || []).find((f) => f.field_code === "PHONE") || { values: [] }).values[0];
+  return { name: String(c.name || "").trim().slice(0, 80), phone: phone ? phoneLabel(phone.value) : "" };
+};
+
 const toLead = (l, sources) => {
   const emb = l._embedded || {};
   const loss = (emb.loss_reason || [])[0];
+  const contacts = emb.contacts || [];
+  const main = contacts.find((c) => c.is_main) || contacts[0];
   const tag = (emb.tags || [])[0];
   return {
     id: l.id,
@@ -62,6 +80,7 @@ const toLead = (l, sources) => {
     pipeline: Number(l.pipeline_id || 0),
     user: Number(l.responsible_user_id || 0),
     name: String(l.name || "").slice(0, 120),
+    contact: main ? Number(main.id) : null,
     price: Number(l.price || 0),
     loss: loss ? loss.name : null,
     source: (l.source_id && sources.get(Number(l.source_id))) || (tag && tag.name) || "Noma'lum",
@@ -196,6 +215,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   let tasksSince = 0;
   let tasksError = null;
   const misses = new Map(); // task id → { month, user, due }
+  const contacts = new Map(); // contact id → { name, phone, at }
   let missesLoaded = false;
   let reminders = null; // { morning: "YYYY-MM-DD", evening: … }
   let timer = null;
@@ -281,7 +301,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   };
 
   const pullLeads = async (since) => {
-    const params = { with: "loss_reason,source_id" };
+    const params = { with: "loss_reason,source_id,contacts" };
     if (since) params["filter[updated_at][from]"] = Math.floor(since / 1000);
     const rows = await pageAll("leads", params, "leads");
     for (const l of rows) leads.set(Number(l.id), toLead(l, sources));
@@ -355,6 +375,26 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     return moved;
   };
 
+  // The customer behind a task, for Telegram: the lead's main contact
+  // (or the task's own contact), else the lead's name.
+  const contactOf = (t) => (t.entity === "contacts" ? t.entityId : t.entity === "leads" && leads.has(t.entityId) ? leads.get(t.entityId).contact : null);
+  const loadContacts = async (list, now) => {
+    const want = [...new Set(list.map(contactOf).filter((id) => id && !(contacts.has(id) && now - contacts.get(id).at < 6 * 3600 * 1000)))];
+    for (let i = 0; i < want.length; i += 50) {
+      try {
+        const rows = await pageAll("contacts", { "filter[id][]": want.slice(i, i + 50) }, "contacts");
+        for (const c of rows) contacts.set(Number(c.id), { ...toContact(c), at: now });
+      } catch (err) {
+        log.error("amoCRM contacts failed", err.message || err);
+      }
+    }
+  };
+  const whoOf = (t) => {
+    const c = contacts.get(contactOf(t));
+    if (c && (c.name || c.phone)) return [c.name, c.phone].filter(Boolean).join(", ");
+    return t.entity === "leads" && leads.has(t.entityId) ? leads.get(t.entityId).name || null : null;
+  };
+
   // A task put off to a later day: late in its month's KPI, and the
   // manager and the admins hear about it now.
   const onPostponed = async (moved, now) => {
@@ -369,16 +409,16 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     }
     for (const [month, ids] of byMonth) await db.collection("amo_task_misses").doc(month).set({ month, ids }, { merge: true });
     if (!notify) return;
-    const leadName = (t) => (t.entity === "leads" && leads.has(t.entityId) ? leads.get(t.entityId).name : null);
+    await loadContacts(moved.map((m) => m.task), now);
     const admins = [...staffInfo.values()].filter((i) => i.admin && i.chat);
     for (const { task, prevDue } of moved) {
       const email = staffByUser.get(task.user);
       const info = email && staffInfo.get(email);
       const name = (users.get(task.user) || {}).name || (info && info.name) || `#${task.user}`;
-      if (info && info.chat) await notify("sendMessage", { chat_id: info.chat, text: T.postponeText(task, prevDue, leadName(task), now) }).catch((err) => log.error("amoCRM postpone notice failed", err.message));
+      if (info && info.chat) await notify("sendMessage", { chat_id: info.chat, text: T.postponeText(task, prevDue, whoOf(task), now) }).catch((err) => log.error("amoCRM postpone notice failed", err.message));
       for (const a of admins) {
         if (info && a.chat === info.chat) continue;
-        await notify("sendMessage", { chat_id: a.chat, text: T.adminPostponeText(name, task, prevDue, leadName(task)) }).catch(() => undefined);
+        await notify("sendMessage", { chat_id: a.chat, text: T.adminPostponeText(name, task, prevDue, whoOf(task)) }).catch(() => undefined);
       }
     }
   };
@@ -450,7 +490,9 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     if (!slot) return;
     reminders[slot.key] = today;
     await db.collection("amo_meta").doc("reminders").set({ [slot.key]: today }, { merge: true });
-    const leadName = (t) => (t.entity === "leads" && leads.has(t.entityId) ? leads.get(t.entityId).name : null);
+    const today_ = T.dayOf(now);
+    await loadContacts([...tasks.values()].filter((t) => !t.done && t.due && T.dayOf(t.due) <= today_), now);
+    const leadName = whoOf;
     const byUser = new Map();
     for (const t of tasks.values()) {
       if (!byUser.has(t.user)) byUser.set(t.user, []);
