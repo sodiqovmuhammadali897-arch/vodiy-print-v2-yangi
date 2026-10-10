@@ -162,17 +162,12 @@ service cloud.firestore {
       allow read, write: if isAdmin() && !isManagerAccount();
     }
 
-    // KPI va bonus: the bonus the admin writes on an order and each
-    // manager's month (CRM mark, approved snapshot, paid). A manager reads
-    // only their own (staff.report_manager_id); only a non-manager admin
-    // writes.
+    // KPI: each manager's month (plan and rates, approved snapshot, paid)
+    // and its live sums. A manager with the "KPI" permission reads only
+    // their own (staff.report_manager_id); only a non-manager admin writes.
     function ownManager(managerId) {
       return isManagerAccount() && staffDoc().report_manager_id == managerId &&
         ('kpi' in staffDoc().permissions) && staffDoc().permissions.kpi.view == true;
-    }
-    match /order_bonuses/{id} {
-      allow read: if (isAdmin() && !isManagerAccount()) || ownManager(resource.data.manager_id);
-      allow write: if isAdmin() && !isManagerAccount();
     }
     match /kpi_months/{id} {
       allow read: if (isAdmin() && !isManagerAccount()) || ownManager(resource.data.manager_id);

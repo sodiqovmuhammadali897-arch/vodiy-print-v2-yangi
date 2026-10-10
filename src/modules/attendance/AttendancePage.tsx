@@ -2,7 +2,6 @@ import { useState } from "react";
 import { BarChart3, CalendarCheck, Gauge, Users } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import EmployeeAttendanceCard from "./EmployeeAttendanceCard";
-import KpiPanel from "./KpiPanel";
 import AttendanceAdminTable from "./AttendanceAdminTable";
 import AttendanceAnalytics from "./AttendanceAnalytics";
 import MyKpi from "../kpi/MyKpi";
@@ -12,9 +11,9 @@ type Tab = "mine" | "kpi" | "team" | "stats";
 
 export default function AttendancePage() {
   const { isAdmin, staff, isManagerAccount } = useAuth();
-  // KPI and bonus are hidden from employees until an admin ticks "KPI va
-  // bonus" for them (Sozlamalar → Xodimlar).
-  const showKpi = canSeeOwnKpi(staff);
+  // The KPI tab shows only with the "KPI" permission (Sozlamalar → Xodimlar).
+  // A sales manager's own KPI (sales, money in); admins use the KPI page.
+  const showKpi = isManagerAccount && canSeeOwnKpi(staff);
   const [tab, setTab] = useState<Tab>("mine");
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
@@ -61,8 +60,7 @@ export default function AttendancePage() {
       )}
       {tab === "kpi" && showKpi && (
         <div className="space-y-4">
-          {/* A sales manager's KPI is its sales and money in (MyKpi). */}
-          {isManagerAccount ? <MyKpi /> : <KpiPanel />}
+          <MyKpi />
         </div>
       )}
       {tab === "team" && isAdmin && <AttendanceAdminTable />}

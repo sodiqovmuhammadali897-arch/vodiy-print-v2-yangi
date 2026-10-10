@@ -16,7 +16,7 @@ const MODEL = process.env.ASSISTANT_MODEL || "claude-sonnet-5";
 const HISTORY_MS = 30 * 60 * 1000;
 const HISTORY_TURNS = 4;
 const PER_HOUR = 30;
-const DEFAULT_WEIGHTS = { attendance: 20, punctuality: 15, hoursWorked: 10, tasksCompleted: 20 };
+const KPI_DEFAULTS = { sales_rate: 7.5, collect_rate: 2, threshold: 80 };
 const TASK_LABEL = { new: "Yangi", in_progress: "Ishga olindi", done: "Bajarildi" };
 const PRIORITY = { high: "🔴 shoshilinch", normal: "", low: "past" };
 
@@ -69,7 +69,7 @@ const TOOL_DEFS = {
   },
   my_kpi: {
     name: "my_kpi",
-    description: "So'rayotgan xodimning joriy oy KPI bali: davomat, o'z vaqtida kelish, ishlagan soat va vazifalar bo'yicha ballar.",
+    description: "So'rayotgan sotuv menejerining joriy oy KPI'si: sotuv va sotuv bonusi, kirim va kirim bonusi (davomat va amoCRM zadachalari sharti bilan), davomat foizi, amoCRM zadachalar foizi, jami.",
     input_schema: { type: "object", properties: {} },
   },
   my_sales: {
@@ -182,33 +182,55 @@ const create = (db, { priceTools }) => {
         };
       },
       async my_kpi() {
+        if (!s.report_manager_id) return { xato: "KPI faqat sotuv menejerlari uchun — xodim profilida Manager profili bog'lanmagan" };
         const mon = todayCode().slice(0, 7);
-        const [sched, rows, settings, tasks] = await Promise.all([
+        const id = `${mon}_${s.report_manager_id}`;
+        const [salesDoc, monthDoc, mgrDoc, settingsDoc, sched, rows, amoDocs] = await Promise.all([
+          db.collection("kpi_sales").doc(id).get(),
+          db.collection("kpi_months").doc(id).get(),
+          db.collection("managers").doc(s.report_manager_id).get(),
+          db.collection("kpi_settings").doc("sales").get(),
           scheduleOf(email),
           monthAttendance(email, mon),
-          db.collection("kpi_settings").doc("default").get(),
-          db.collection("tasks").where("assigned_to_email", "==", email).get(),
+          db.collection("amo_tasks").where("staff_email", "==", email).get(),
         ]);
-        const w = { ...DEFAULT_WEIGHTS, ...((settings.exists && settings.data().weights) || {}) };
-        const days = workingDays(mon, sched.offDays);
-        const present = rows.filter((r) => r.checkInTime);
-        const onTime = present.filter((r) => !(Number(r.lateMinutes) > 0)).length;
-        const worked = present.reduce((a, r) => a + workedOf(r, sched), 0);
+        const k = monthDoc.exists ? monthDoc.data() : {};
+        if (k.snapshot && k.status !== "open") {
+          const sn = k.snapshot;
+          return { oy: mon, holat: k.status === "paid" ? "to'langan" : "tasdiqlangan", sotuv: money(sn.sales), sotuv_bonusi: money(sn.sales_bonus), kirim: money(sn.collected), kirim_bonusi: money(sn.collect_bonus), jami: money(sn.payout) };
+        }
+        const m = mgrDoc.exists ? mgrDoc.data() : {};
+        const cfg = { ...KPI_DEFAULTS, ...(settingsDoc.exists ? settingsDoc.data() : {}) };
+        const pick = (...v) => Number(v.find((x) => x !== null && x !== undefined && Number.isFinite(Number(x))));
+        const salesRate = pick(k.sales_rate, m.sales_rate, cfg.sales_rate);
+        const collectRate = pick(k.collect_rate, m.collect_rate, cfg.collect_rate);
+        const plan = pick(k.plan, m.monthly_plan, 0) || 0;
+        const sd = salesDoc.exists ? salesDoc.data() : { sales: 0, collected: 0, debt: 0 };
+        // Davomat: scheduled time minus missed days and late/early minutes
+        // (today counts once checked in) — same rule as the site.
         const daily = Math.max(0, toMin(sched.workEnd) - toMin(sched.workStart) - sched.breakMinutes);
-        const monthTasks = tasks.docs.map((d) => d.data()).filter((x) => String(x.created_at || "").startsWith(mon));
-        const done = monthTasks.filter((x) => x.status === "done").length;
-        const att = days > 0 ? (present.length / days) * w.attendance : 0;
-        const punct = present.length > 0 ? (onTime / present.length) * w.punctuality : 0;
-        const hours = days * daily > 0 ? Math.min(1, worked / (days * daily)) * w.hoursWorked : 0;
-        const tsk = monthTasks.length ? (done / monthTasks.length) * w.tasksCompleted : 0;
-        const max = w.attendance + w.punctuality + w.hoursWorked + (monthTasks.length ? w.tasksCompleted : 0);
+        const present = rows.filter((r) => r.checkInTime);
+        const todayPending = !rows.some((r) => r.dateCode === todayCode() && r.checkInTime) && !sched.offDays.includes(new Date(`${todayCode()}T00:00:00Z`).getUTCDay());
+        const days = workingDays(mon, sched.offDays) - (todayPending ? 1 : 0);
+        const norm = days * daily;
+        const lost = Math.max(0, days - present.length) * daily + present.reduce((a, r) => a + Math.min(daily, Math.max(0, Number(r.lateMinutes) || 0) + Math.max(0, Number(r.earlyLeaveMinutes) || 0)), 0);
+        const att = norm > 0 ? round1(((norm - lost) / norm) * 100) : null;
+        const amo = amoDocs.docs.map((d) => d.data()).find((a) => a.month === mon) || null;
+        const amoPct = amo && amo.pct !== null && amo.pct !== undefined ? amo.pct : null;
+        const ok = (att === null || att >= cfg.threshold) && (amoPct === null || amoPct >= cfg.threshold);
+        const salesBonus = (sd.sales * salesRate) / 100;
+        const collectBonus = (sd.collected * collectRate) / 100;
         return {
           oy: mon,
-          ball: `${round1(att + punct + hours + tsk)} / ${max}`,
-          davomat: `${round1(att)} / ${w.attendance} (${present.length} kun keldi, ${days} ish kunidan)`,
-          vaqtida_kelish: `${round1(punct)} / ${w.punctuality} (${onTime} kun vaqtida)`,
-          ishlagan_soat: `${round1(hours)} / ${w.hoursWorked} (${round1(worked / 60)} soat, kerak ${round1((days * daily) / 60)})`,
-          vazifalar: monthTasks.length ? `${round1(tsk)} / ${w.tasksCompleted} (${done} / ${monthTasks.length} bajarildi)` : "bu oy vazifa berilmagan — hisobga olinmaydi",
+          reja: plan ? `${money(plan)} (${Math.round((sd.sales / plan) * 100)}% bajarildi)` : "belgilanmagan",
+          sotuv: money(sd.sales),
+          sotuv_bonusi: `${money(salesBonus)} (${salesRate}%, shartsiz)`,
+          kirim: money(sd.collected),
+          kirim_bonusi: ok ? `${money(collectBonus)} (${collectRate}%)` : `0 — davomat yoki amoCRM ${cfg.threshold}% dan past (${money(collectBonus)} berilmaydi)`,
+          davomat: att === null ? "hali hisob yo'q" : `${att}% (chegara ${cfg.threshold}%)`,
+          amocrm_zadachalar: amo ? (amoPct === null ? "bu oy muddati kelgan zadacha yo'q" : `${amoPct}% — ${amo.due} tadan ${amo.on_time} tasi vaqtida`) : "amoCRM ulanmagan",
+          mijozlar_qarzi: money(sd.debt || 0),
+          jami_hozircha: money(salesBonus + (ok ? collectBonus : 0)),
         };
       },
     };
@@ -258,7 +280,7 @@ const create = (db, { priceTools }) => {
       `Bugun: ${todayCode()} (Toshkent vaqti).`,
       "Faqat quyidagi mavzularda, faqat vositalar (tools) qaytargan ma'lumot bilan javob berasan:",
       names.includes("product_price") ? "• mahsulot narxlari (mijozga aytiladigan narx, tiraj bo'yicha)" : "",
-      names.includes("my_kpi") ? "• xodimning o'z vazifalari, o'z davomati, o'z KPI bali" : "• xodimning o'z vazifalari va o'z davomati (KPI bali so'ralsa: bu botda ko'rsatilmaydi, adminga murojaat qilsin)",
+      names.includes("my_kpi") ? "• xodimning o'z vazifalari, o'z davomati, o'z KPI'si (sotuv va kirim bonusi)" : "• xodimning o'z vazifalari va o'z davomati (KPI so'ralsa: bu botda ko'rsatilmaydi, adminga murojaat qilsin)",
       names.includes("my_sales") ? "• xodimning o'z savdosi, oylik rejasi va o'z mijozlari qarzi" : "",
       "Qoidalar:",
       "- Raqamni o'ylab topma, faqat vositadan ol. Vosita topa olmasa, shuni ayt.",

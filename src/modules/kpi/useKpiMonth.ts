@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getOne, listAll, listRange, listWhere, subscribeWhere } from "../../lib/firestoreDb";
-import { DEFAULT_KPI_WEIGHTS, type AttendanceRecord, type Holiday, type LeaveRequest, type Manager, type PersonalSchedule, type WorkSchedule } from "../../lib/types";
+import { type AttendanceRecord, type Holiday, type LeaveRequest, type Manager, type PersonalSchedule, type WorkSchedule } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
 import { buildAnalytics, type StaffSummary } from "../../lib/attendanceAnalytics";
@@ -126,7 +126,6 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
       records: base.attendance,
       leaves: base.leaves,
       holidays: base.holidays,
-      weights: DEFAULT_KPI_WEIGHTS,
     });
     const byEmail = new Map(analytics.staff.map((s) => [s.email, s]));
     const salesBy = new Map(sales.map((s) => [s.manager_id, s]));

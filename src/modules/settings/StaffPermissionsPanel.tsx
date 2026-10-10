@@ -353,7 +353,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
           <p className="mt-1 text-xs text-ink-500">
             {role === "admin"
               ? "Admin botning shaxsiy chatida to'liq Hisobchi bilan ishlaydi: moliya, qarzlar, buyurtmalar, lidlar, ombor va tasdiqlash tugmali o'zgartirishlar."
-              : "Telegram botda mahsulot narxlari (Mahsulotlar ruxsati bo'lsa), o'z vazifalari, davomati, KPI bali va — manager bo'lsa — o'z savdosi haqida so'ray oladi. Kompaniya foydasi, xarajat, tannarx va boshqalarning ma'lumoti aytilmaydi."}
+              : "Telegram botda mahsulot narxlari (Mahsulotlar ruxsati bo'lsa), o'z vazifalari, davomati, KPI'si va — manager bo'lsa — o'z savdosi haqida so'ray oladi. Kompaniya foydasi, xarajat, tannarx va boshqalarning ma'lumoti aytilmaydi."}
           </p>
         </div>
         {amoUsers.length > 0 && (

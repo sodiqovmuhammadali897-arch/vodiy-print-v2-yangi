@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BarChart3, Download, Loader2 } from "lucide-react";
-import { getOne, listAll, listRange } from "../../lib/firestoreDb";
-import { DEFAULT_KPI_WEIGHTS, type AttendanceRecord, type Holiday, type KpiSettings, type LeaveRequest, type PersonalSchedule, type WorkSchedule } from "../../lib/types";
+import { listAll, listRange } from "../../lib/firestoreDb";
+import { type AttendanceRecord, type Holiday, type LeaveRequest, type PersonalSchedule, type WorkSchedule } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
 import { defaultDateRange, previousPeriod, type DateRange } from "../../lib/dateRange";
@@ -67,7 +67,6 @@ export default function AttendanceAnalytics() {
     personal: Map<string, PersonalSchedule>;
     holidays: Holiday[];
     leaves: LeaveRequest[];
-    weights: typeof DEFAULT_KPI_WEIGHTS;
   } | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,13 +75,12 @@ export default function AttendanceAnalytics() {
   useEffect(() => {
     void (async () => {
       try {
-        const [staff, general, personal, holidays, leaves, settings] = await Promise.all([
+        const [staff, general, personal, holidays, leaves] = await Promise.all([
           listAll<Staff>("staff"),
           getWorkSchedule(),
           listPersonalSchedules().catch(() => new Map<string, PersonalSchedule>()),
           listAll<Holiday>("holidays").catch(() => [] as Holiday[]),
           listAll<LeaveRequest>("leave_requests").catch(() => [] as LeaveRequest[]),
-          getOne<KpiSettings>("kpi_settings", "default").catch(() => null),
         ]);
         setBase({
           staff: staff.sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email)),
@@ -90,7 +88,6 @@ export default function AttendanceAnalytics() {
           personal,
           holidays,
           leaves,
-          weights: settings?.weights || DEFAULT_KPI_WEIGHTS,
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Ma'lumotlarni yuklab bo'lmadi");
@@ -116,7 +113,7 @@ export default function AttendanceAnalytics() {
     const nowMinute = nowMinuteTashkent();
     const people = person ? base.staff.filter((s) => s.email.toLowerCase() === person) : base.staff;
     const build = (from: string, to: string) =>
-      buildAnalytics({ from, to, today, nowMinute, staff: people, general: base.general, personal: base.personal, records, leaves: base.leaves, holidays: base.holidays, weights: base.weights });
+      buildAnalytics({ from, to, today, nowMinute, staff: people, general: base.general, personal: base.personal, records, leaves: base.leaves, holidays: base.holidays });
     return [today, build(range.from, range.to), build(prev.from, prev.to)] as const;
   }, [base, records, person, range.from, range.to, prev.from, prev.to]);
 
@@ -124,7 +121,7 @@ export default function AttendanceAnalytics() {
     if (!current) return;
     exportCsv(
       `davomat-${range.from}_${range.to}`,
-      ["Xodim", "Kelgan kun", "Ish kuni", "Davomat %", "Kechikish (marta)", "Kechikish (daq)", "Erta ketish (marta)", "Kelmagan", "Ishlagan (soat)", "Norma (soat)", "Qo'shimcha (soat)", "O'rtacha kelish", "KPI %"],
+      ["Xodim", "Kelgan kun", "Ish kuni", "Davomat %", "Kechikish (marta)", "Kechikish (daq)", "Erta ketish (marta)", "Kelmagan", "Ishlagan (soat)", "Norma (soat)", "Qo'shimcha (soat)", "O'rtacha kelish", "Vaqt bo'yicha davomat %"],
       current.staff.map((s) => [
         s.name,
         s.present,
@@ -138,7 +135,7 @@ export default function AttendanceAnalytics() {
         hours(s.normMinutes),
         hours(s.overtimeMinutes),
         hm(s.avgArrivalMinute),
-        s.kpiPct ?? "",
+        s.presencePct ?? "",
       ]),
     );
   };
@@ -559,7 +556,7 @@ function ReportTable({ a }: { a: Analytics }) {
       <table className="w-full min-w-[880px] text-sm tabular-nums">
         <thead>
           <tr className="border-b border-ink-100">
-            {["Xodim", "Kelgan kun", "Davomat", "Kechikish", "Erta ketish", "Ishlagan / norma", "Qo'shimcha", "O'rtacha kelish", "KPI"].map((h) => (
+            {["Xodim", "Kelgan kun", "Davomat", "Kechikish", "Erta ketish", "Ishlagan / norma", "Qo'shimcha", "O'rtacha kelish", "Vaqt %"].map((h) => (
               <th key={h} className="table-th">
                 {h}
               </th>
@@ -591,7 +588,9 @@ function ReportTable({ a }: { a: Analytics }) {
                   {hm(s.avgArrivalMinute)} <span className="text-xs text-ink-400">({s.schedule.workStart})</span>
                 </td>
                 <td className="table-td">
-                  <span className={`chip font-bold ${tone(s.kpiPct)}`}>{s.kpiPct ?? "—"}</span>
+                  <span className={`chip font-bold ${tone(s.presencePct)}`} title="Jadvaldagi vaqtdan ishlagani: kelmagan kun, kech kelish va erta ketish ayiriladi (KPI'dagi davomat)">
+                    {s.presencePct === null ? "—" : `${String(s.presencePct).replace(".", ",")}%`}
+                  </span>
                 </td>
               </tr>
             );

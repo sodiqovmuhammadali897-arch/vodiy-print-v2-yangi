@@ -552,42 +552,6 @@ export type LeaveRequest = {
   decidedAt?: string;
 };
 
-export type KpiWeights = {
-  attendance: number;
-  punctuality: number;
-  hoursWorked: number;
-  tasksCompleted: number;
-  onTimeOrders: number;
-  reworkRate: number;
-  managerScore: number;
-};
-
-export const DEFAULT_KPI_WEIGHTS: KpiWeights = {
-  attendance: 20,
-  punctuality: 15,
-  hoursWorked: 10,
-  tasksCompleted: 20,
-  onTimeOrders: 20,
-  reworkRate: 10,
-  managerScore: 5,
-};
-
-export type KpiSettings = {
-  id: string;
-  weights: KpiWeights;
-  updatedAt?: string;
-};
-
-export type EmployeeKpi = {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  periodCode: string; // "YYYY-MM"
-  totalScore: number;
-  breakdown: Record<string, number>;
-  computedAt: string;
-};
-
 export type AttendanceAuditEntry = {
   id: string;
   attendanceId: string;

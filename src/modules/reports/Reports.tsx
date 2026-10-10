@@ -25,14 +25,13 @@ import {
   Target,
   UserCheck,
 } from "lucide-react";
-import { getOne, listAll } from "../../lib/firestoreDb";
-import type { AttendanceRecord, Brand, Customer, Expense, KpiSettings, Manager, Order, OrderCost, OrderProduct, PersonalSchedule, WorkSchedule } from "../../lib/types";
+import { listAll } from "../../lib/firestoreDb";
+import type { AttendanceRecord, Brand, Customer, Expense, Manager, Order, OrderCost, OrderProduct, PersonalSchedule, WorkSchedule } from "../../lib/types";
 import { buildMarginRows, isSaleOrder, profitBreakdown, summarize } from "../../lib/margin";
 import { canViewMargin } from "../../lib/rolePermissions";
 import { isSale } from "../../lib/salesPeriod";
 import ProfitLines from "../margin/ProfitLines";
 import { Link } from "react-router-dom";
-import { DEFAULT_KPI_WEIGHTS } from "../../lib/types";
 import type { Staff } from "../../lib/permissions";
 import { formatDate, formatMoney, formatMoneyShort, monthNameUz } from "../../lib/format";
 import { monthRange as calendarMonthRange } from "../../lib/workdays";
@@ -53,7 +52,7 @@ import { useAuth } from "../../lib/AuthContext";
 import { getWorkSchedule, listPersonalSchedules } from "../../services/attendanceService";
 import { ownOrdersOnly } from "../../lib/orderScope";
 import {
-  computeAttendanceKpi,
+  attendanceSummary,
   dateCodeOf,
   formatMinutes,
   workingDaysSoFar,
@@ -112,7 +111,6 @@ export default function Reports() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [workSchedule, setWorkSchedule] = useState<WorkSchedule | null>(null);
   const [personalSchedules, setPersonalSchedules] = useState<Map<string, PersonalSchedule>>(new Map());
-  const [kpiWeights, setKpiWeights] = useState(DEFAULT_KPI_WEIGHTS);
 
   useEffect(() => {
     const load = async () => {
@@ -143,18 +141,16 @@ export default function Reports() {
       // reports viewer without attendance.view would get a Firestore
       // permission error fetching the whole `attendance` collection.
       if (canAttendance) {
-        const [staffData, attendanceData, schedule, kpiSettings, own] = await Promise.all([
+        const [staffData, attendanceData, schedule, own] = await Promise.all([
           listAll<Staff>("staff", { orderBy: ["full_name", "asc"] }),
           listAll<AttendanceRecord>("attendance"),
           getWorkSchedule(),
-          getOne<KpiSettings>("kpi_settings", "default"),
           listPersonalSchedules().catch(() => new Map<string, PersonalSchedule>()),
         ]);
         setPersonalSchedules(own);
         setStaffList(staffData);
         setAttendanceRecords(attendanceData);
         setWorkSchedule(schedule);
-        if (kpiSettings?.weights) setKpiWeights(kpiSettings.weights);
       }
       setLoading(false);
     };
@@ -429,11 +425,8 @@ export default function Reports() {
       .sort((a, b) => b.revenue - a.revenue);
   }, [ordersInRange, managerPlanMap]);
 
-  // Employee performance for the current calendar month: attendance rate,
-  // punctuality and hours worked feed the same weighted score KpiPanel
-  // shows each employee for themselves, computed here company-wide. Kept
-  // deliberately limited to what attendance data alone can support (no
-  // tasks/manager-review component) rather than approximating those.
+  // Employee attendance for the current calendar month, ranked by time on
+  // the job against the schedule (the KPI's "davomat").
   const employeeStats = useMemo(() => {
     if (!canAttendance || !workSchedule || staffList.length === 0) return [];
     const todayCode = dateCodeOf(new Date());
@@ -453,13 +446,13 @@ export default function Reports() {
         const own = mergeSchedule(workSchedule, personalSchedules.get(s.email.toLowerCase()));
         return {
           staff: s,
-          ...computeAttendanceKpi(records, workingDaysSoFar(todayCode, own), kpiWeights, undefined, dailyWorkMinutes(own)),
+          ...attendanceSummary(records, workingDaysSoFar(todayCode, own), dailyWorkMinutes(own)),
           totalLateMinutes: records.reduce((sum, r) => sum + (r.lateMinutes || 0), 0),
           revenue: revenueByManager.get(s.full_name) ?? null,
         };
       })
-      .sort((a, b) => b.score - a.score);
-  }, [canAttendance, workSchedule, personalSchedules, staffList, attendanceRecords, kpiWeights, managerRows]);
+      .sort((a, b) => (b.presencePct ?? -1) - (a.presencePct ?? -1));
+  }, [canAttendance, workSchedule, personalSchedules, staffList, attendanceRecords, managerRows]);
 
   const attendanceDonut: DonutSlice[] = useMemo(() => {
     if (employeeStats.length === 0) return [];
@@ -1148,7 +1141,7 @@ export default function Reports() {
                 <SimpleDonutChart data={attendanceDonut} valueFormat="count" size={150} />
               </div>
               <div>
-                <h3 className="mb-3 text-sm font-semibold text-ink-700">TOP xodimlar — davomat KPI</h3>
+                <h3 className="mb-3 text-sm font-semibold text-ink-700">TOP xodimlar — vaqt bo'yicha davomat</h3>
                 <div className="space-y-2">
                   {topEmployees.map((e, i) => (
                     <div key={e.staff.email} className="rounded-xl border border-ink-100 px-3 py-2">
@@ -1157,14 +1150,12 @@ export default function Reports() {
                           <span className="text-xs font-bold text-ink-400">{i + 1}</span>
                           <span className="font-medium text-ink-800">{e.staff.full_name}</span>
                         </div>
-                        <span className="text-xs font-semibold text-ink-800">
-                          {e.score} / {e.maxScore}
-                        </span>
+                        <span className="text-xs font-semibold text-ink-800">{e.presencePct === null ? "—" : `${String(e.presencePct).replace(".", ",")}%`}</span>
                       </div>
                       <div className="mt-2 progress-track">
                         <div
                           className="progress-bar bg-emerald-500"
-                          style={{ width: `${e.maxScore > 0 ? Math.min(100, (e.score / e.maxScore) * 100) : 0}%` }}
+                          style={{ width: `${Math.min(100, e.presencePct ?? 0)}%` }}
                         />
                       </div>
                     </div>
@@ -1181,7 +1172,7 @@ export default function Reports() {
                     <th className="table-th text-right">Davomat</th>
                     <th className="table-th text-right">Kech qolish</th>
                     <th className="table-th text-right">Ishlagan soat</th>
-                    <th className="table-th text-right">KPI ball</th>
+                    <th className="table-th text-right">Vaqt %</th>
                     <th className="table-th text-right">Sotuvga hissa</th>
                   </tr>
                 </thead>
@@ -1194,9 +1185,7 @@ export default function Reports() {
                         {e.totalLateMinutes > 0 ? `${e.totalLateMinutes} daq` : "-"}
                       </td>
                       <td className="table-td text-right">{formatMinutes(e.totalWorkedMinutes)}</td>
-                      <td className="table-td text-right font-semibold">
-                        {e.score} / {e.maxScore}
-                      </td>
+                      <td className="table-td text-right font-semibold">{e.presencePct === null ? "—" : `${String(e.presencePct).replace(".", ",")}%`}</td>
                       <td className="table-td text-right">
                         {e.revenue != null ? formatMoneyShort(e.revenue) : "-"}
                       </td>

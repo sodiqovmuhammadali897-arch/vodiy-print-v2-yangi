@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildAnalytics, daysBetween, offsetLabel } from "../src/lib/attendanceAnalytics";
-import { DEFAULT_KPI_WEIGHTS, type AttendanceRecord, type PersonalSchedule, type WorkSchedule } from "../src/lib/types";
+import { type AttendanceRecord, type PersonalSchedule, type WorkSchedule } from "../src/lib/types";
 
 const general = {
   id: "default",
@@ -49,7 +49,6 @@ const base = {
   today: "2026-10-05",
   nowMinute: 11 * 60,
   general,
-  weights: DEFAULT_KPI_WEIGHTS,
 };
 
 describe("attendance analytics", () => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Building2, Users, Target, CalendarDays, Shirt, ShieldCheck, Clock, Gauge, Send, Instagram, FileSpreadsheet, Swords } from "lucide-react";
+import { Building2, Users, Target, CalendarDays, Shirt, ShieldCheck, Clock, Send, Instagram, FileSpreadsheet, Swords } from "lucide-react";
 import CompanySettingsPanel from "./CompanySettingsPanel";
 import ManagersPanel from "./ManagersPanel";
 import MonthlyPlanPanel from "./MonthlyPlanPanel";
@@ -7,7 +7,6 @@ import HolidaysPanel from "./HolidaysPanel";
 import TextileCompaniesPanel from "./TextileCompaniesPanel";
 import StaffPermissionsPanel from "./StaffPermissionsPanel";
 import WorkSchedulePanel from "./WorkSchedulePanel";
-import KpiWeightsPanel from "./KpiWeightsPanel";
 import SeedPanel from "./SeedPanel";
 import TelegramGroupPanel from "./TelegramGroupPanel";
 import InstagramPanel from "./InstagramPanel";
@@ -22,7 +21,6 @@ type Tab =
   | "textile"
   | "staff"
   | "workSchedule"
-  | "kpiWeights"
   | "telegram"
   | "instagram"
   | "import"
@@ -36,7 +34,6 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "textile", label: "Textil kompaniyalari", icon: <Shirt className="h-4 w-4" /> },
   { key: "staff", label: "Xodimlar va ruxsatlar", icon: <ShieldCheck className="h-4 w-4" /> },
   { key: "workSchedule", label: "Ish jadvali", icon: <Clock className="h-4 w-4" /> },
-  { key: "kpiWeights", label: "KPI og'irliklari", icon: <Gauge className="h-4 w-4" /> },
   { key: "telegram", label: "Telegram guruh", icon: <Send className="h-4 w-4" /> },
   { key: "instagram", label: "Instagram Direct", icon: <Instagram className="h-4 w-4" /> },
   { key: "import", label: "Excel import", icon: <FileSpreadsheet className="h-4 w-4" /> },
@@ -86,7 +83,6 @@ export default function Settings() {
       {tab === "textile" && <TextileCompaniesPanel />}
       {tab === "staff" && <StaffPermissionsPanel />}
       {tab === "workSchedule" && <WorkSchedulePanel />}
-      {tab === "kpiWeights" && <KpiWeightsPanel />}
       {tab === "telegram" && <TelegramGroupPanel />}
       {tab === "instagram" && <InstagramPanel />}
       {tab === "import" && <ImportPanel />}

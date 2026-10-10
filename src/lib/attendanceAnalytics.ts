@@ -1,5 +1,5 @@
-import type { AttendanceRecord, Holiday, KpiWeights, LeaveRequest, PersonalSchedule, WorkSchedule } from "./types";
-import { computeAttendanceKpi, dailyWorkMinutes, isWeeklyOff, mergeSchedule, withWorkedMinutes } from "../utils/attendanceCalculations";
+import type { AttendanceRecord, Holiday, LeaveRequest, PersonalSchedule, WorkSchedule } from "./types";
+import { dailyWorkMinutes, isWeeklyOff, mergeSchedule, withWorkedMinutes } from "../utils/attendanceCalculations";
 
 // Davomat → Tahlil: every employee × every day of a period, and what the
 // charts and the report table are drawn from. Days are Tashkent calendar
@@ -45,7 +45,6 @@ export type StaffSummary = {
   avgArrivalMinute: number | null;
   avgArrivalOffset: number | null;
   attendancePct: number | null;
-  kpiPct: number | null;
   // Time on the job against the schedule: a missed day loses the whole
   // day, a late arrival or early leave its minutes (today counts as soon
   // as it happens). Off days, holidays and approved leave are left out.
@@ -109,9 +108,8 @@ export const buildAnalytics = (input: {
   records: AttendanceRecord[];
   leaves?: LeaveRequest[];
   holidays?: Holiday[];
-  weights: Pick<KpiWeights, "attendance" | "punctuality" | "hoursWorked" | "tasksCompleted">;
 }): Analytics => {
-  const { today, nowMinute, general, weights } = input;
+  const { today, nowMinute, general } = input;
   // A period reaching into the future stops at today.
   const days = daysBetween(input.from, input.to < today ? input.to : today);
   const holidays = new Set((input.holidays || []).map((h) => h.date));
@@ -157,13 +155,6 @@ export const buildAnalytics = (input: {
     // out, would add a full day of norm against nothing worked yet.
     const finished = cells.filter((c, i) => c.kind !== "off" && c.kind !== "leave" && c.kind !== "pending" && (days[i] < today || !!c.record?.checkOutTime));
     const late = present.filter((c) => c.lateMinutes > 0);
-    const kpi = computeAttendanceKpi(
-      present.map((c) => ({ checkInTime: c.record!.checkInTime, lateMinutes: c.lateMinutes, workedMinutes: finished.includes(c) ? c.workedMinutes : 0 })),
-      counted.length,
-      weights,
-      undefined,
-      daily,
-    );
     return {
       email,
       name: s.full_name || s.email,
@@ -181,7 +172,6 @@ export const buildAnalytics = (input: {
       avgArrivalMinute: avg(present.map((c) => c.arrivalMinute!)),
       avgArrivalOffset: avg(present.map((c) => c.arrivalOffset!)),
       attendancePct: counted.length ? Math.round((present.length / counted.length) * 100) : null,
-      kpiPct: counted.length && kpi.maxScore ? Math.round((kpi.score / kpi.maxScore) * 100) : null,
       ...presence(counted, daily),
     };
   });
