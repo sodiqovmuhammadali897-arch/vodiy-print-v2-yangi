@@ -388,6 +388,18 @@ With `TELEGRAM_BOT_TOKEN` set, each employee linked to an amoCRM user (staff
 at 09:00 and what is still open at 18:00; admins get a one-line-per-manager
 summary in the evening. Each slot is sent once a day (`amo_meta/reminders`).
 
+## ⏰ Eslatma — personal reminders (`reminders.js`)
+
+Every employee with a linked Telegram chat has «⏰ Eslatma» and «📋
+Eslatmalarim» at the bottom of the bot's private chat (admins: under the
+agent buttons). «⏰ Eslatma» → the bot asks what about → time buttons (30
+daq, 1 soat, 2 soat, bugun 17:00, ertaga 10:00) or a typed time ("15:30",
+"ertaga 9:30", "14.10 11:00") → saved in `bot_reminders`. At that time the
+bot sends it with ✅ Bajarildi / +30 daq / +1 soat / Ertaga 10:00. Nothing
+is written to amoCRM. The step being set is kept in `bot_reminder_drafts`
+(30 minutes); each due reminder is claimed in a transaction before it is
+sent. Everyone linked gets a one-time intro with the buttons (`tg_kb`).
+
 ## Targetolog agent (`targetolog.js`)
 
 Facebook/Instagram ads through the Meta Marketing API (`META_ADS_TOKEN` with

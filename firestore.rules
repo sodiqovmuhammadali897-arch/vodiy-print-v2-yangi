@@ -224,6 +224,16 @@ service cloud.firestore {
       allow read: if isAdmin() || (isStaff() && resource.data.staff_email == email());
       allow write: if false;
     }
+    // ⏰ Eslatma (meta-webhook/reminders.js): server-only.
+    match /bot_reminders/{id} {
+      allow read, write: if false;
+    }
+    match /bot_reminder_drafts/{id} {
+      allow read, write: if false;
+    }
+    match /tg_kb/{id} {
+      allow read, write: if false;
+    }
     match /amo_task_misses/{id} {
       allow read, write: if false;
     }

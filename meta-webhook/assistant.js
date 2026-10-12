@@ -35,6 +35,7 @@ const {
 } = require("./shared");
 const { ACTION_TOOLS, createActionTools, sendConfirmations, handleCallback, decideAction } = require("./actions");
 const { telegram, sendDocument, BOT_TOKEN } = require("./telegram");
+const { BTN: REMINDER_BTN } = require("./reminders");
 const { buildPriceSheet, priceSheetText } = require("./pdf");
 const { buildPriceSheetPng } = require("./png");
 const { staffFromRequest } = require("./auth");
@@ -453,7 +454,11 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
     mkt: "Sotuv manbalari, reklama, mijozlar, raqobatchilar, post va aksiya g'oyalari. /hisobot — haftalik hisobot, /raqobat — raqobatchilar tahlili.",
     chief: "Kompaniyaning umumiy holati, reja, muammolar va tavsiyalar. /brif — bugungi brif va takliflar.",
   };
-  const agentKeyboard = { keyboard: [[{ text: AGENTS.hisobchi }, { text: AGENTS.mkt }, { text: AGENTS.chief }]], resize_keyboard: true, is_persistent: true };
+  // Everyone's private chat also has the reminder buttons (reminders.js).
+  const reminderRow = [{ text: REMINDER_BTN.add }, { text: REMINDER_BTN.list }];
+  const agentKeyboard = { keyboard: [[{ text: AGENTS.hisobchi }, { text: AGENTS.mkt }, { text: AGENTS.chief }], reminderRow], resize_keyboard: true, is_persistent: true };
+  const staffKeyboard = { keyboard: [reminderRow], resize_keyboard: true, is_persistent: true };
+  const reminders = require("./reminders").create(db, { keyboardFor: (s) => (s && s.role === "admin" ? agentKeyboard : staffKeyboard) });
   const adminPrivate = async (msg, text) => {
     const chatId = msg.chat.id;
     const ref = db.collection("tg_private_mode").doc(String(chatId));
@@ -507,6 +512,7 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
         const data = req.body.callback_query.data || "";
         // Task buttons live in employees' private chats (tasks.js).
         if (tasks && /^task:/.test(data)) await tasks.handleCallback(req.body.callback_query);
+        else if (/^rem:/.test(data)) await reminders.handleCallback(req.body.callback_query);
         else if (chief && /^chief:/.test(data)) await chief.handleCallback(req.body.callback_query, isWorkChat);
         // Reklama proposals: marketolog / admin buttons (targetolog.js).
         else if (ads && /^ads:/.test(data)) await ads.handleCallback(req.body.callback_query);
@@ -520,6 +526,14 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
     const msg = req.body?.channel_post || req.body?.message;
     const text = msg?.text?.trim();
     if (msg?.chat?.type === "private") {
+      // ⏰ Eslatma: its buttons and the steps of setting one (reminders.js).
+      if (text && !msg.from?.is_bot) {
+        const handled = await reminders.handlePrivateMessage(msg).catch((err) => {
+          console.error("Reminder message failed", err);
+          return false;
+        });
+        if (handled) return;
+      }
       // Task replies / proof photos first (tasks.js), then attendance (hr.js).
       if (tasks && !msg.from?.is_bot) {
         const handled = await tasks.handlePrivateMessage(msg).catch((err) => {
@@ -682,6 +696,7 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
       drop_pending_updates: true,
     });
     if (data.ok) console.log(`Hisobchi bot webhook set: ${url} (chats: ${[...ALLOWED_CHATS].join(", ")}, model ${MODEL})`);
+    reminders.start();
   };
   return { start };
 };
