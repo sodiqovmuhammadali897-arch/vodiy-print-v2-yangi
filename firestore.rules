@@ -234,6 +234,16 @@ service cloud.firestore {
     match /tg_kb/{id} {
       allow read, write: if false;
     }
+    // Surilgan zadacha sababi va admin qarori (meta-webhook/postpones.js).
+    match /amo_postpones/{id} {
+      allow read, write: if false;
+    }
+    match /bot_reason_drafts/{id} {
+      allow read, write: if false;
+    }
+    match /tg_postpone_msgs/{id} {
+      allow read, write: if false;
+    }
     match /amo_task_misses/{id} {
       allow read, write: if false;
     }

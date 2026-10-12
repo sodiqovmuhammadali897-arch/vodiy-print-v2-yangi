@@ -83,4 +83,14 @@ describe("amoCRM tasks", () => {
     );
     expect(T.adminPostponeText("Nuriddin", { ...moved, text: "Narxni aytish" }, prev.due, null)).toBe("⚠️ Nuriddin: 10-oktyabrdagi zadacha «Narxni aytish» bajarilmasdan 11-oktyabrga surildi.");
   });
+  it("drops an excused postponement, and counts the task again at its new date", () => {
+    const now = at("2026-10-10T15:00");
+    const moved = task(30, "2026-10-11T10:00", false, "2026-10-10T12:00");
+    const excused = new Map([[30, { month: "2026-10", user: 7, due: at("2026-10-10T12:00"), postponed: true, at: now, to: moved.due, excused: true }]]);
+    const s = T.computeTasks("2026-10", { tasks: [moved], misses: excused, now }).get(7);
+    expect([s.due, s.late, s.postponed_today]).toEqual([0, 0, 0]);
+    // Its new deadline passes with it still open: a miss again.
+    expect(T.newMisses([moved], excused, at("2026-10-11T12:00")).map((m: { id: number }) => m.id)).toEqual([30]);
+    expect(T.newMisses([moved], excused, now)).toEqual([]);
+  });
 });

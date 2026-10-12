@@ -40,7 +40,11 @@ const toTask = (t) => ({
 const newMisses = (tasks, misses, now) => {
   const out = [];
   for (const t of tasks) {
-    if (t.done || !t.due || t.due > now - GRACE_MS || misses.has(t.id)) continue;
+    if (t.done || !t.due || t.due > now - GRACE_MS) continue;
+    // Already missed — unless that miss was excused and the task has since
+    // come due again at its new date.
+    const had = misses.get(t.id);
+    if (had && !(had.excused && t.due >= had.to)) continue;
     out.push({ id: t.id, user: t.user, due: t.due, month: monthOf(t.due) });
   }
   return out;
@@ -68,7 +72,9 @@ const empty = () => ({
 // Per amoCRM user, the month's task numbers. `misses`: task id → { month }.
 // Current-state counts (overdue now, today, leads without a task) only for
 // the current month.
-function computeTasks(month, { tasks, misses, leads = [], now }) {
+function computeTasks(month, { tasks, misses: all, leads = [], now }) {
+  // An excused postponement (approved by an admin) is not a miss.
+  const misses = new Map([...all].filter(([, m]) => !m.excused));
   const by = new Map();
   const of = (u) => {
     if (!by.has(u)) by.set(u, empty());
@@ -151,7 +157,7 @@ function postponeText(t, prevDue, leadName, now = Date.now()) {
   const was = dayOf(prevDue) === dayOf(now) ? "bugungi" : `${dayLabel(dayOf(prevDue))}dagi`;
   return [
     `⚠️ ${what} ${was} zadachani bajarmasdan ${dayLabel(dayOf(t.due))}ga surdingiz.`,
-    "Mijoz bilan gaplashgan bo'lsangiz, zadachani natija bilan yoping va keyingisini oching — surilgan zadacha KPI'da kechikkan bo'lib hisoblanadi.",
+    "Sababini yozing — rahbar ko'rib chiqadi. Tasdiqlasa, KPI'da kechikkan sanalmaydi; aks holda kechikkan bo'lib qoladi.",
   ].join("\n");
 }
 function adminPostponeText(name, t, prevDue, who) {

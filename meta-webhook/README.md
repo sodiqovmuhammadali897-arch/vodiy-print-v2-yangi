@@ -378,8 +378,11 @@ tasks and open leads with no task. The KPI's collect part needs this % at
 or above the threshold. A task seen open past its deadline is remembered in
 `amo_task_misses/{YYYY-MM}`, so moving its deadline later doesn't clear it.
 An open task moved from today (or an earlier day) to a later day without
-being done counts late the same way, and the manager and the admins get a
-Telegram note right away. The Sotuv bo'limi → amoCRM tab shows, per
+being done counts late the same way. The bot asks the manager why
+(`postpones.js`, [✍️ Sababini yozish] or a reply); the reason goes to the
+admins with [✅ Tasdiqlash] [❌ Rad etish] (after an hour without one, they
+get it marked "sabab yozilmadi"). Approved → excused at once: the miss is
+flagged `excused` and stops counting; the amoCRM task keeps its new date. The Sotuv bo'limi → amoCRM tab shows, per
 manager, left over from earlier days, today's (done / left), put off today,
 tomorrow's and open leads with no task.
 

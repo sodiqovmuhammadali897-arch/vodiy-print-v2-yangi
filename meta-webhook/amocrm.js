@@ -216,6 +216,8 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   let tasksError = null;
   const misses = new Map(); // task id → { month, user, due }
   const contacts = new Map(); // contact id → { name, phone, at }
+  // Asks the manager why a task was put off, then the admins decide.
+  const postpones = notify ? require("./postpones").create(db) : null;
   let missesLoaded = false;
   let reminders = null; // { morning: "YYYY-MM-DD", evening: … }
   let timer = null;
@@ -402,24 +404,35 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     const byMonth = new Map();
     for (const { task, prevDue } of moved) {
       const had = misses.get(task.id);
-      const entry = { month: had ? had.month : T.monthOf(prevDue), user: task.user, due: had ? had.due : prevDue, postponed: true, at: now, to: task.due };
+      const keep = had && !had.excused;
+      const entry = { month: keep ? had.month : T.monthOf(prevDue), user: task.user, due: keep ? had.due : prevDue, postponed: true, at: now, to: task.due, excused: false };
       misses.set(task.id, entry);
       if (!byMonth.has(entry.month)) byMonth.set(entry.month, {});
-      byMonth.get(entry.month)[task.id] = { user: entry.user, due: entry.due, postponed: true, at: now, to: task.due };
+      byMonth.get(entry.month)[task.id] = { user: entry.user, due: entry.due, postponed: true, at: now, to: task.due, excused: false };
     }
     for (const [month, ids] of byMonth) await db.collection("amo_task_misses").doc(month).set({ month, ids }, { merge: true });
-    if (!notify) return;
+    if (!postpones) return;
     await loadContacts(moved.map((m) => m.task), now);
-    const admins = [...staffInfo.values()].filter((i) => i.admin && i.chat);
     for (const { task, prevDue } of moved) {
       const email = staffByUser.get(task.user);
       const info = email && staffInfo.get(email);
       const name = (users.get(task.user) || {}).name || (info && info.name) || `#${task.user}`;
-      if (info && info.chat) await notify("sendMessage", { chat_id: info.chat, text: T.postponeText(task, prevDue, whoOf(task), now) }).catch((err) => log.error("amoCRM postpone notice failed", err.message));
-      for (const a of admins) {
-        if (info && a.chat === info.chat) continue;
-        await notify("sendMessage", { chat_id: a.chat, text: T.adminPostponeText(name, task, prevDue, whoOf(task)) }).catch(() => undefined);
-      }
+      await postpones
+        .ask(
+          {
+            task_id: task.id,
+            user: task.user,
+            manager: name,
+            manager_chat: info && info.chat ? Number(info.chat) : null,
+            who: whoOf(task),
+            task: task.text || null,
+            from_due: prevDue,
+            to_due: task.due,
+            month: misses.get(task.id).month,
+          },
+          T.postponeText(task, prevDue, whoOf(task), now),
+        )
+        .catch((err) => log.error("amoCRM postpone notice failed", err.message));
     }
   };
 
@@ -428,7 +441,9 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     for (const month of [prevMonth(cur), cur]) {
       const snap = await db.collection("amo_task_misses").doc(month).get();
       const ids = (snap.exists && snap.data().ids) || {};
-      for (const [id, m] of Object.entries(ids)) misses.set(Number(id), { month, user: Number(m.user || 0), due: Number(m.due || 0), postponed: Boolean(m.postponed), at: Number(m.at || 0), to: Number(m.to || 0) });
+      for (const [id, m] of Object.entries(ids)) {
+        misses.set(Number(id), { month, user: Number(m.user || 0), due: Number(m.due || 0), postponed: Boolean(m.postponed), at: Number(m.at || 0), to: Number(m.to || 0), excused: Boolean(m.excused) });
+      }
     }
     missesLoaded = true;
   };
@@ -443,7 +458,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       misses.set(m.id, m);
       if (!keep.has(m.month)) continue;
       if (!byMonth.has(m.month)) byMonth.set(m.month, {});
-      byMonth.get(m.month)[m.id] = { user: m.user, due: m.due };
+      byMonth.get(m.month)[m.id] = { user: m.user, due: m.due, postponed: false, excused: false };
     }
     for (const [month, ids] of byMonth) await db.collection("amo_task_misses").doc(month).set({ month, ids }, { merge: true });
   };
@@ -579,11 +594,13 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       try {
         const moved = await pullTasks(tasksSince, now);
         tasksSince = startedAt;
-        if (!missesLoaded) await loadMisses(now);
+        // Every sync: an admin may have excused a postponement meanwhile.
+        await loadMisses(now);
         await onPostponed(moved, now);
         await recordMisses(now);
         taskDocs = await writeTasks(now);
         await remind(now);
+        if (postpones) await postpones.tick(now);
         tasksError = null;
       } catch (err) {
         tasksError = String(err.message || err).slice(0, 300);

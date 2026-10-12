@@ -459,6 +459,8 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
   const agentKeyboard = { keyboard: [[{ text: AGENTS.hisobchi }, { text: AGENTS.mkt }, { text: AGENTS.chief }], reminderRow], resize_keyboard: true, is_persistent: true };
   const staffKeyboard = { keyboard: [reminderRow], resize_keyboard: true, is_persistent: true };
   const reminders = require("./reminders").create(db, { keyboardFor: (s) => (s && s.role === "admin" ? agentKeyboard : staffKeyboard) });
+  // Surilgan zadacha: the manager's reason and the admin's decision (postpones.js).
+  const postpones = require("./postpones").create(db);
   const adminPrivate = async (msg, text) => {
     const chatId = msg.chat.id;
     const ref = db.collection("tg_private_mode").doc(String(chatId));
@@ -513,6 +515,7 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
         // Task buttons live in employees' private chats (tasks.js).
         if (tasks && /^task:/.test(data)) await tasks.handleCallback(req.body.callback_query);
         else if (/^rem:/.test(data)) await reminders.handleCallback(req.body.callback_query);
+        else if (/^pp:/.test(data)) await postpones.handleCallback(req.body.callback_query);
         else if (chief && /^chief:/.test(data)) await chief.handleCallback(req.body.callback_query, isWorkChat);
         // Reklama proposals: marketolog / admin buttons (targetolog.js).
         else if (ads && /^ads:/.test(data)) await ads.handleCallback(req.body.callback_query);
@@ -526,8 +529,14 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
     const msg = req.body?.channel_post || req.body?.message;
     const text = msg?.text?.trim();
     if (msg?.chat?.type === "private") {
+      // The reason for a put-off amoCRM task (postpones.js), then
       // ⏰ Eslatma: its buttons and the steps of setting one (reminders.js).
       if (text && !msg.from?.is_bot) {
+        const reason = await postpones.handlePrivateMessage(msg).catch((err) => {
+          console.error("Postpone reason failed", err);
+          return false;
+        });
+        if (reason) return;
         const handled = await reminders.handlePrivateMessage(msg).catch((err) => {
           console.error("Reminder message failed", err);
           return false;
