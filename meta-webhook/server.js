@@ -49,7 +49,10 @@ const db = getFirestore();
 const app = express();
 // Keep the raw body around (needed to check Meta's signature) while
 // still parsing JSON for convenience.
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+const jsonBody = express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } });
+// The site's form (siteLeads.js) may carry a logo file: it parses its own
+// larger body.
+app.use((req, res, next) => (req.path === "/webhooks/site-lead" ? next() : jsonBody(req, res, next)));
 
 // HR agent (attendance reminders / late notices) — see hr.js — and the
 // Telegram "Hisobchi" Q&A bot — see assistant.js. Both use the same bot.
@@ -57,6 +60,8 @@ app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 const reportChannel = (process.env.ASSISTANT_CHAT_IDS || "").split(",")[0].trim();
 const groups = process.env.TELEGRAM_BOT_TOKEN ? require("./groups").create(db, { fallbackChatId: reportChannel }) : null;
 if (groups) groups.register(app);
+// Kompaniya sayti (website/) → ariza → Sotuv topic — see siteLeads.js.
+require("./siteLeads").create(db, { route: groups ? groups.route : null }).register(app);
 const hr = groups ? require("./hr").create(db, { route: groups.route }) : null;
 if (hr) hr.register(app);
 // Marketolog agent — see marketing.js; answers in the Marketing topic.

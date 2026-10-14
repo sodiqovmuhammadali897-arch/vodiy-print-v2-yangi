@@ -72,6 +72,8 @@ jobs:
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S apt-get install -y nginx certbot python3-certbot-nginx
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S mkdir -p /var/www/printvodiy.uz
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R "${{ secrets.SERVER_USER }}" /var/www/printvodiy.uz
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S mkdir -p /var/www/sayt
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R "${{ secrets.SERVER_USER }}" /var/www/sayt
 
       - name: Upload nginx site config
         uses: appleboy/scp-action@v0.1.7
@@ -111,6 +113,17 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           source: "dist/*"
           target: "/var/www/printvodiy.uz"
+          strip_components: 1
+
+      # Company website (website/, plain HTML) → printvodiy.uz/sayt/
+      - name: Upload company website
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: "website/*"
+          target: "/var/www/sayt"
           strip_components: 1
 
       - name: Reload nginx

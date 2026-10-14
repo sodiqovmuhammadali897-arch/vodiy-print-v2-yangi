@@ -459,3 +459,18 @@ approval the manager gets the month's report — sales vs plan, both parts and
 the payout; on "To'landi" a short paid note. Each notice is claimed once
 (`notified_at`, `paid_notified_at`), and only changes from the last three
 days are sent.
+
+## Kompaniya sayti → ariza (`siteLeads.js`)
+
+The public site lives in `website/` (plain HTML/CSS/JS, no build step) and
+is uploaded by `deploy.yml` to `/var/www/sayt`, served at
+`https://printvodiy.uz/sayt/` until it gets its own domain (`noindex` for
+now). Its coupon form posts JSON to `POST /webhooks/site-lead`:
+
+- `name`, `phone` (normalised to `+998…`), `product`, `qty`, `note`, and an
+  optional `file` `{ name, type, data: base64 }` up to 8 MB (images, PDF,
+  AI/CDR). nginx allows a 12 MB body on this path only.
+- A hidden `website` field is a honeypot; at most 5 requests per address
+  in 10 minutes.
+- Saved in `site_leads/{id}` (admins read, server writes), then sent to
+  the work group's 💼 Sotuv topic (`#sayt`), with the file attached.
