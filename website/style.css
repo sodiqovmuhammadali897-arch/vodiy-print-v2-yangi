@@ -171,7 +171,7 @@ footer.site .cols .serif { font-size: 22px; color: var(--lime); }
 footer.site .cols b { font-size: 24px; color: #fff; }
 footer.site a:hover { color: #fff; }
 .wordmark { display: flex; align-items: baseline; margin-top: 40px; padding-bottom: 36px; }
-.wordmark .d { font-size: clamp(96px, 20vw, 250px); font-weight: 800; line-height: .8; letter-spacing: -0.045em; font-stretch: 80%; background: linear-gradient(180deg, #22b067, #0e8a4f 60%, #0b3d2e); -webkit-background-clip: text; background-clip: text; color: transparent; padding: .14em .06em .22em 0; margin: -.14em 0 -.22em; }
+.wordmark .d { font-size: clamp(96px, 20vw, 250px); font-weight: 800; line-height: .8; letter-spacing: -0.02em; font-stretch: 80%; background: linear-gradient(180deg, #22b067, #0e8a4f 60%, #0b3d2e); -webkit-background-clip: text; background-clip: text; color: transparent; padding: .14em .06em .22em 0; margin: -.14em 0 -.22em; }
 .wordmark .serif { font-size: clamp(96px, 20vw, 250px); line-height: .8; color: var(--lime); padding-bottom: .2em; margin-bottom: -.2em; }
 
 .callbar { display: none; }
