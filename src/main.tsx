@@ -6,7 +6,12 @@ import ConfigError from "./components/ui/ConfigError";
 import { isFirebaseConfigured } from "./lib/firebase";
 import { AuthProvider } from "./lib/AuthContext";
 import { ThemeProvider } from "./lib/ThemeContext";
+import { registerServiceWorker } from "./lib/push";
 import "./index.css";
+
+// Keeps the app's code on the device (and shows push notifications) — see
+// public/sw.js. Not in development, where files change all the time.
+if (import.meta.env.PROD) void registerServiceWorker();
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 

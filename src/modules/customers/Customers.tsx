@@ -27,6 +27,9 @@ type Row = Customer & { lastOrderAt: string | null; lifetimeValue: number; order
 
 const PAGE_SIZES = [20, 50, 100];
 
+// The brand backfill below runs once per session, not on every visit.
+let brandsBackfilled = false;
+
 export default function Customers() {
   const { can } = useAuth();
   const canEdit = can("customers", "edit");
@@ -89,7 +92,8 @@ export default function Customers() {
   };
 
   useEffect(() => {
-    void load(true);
+    void load(!brandsBackfilled);
+    brandsBackfilled = true;
   }, []);
 
   const ordersByCustomer = useMemo(() => {

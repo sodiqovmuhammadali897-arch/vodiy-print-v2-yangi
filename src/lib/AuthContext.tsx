@@ -12,7 +12,7 @@ import {
   signOut as fbSignOut,
   type User,
 } from "firebase/auth";
-import { auth } from "./firebase";
+import { auth, clearLocalData } from "./firebase";
 import { getOne, resetCollectionCache, upsertOne } from "./firestoreDb";
 import {
   BOOTSTRAP_ADMIN_EMAIL,
@@ -106,6 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       signOut: async () => {
         await fbSignOut(auth);
+        await clearLocalData();
+        window.location.assign("/login");
       },
     }),
     [user, initializing, staff, staffLoading],

@@ -1,5 +1,13 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  clearIndexedDbPersistence,
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  terminate,
+  type Firestore,
+} from "firebase/firestore";
 import { getAuth, type Auth } from "firebase/auth";
 import { getFunctions, type Functions } from "firebase/functions";
 
@@ -44,7 +52,16 @@ if (isFirebaseConfigured) {
     messagingSenderId: readEnv("VITE_FIREBASE_MESSAGING_SENDER_ID")!,
     appId: readEnv("VITE_FIREBASE_APP_ID")!,
   });
-  dbInstance = getFirestore(appInstance);
+  // Data is also kept on the device (IndexedDB): pages show the last
+  // known rows at once and only changes come over the network — what makes
+  // the phone app quick. Falls back to memory only where storage is off.
+  try {
+    dbInstance = initializeFirestore(appInstance, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    dbInstance = getFirestore(appInstance);
+  }
   authInstance = getAuth(appInstance);
   functionsInstance = getFunctions(appInstance);
 }
@@ -62,3 +79,16 @@ export const firebaseApp: FirebaseApp = appInstance ?? proxy<FirebaseApp>();
 export const db: Firestore = dbInstance ?? proxy<Firestore>();
 export const auth: Auth = authInstance ?? proxy<Auth>();
 export const functions: Functions = functionsInstance ?? proxy<Functions>();
+
+// On sign-out the data kept on this device is wiped, so the next person
+// on the same phone never sees it. The page reloads afterwards (Firestore
+// can't be used again after terminate).
+export const clearLocalData = async (): Promise<void> => {
+  if (!dbInstance) return;
+  try {
+    await terminate(dbInstance);
+    await clearIndexedDbPersistence(dbInstance);
+  } catch {
+    // another tab still holds it — it's cleared on the next start
+  }
+};

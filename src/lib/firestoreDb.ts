@@ -49,10 +49,17 @@ const SHARED = new Set([
   "products",
   "product_costs",
   "expenses",
+  "order_files",
 ]);
+
+// How long a page waits for the server before using the rows kept on the
+// device (weak mobile internet).
+const FRESH_WAIT_MS = 4000;
 
 type Hub = {
   rows: WithId<DocumentData>[] | null;
+  // rows came from the server (not only from the device's copy)
+  fresh: boolean;
   ready: Promise<WithId<DocumentData>[]>;
   subscribers: Set<(rows: WithId<DocumentData>[]) => void>;
   stop: () => void;
@@ -69,14 +76,22 @@ const openHub = (name: string): Hub => {
     reject = rej;
   });
   ready.catch(() => undefined);
-  const hub: Hub = { rows: null, ready, subscribers: new Set(), stop: () => undefined };
+  const hub: Hub = { rows: null, fresh: false, ready, subscribers: new Set(), stop: () => undefined };
   hubs.set(name, hub);
+  // The device's copy arrives first and is shown at once; the server's
+  // answer follows. Metadata-only events (cache → server with nothing
+  // changed, own writes confirmed) just mark the rows fresh.
   hub.stop = onSnapshot(
     collection(db, name),
+    { includeMetadataChanges: true },
     (snap) => {
-      hub.rows = snap.docs.map((d) => mapDoc<DocumentData>(d));
-      resolve(hub.rows);
-      hub.subscribers.forEach((fn) => fn(hub.rows!));
+      const changed = hub.rows === null || snap.docChanges().length > 0;
+      if (changed) hub.rows = snap.docs.map((d) => mapDoc<DocumentData>(d));
+      if (!snap.metadata.fromCache && !hub.fresh) {
+        hub.fresh = true;
+        resolve(hub.rows!);
+      }
+      if (changed) hub.subscribers.forEach((fn) => fn(hub.rows!));
     },
     (err) => {
       // No access (or signed out): forget the listener so the next call
@@ -95,8 +110,24 @@ export const warmCollections = (names: string[]): void => {
   for (const n of names) if (SHARED.has(n)) openHub(n);
 };
 
-// Rows of a shared collection already in memory, or null when not loaded yet.
-const loadedRows = (name: string): WithId<DocumentData>[] | null => (SHARED.has(name) ? hubs.get(name)?.rows ?? null : null);
+// Rows of a shared collection already loaded from the server, or null.
+const loadedRows = (name: string): WithId<DocumentData>[] | null => {
+  const hub = SHARED.has(name) ? hubs.get(name) : undefined;
+  return hub && hub.fresh ? hub.rows : null;
+};
+
+// The server's rows; on a slow connection, after FRESH_WAIT_MS, the
+// device's copy (and live updates replace it as they come).
+const hubRows = async (hub: Hub): Promise<WithId<DocumentData>[]> => {
+  if (hub.fresh && hub.rows) return hub.rows;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<WithId<DocumentData>[] | null>((res) => {
+    timer = setTimeout(() => res(hub.rows), FRESH_WAIT_MS);
+  });
+  const rows = await Promise.race([hub.ready, slow]);
+  clearTimeout(timer);
+  return rows ?? hub.ready;
+};
 
 // Called when the signed-in user changes — another user may see other data.
 export const resetCollectionCache = (): void => {
@@ -135,8 +166,7 @@ export const listAll = async <T>(
   options?: ListOptions,
 ): Promise<WithId<T>[]> => {
   if (SHARED.has(name)) {
-    const hub = openHub(name);
-    return arrange<T>(hub.rows ?? (await hub.ready), options?.orderBy);
+    return arrange<T>(await hubRows(openHub(name)), options?.orderBy);
   }
   const constraints = buildOrder(options?.orderBy);
   const q = constraints.length

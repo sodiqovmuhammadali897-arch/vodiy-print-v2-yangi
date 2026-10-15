@@ -18,7 +18,9 @@ vi.mock("firebase/firestore", () => ({
   query: (c: unknown) => c,
   where: vi.fn(),
   orderBy: vi.fn(),
-  onSnapshot: (ref: { name: string }, next: (s: unknown) => void, error: (e: unknown) => void) => {
+  // (ref, next, error) or (ref, options, next, error)
+  onSnapshot: (ref: { name: string }, ...rest: unknown[]) => {
+    const [next, error] = (typeof rest[0] === "function" ? rest : rest.slice(1)) as [(s: unknown) => void, (e: unknown) => void];
     const l = { next, error, stopped: false };
     listeners.set(ref.name, l);
     return () => {
@@ -27,7 +29,12 @@ vi.mock("firebase/firestore", () => ({
   },
 }));
 
-const snap = (rows: Record<string, unknown>[]) => ({ docs: rows.map(({ id, ...data }) => ({ id, data: () => data })) });
+// A snapshot from the server (or, with fromCache, the device's copy).
+// changed = false: a metadata-only event (same rows).
+const snap = (rows: Record<string, unknown>[], { fromCache = false, changed = true } = {}) => {
+  const docs = rows.map(({ id, ...data }) => ({ id, data: () => data }));
+  return { docs, metadata: { fromCache }, docChanges: () => (changed ? [{}] : []) };
+};
 
 const load = async () => {
   vi.resetModules();
@@ -103,5 +110,40 @@ describe("shared collection cache", () => {
     await db.listAll("tasks");
     expect(getDocs).toHaveBeenCalledTimes(1);
     expect(listeners.has("tasks")).toBe(false);
+  });
+
+  it("shows the device's copy at once but waits for the server's rows", async () => {
+    const seen: string[][] = [];
+    db.subscribeAll("customers", (rows) => seen.push(rows.map((r) => r.id)));
+    const listed = db.listAll("customers");
+    const l = listeners.get("customers")!;
+    l.next(snap([{ id: "old" }], { fromCache: true }));
+    expect(seen).toEqual([["old"]]);
+    l.next(snap([{ id: "old" }, { id: "new" }]));
+    expect((await listed).map((r) => r.id)).toEqual(["old", "new"]);
+    expect(seen).toEqual([["old"], ["old", "new"]]);
+  });
+
+  it("counts a metadata-only event as the server's answer", async () => {
+    const seen: number[] = [];
+    db.subscribeAll("products", (rows) => seen.push(rows.length));
+    const listed = db.listAll("products");
+    const l = listeners.get("products")!;
+    l.next(snap([{ id: "p" }], { fromCache: true }));
+    l.next(snap([{ id: "p" }], { changed: false }));
+    expect(await listed).toEqual([{ id: "p" }]);
+    expect(seen).toEqual([1]);
+  });
+
+  it("uses the device's copy when the server is slow", async () => {
+    vi.useFakeTimers();
+    try {
+      const listed = db.listAll("expenses");
+      listeners.get("expenses")!.next(snap([{ id: "e" }], { fromCache: true }));
+      await vi.advanceTimersByTimeAsync(4100);
+      expect(await listed).toEqual([{ id: "e" }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

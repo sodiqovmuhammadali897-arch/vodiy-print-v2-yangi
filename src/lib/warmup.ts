@@ -18,11 +18,13 @@ export function useWarmup(): void {
     if (can("products", "view") || can("textile", "view") || can("proposals", "view") || can("leads", "view")) names.push("products");
     if (can("finance", "view")) names.push("expenses");
     if (isAdmin && !isManagerAccount) names.push("order_costs", "product_costs");
-    // Let the page being opened go first.
+    // Let the page being opened go first — longer on phones, where the
+    // first page needs the whole (slower) processor to itself.
+    const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const t = setTimeout(() => {
       warmCollections(names);
       prefetchPages();
-    }, 1500);
+    }, phone ? 3500 : 1500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, staff, staffLoading]);
