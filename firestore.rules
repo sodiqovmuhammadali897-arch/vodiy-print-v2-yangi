@@ -229,6 +229,25 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Push-bildirishnomalar (meta-webhook/push.js): each person manages
+    // their own devices and choices; the keys are server-only except the
+    // public one.
+    match /push_subs/{id} {
+      allow read, delete: if isSignedIn() && resource.data.email == email();
+      allow create, update: if isSignedIn() && request.resource.data.email == email();
+    }
+    match /push_prefs/{em} {
+      allow read, write: if isSignedIn() && em == email();
+    }
+    match /push_tests/{em} {
+      allow create, update: if isSignedIn() && em == email();
+    }
+    match /push_meta/public {
+      allow read: if isSignedIn();
+    }
+    match /push_meta/{id} {
+      allow read, write: if false;
+    }
     // ⏰ Eslatma (meta-webhook/reminders.js): server-only.
     match /bot_reminders/{id} {
       allow read, write: if false;

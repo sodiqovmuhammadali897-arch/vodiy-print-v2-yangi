@@ -474,3 +474,20 @@ now). Its coupon form posts JSON to `POST /webhooks/site-lead`:
   in 10 minutes.
 - Saved in `site_leads/{id}` (admins read, server writes), then sent to
   the work group's 💼 Sotuv topic (`#sayt`), with the file attached.
+
+## Push-bildirishnomalar (`push.js`)
+
+Phone notifications next to the Telegram ones (Telegram keeps working):
+amoCRM reminders and postponed tasks, task notices, ⏰ reminders, KPI
+notes, and for admins the postponed-task reasons, the evening summary and
+site leads. Works in the Vodiyprint Android app, Chrome, and the iPhone
+home-screen app (iOS 16.4+).
+
+- The ERP's "Bildirishnomalar" page (and a banner) turns them on per
+  device: `public/sw.js` + `src/lib/push.ts` save the subscription in
+  `push_subs/{id}`; choices per person in `push_prefs/{email}`.
+- VAPID keys are made on first start and kept in `push_meta/vapid`
+  (server only); the public key is copied to `push_meta/public`.
+- "Sinov xabari" writes `push_tests/{email}`; the server sends a test.
+- Other modules call `require("./push").toEmail / toChat / toAdmins`;
+  dead subscriptions (404/410) are removed.

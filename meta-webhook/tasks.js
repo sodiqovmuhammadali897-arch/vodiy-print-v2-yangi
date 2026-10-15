@@ -19,6 +19,7 @@
 // history.
 const { telegram, BOT_TOKEN } = require("./telegram");
 const { clip, dayCodeOf, todayCode } = require("./shared");
+const push = require("./push");
 
 const FRESH_MS = 24 * 3600 * 1000;
 const PENDING_MS = 15 * 60 * 1000;
@@ -109,6 +110,7 @@ const create = (db) => {
   // ── notices ────────────────────────────────────────────────────────
   const notifyAssignee = async (id, t) => {
     const s = await staffByEmail(t.assigned_to_email);
+    if (s) await push.toEmail(s.email, "tasks", taskText(t), "/tasks");
     if (!s || !s.telegram_chat_id) return;
     const sent = await telegram("sendMessage", { chat_id: s.telegram_chat_id, text: taskText(t), reply_markup: buttons(id, t.status || "new") });
     await rememberMsg(sent, id);
@@ -133,6 +135,7 @@ const create = (db) => {
       if (seen.has(s.telegram_chat_id) || s.email === String(t.assigned_to_email).toLowerCase()) continue;
       seen.add(s.telegram_chat_id);
       await rememberMsg(await telegram("sendMessage", { chat_id: s.telegram_chat_id, text }), id);
+      await push.toEmail(s.email, "tasks", text, "/tasks");
       for (const f of files) await sendPhoto(s.telegram_chat_id, f.data, `📎 ${t.title}`, f.name);
     }
   };
@@ -170,6 +173,7 @@ const create = (db) => {
         chat_id: s.telegram_chat_id,
         text: `💬 Izoh — «${t.title}»\n${c.by_name || c.by_email}: ${clip(c.text, 1500)}\n\nJavob yozish uchun shu xabarga javob (reply) qiling.`,
       });
+      await push.toEmail(s.email, "tasks", `💬 Izoh — «${t.title}»\n${c.by_name || c.by_email}: ${clip(c.text, 300)}`, "/tasks");
       await rememberMsg(sent, taskRef.id);
     }
   };
@@ -376,6 +380,7 @@ const create = (db) => {
       if (rest.length) L.push("", `📋 Boshqalar (${rest.length}):`, ...rest.slice(0, 10).map(line), ...(rest.length > 10 ? [`… va yana ${rest.length - 10} ta`] : []));
       L.push("", "Saytda: Vazifalar bo'limi.");
       await telegram("sendMessage", { chat_id: s.telegram_chat_id, text: L.join("\n") });
+      await push.toEmail(s.email, "tasks", L.join("\n"), "/tasks");
       sent++;
     }
     // Newly overdue → the giver is told once.
@@ -386,10 +391,9 @@ const create = (db) => {
       if (!(await claim(t.id, "overdue_notified_at"))) continue;
       for (const g of await giversOf(t)) {
         if (g.email === String(t.assigned_to_email).toLowerCase()) continue;
-        const m = await telegram("sendMessage", {
-          chat_id: g.telegram_chat_id,
-          text: `⚠️ Vazifa kechikdi\n\n${PRIORITY_ICON[t.priority] || ""}${t.title}\nXodim: ${t.assigned_to_name || t.assigned_to_email}\nMuddat: ${human(d)} · Holat: ${LABEL[t.status] || t.status}`,
-        });
+        const overdueText = `⚠️ Vazifa kechikdi\n\n${PRIORITY_ICON[t.priority] || ""}${t.title}\nXodim: ${t.assigned_to_name || t.assigned_to_email}\nMuddat: ${human(d)} · Holat: ${LABEL[t.status] || t.status}`;
+        const m = await telegram("sendMessage", { chat_id: g.telegram_chat_id, text: overdueText });
+        await push.toEmail(g.email, "tasks", overdueText, "/tasks");
         await rememberMsg(m, t.id);
       }
       overdueSent++;

@@ -11,6 +11,7 @@
 // buttons. Everything lives in amo_postpones/{id}.
 const { telegram } = require("./telegram");
 const { clip } = require("./shared");
+const push = require("./push");
 
 const ASK_MS = 60 * 60 * 1000;
 const DRAFT_MS = 30 * 60 * 1000;
@@ -45,6 +46,7 @@ const create = (db) => {
       if (r && r.result) sent.push({ chat, message_id: r.result.message_id });
     }
     await col.doc(id).update({ admin_msgs: sent });
+    await push.toAdmins("admin", adminText(p), "/leads");
   };
 
   // amocrm.js: a task was put off. Ask the manager; if there is no chat to
@@ -161,6 +163,7 @@ const create = (db) => {
       const what = p.who ? `«${p.who}» zadachasini` : "Zadachani";
       const text = ok ? `✅ Rahbar tasdiqladi: ${what} surish uzrli — KPI'da kechikkan sanalmaydi.` : `❌ Rahbar rad etdi: ${what} surish — KPI'da kechikkan bo'lib qoladi.`;
       await telegram("sendMessage", { chat_id: p.manager_chat, text }).catch(() => undefined);
+      await push.toChat(p.manager_chat, "amo", text, "/leads");
     }
   };
 

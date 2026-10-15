@@ -7,7 +7,7 @@ import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
 import { pages } from "./pages";
 
-const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, Settings } = pages;
+const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, NotificationsPage, Settings } = pages;
 
 export default function App() {
   return (
@@ -82,6 +82,8 @@ export default function App() {
 
           {/* Every staff member has tasks (given to them or by them). */}
           <Route path="/tasks" element={<Tasks />} />
+          {/* Everyone chooses their own phone notifications. */}
+          <Route path="/notifications" element={<NotificationsPage />} />
 
           <Route element={<AdminRoute />}>
             <Route path="/settings" element={<Settings />} />

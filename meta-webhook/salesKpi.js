@@ -7,6 +7,7 @@
 // new order (+sales %) and payment (+collect %). See src/lib/salesKpi.ts.
 const { telegram } = require("./telegram");
 const { orderDebt } = require("./shared");
+const push = require("./push");
 
 const TZ_MS = 5 * 3600 * 1000;
 const RECENT_MS = 24 * 3600 * 1000;
@@ -126,6 +127,11 @@ const create = (db, { notify = false } = {}) => {
 
   const send = async (managerId, text) => {
     for (const chat_id of await chatsOf(managerId)) await telegram("sendMessage", { chat_id, text });
+    const viewers = (await db.collection("staff").where("report_manager_id", "==", managerId).get()).docs.filter((d) => {
+      const s = d.data();
+      return s.permissions && s.permissions.kpi && s.permissions.kpi.view;
+    });
+    for (const d of viewers) await push.toEmail(d.id, "kpi", text, "/attendance");
   };
 
   const announce = async (docs, month) => {

@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles, Bot, Percent, Megaphone, Clapperboard, Coins, Smartphone } from "lucide-react";
+import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles, Bot, Percent, Megaphone, Clapperboard, Coins, Smartphone, Bell } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import { canViewMargin } from "../../lib/rolePermissions";
 import { canSeeOwnKpi, type ModuleKey } from "../../lib/permissions";
@@ -25,6 +25,7 @@ const navItems = [
   { to: "/ai-office", label: "AI Ofis", icon: Bot, module: "reports" as ModuleKey, adminOnly: true },
   { to: "/attendance", label: "Davomat va KPI", icon: Fingerprint, module: "attendance" as ModuleKey, kpiToo: true },
   { to: "/tasks", label: "Vazifalar", icon: ClipboardList, module: "tasks" as ModuleKey, everyone: true },
+  { to: "/notifications", label: "Bildirishnomalar", icon: Bell, module: "tasks" as ModuleKey, everyone: true },
 ];
 
 // The pages an account can open, in sidebar order. "Davomat va KPI" also

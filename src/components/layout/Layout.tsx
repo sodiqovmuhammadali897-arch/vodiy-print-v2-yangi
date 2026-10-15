@@ -4,6 +4,7 @@ import { Loader } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import ErrorBoundary from "../ErrorBoundary";
+import PushBanner from "./PushBanner";
 import { useAuth } from "../../lib/AuthContext";
 import { useActivityHeartbeat } from "../../lib/activityTracking";
 import { useWarmup } from "../../lib/warmup";
@@ -21,6 +22,7 @@ export default function Layout() {
         <Topbar onOpenMobile={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
+            {location.pathname !== "/notifications" && <PushBanner email={user?.email?.toLowerCase() || ""} />}
             <Suspense
               fallback={
                 <div className="flex items-center justify-center py-16 text-ink-500">

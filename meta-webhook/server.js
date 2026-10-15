@@ -45,6 +45,8 @@ if (!MOIZVONKI_CONFIGURED) {
 
 initializeApp({ credential: cert(require(SERVICE_ACCOUNT_PATH)) });
 const db = getFirestore();
+// Phone notifications alongside the Telegram ones — see push.js.
+require("./push").init(db);
 
 const app = express();
 // Keep the raw body around (needed to check Meta's signature) while

@@ -5,6 +5,7 @@
 // work group's Sotuv topic (or the old channel) with the file attached.
 const crypto = require("crypto");
 const { telegram } = require("./telegram");
+const push = require("./push");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const MAX_FILE = 8 * 1024 * 1024;
@@ -91,6 +92,7 @@ const create = (db, { route = null } = {}) => {
         const ref = db.collection("site_leads").doc();
         await ref.set({ ...out.lead, has_file: Boolean(out.file), file_name: out.file ? out.file.name : null, status: "new", created_at: new Date().toISOString() });
         res.json({ ok: true });
+        await push.toAdmins("admin", leadText(out.lead, ref.id), "/");
         // Telegram after answering: the visitor doesn't wait on it.
         if (!BOT_TOKEN || !route) return;
         const target = await route("sales");

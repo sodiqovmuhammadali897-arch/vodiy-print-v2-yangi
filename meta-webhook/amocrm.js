@@ -20,6 +20,7 @@
 // (amo_stats/{YYYY-MM}_{amoUserId}), so a manager can be allowed to read
 // just their own doc and the page reads a handful of docs, not thousands.
 const crypto = require("crypto");
+const push = require("./push");
 const T = require("./amoTasks");
 
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Tashkent
@@ -416,6 +417,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     for (const { task, prevDue } of moved) {
       const email = staffByUser.get(task.user);
       const info = email && staffInfo.get(email);
+      if (email) await push.toEmail(email, "amo", T.postponeText(task, prevDue, whoOf(task), now), "/leads");
       const name = (users.get(task.user) || {}).name || (info && info.name) || `#${task.user}`;
       await postpones
         .ask(
@@ -520,6 +522,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       const info = email && staffInfo.get(email);
       const text = slot.key === "morning" ? T.morningText(list, now, leadName) : T.eveningText(list, now, leadName);
       if (text && info && info.chat) await notify("sendMessage", { chat_id: info.chat, text }).catch((err) => log.error("amoCRM reminder failed", err.message));
+      if (text && email) await push.toEmail(email, "amo", text, "/leads");
       if (summary && summary.has(user)) {
         const s = summary.get(user);
         if (s.today_due) rows.push({ name: (users.get(user) || {}).name || `#${user}`, total: s.today_due, open: s.today_open, noTask: s.no_task_leads });
@@ -528,6 +531,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     const adminMsg = summary ? T.adminText(rows) : null;
     if (adminMsg) {
       for (const info of staffInfo.values()) if (info.admin && info.chat) await notify("sendMessage", { chat_id: info.chat, text: adminMsg }).catch(() => undefined);
+      await push.toAdmins("admin", adminMsg, "/leads");
     }
   };
 

@@ -12,6 +12,7 @@
 // a transaction, so a restart never sends it twice.
 const { telegram } = require("./telegram");
 const { clip } = require("./shared");
+const push = require("./push");
 
 const TZ_MS = 5 * 3600 * 1000;
 const DRAFT_MS = 30 * 60 * 1000;
@@ -267,6 +268,7 @@ const create = (db, { keyboardFor = () => undefined } = {}) => {
         if (!won) continue;
         const r = d.data();
         await say(r.chat_id, `⏰ Eslatma:\n${r.text}`, { reply_markup: dueButtons(d.id) }).catch((err) => console.error("Reminder send failed", err.message));
+        if (r.email) await push.toEmail(r.email, "reminders", `⏰ Eslatma\n${r.text}`, "/");
       }
     } catch (err) {
       console.error("Reminders tick failed", err.message);
