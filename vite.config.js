@@ -5,4 +5,21 @@ export default defineConfig({
     server: {
         host: true,
     },
+    build: {
+        rollupOptions: {
+            output: {
+                // Libraries in their own files: they rarely change, so after a
+                // deploy phones keep them cached and download only our own code.
+                manualChunks: function (id) {
+                    if (!id.includes("node_modules"))
+                        return undefined;
+                    if (/[\\/]node_modules[\\/](firebase|@firebase|idb)[\\/]/.test(id))
+                        return "firebase";
+                    if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler|@remix-run)[\\/]/.test(id))
+                        return "react";
+                    return undefined;
+                },
+            },
+        },
+    },
 });
