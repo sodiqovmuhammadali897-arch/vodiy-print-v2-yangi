@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appName">Vodiyprint</string>
+    <string name="launchUrl">https://printvodiy.uz/</string>
+    <string name="providerAuthority">uz.printvodiy.app.fileprovider</string>
+    <string name="assetStatements" translatable="false">
+        [{ \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+           \"target\": { \"namespace\": \"web\", \"site\": \"https://printvodiy.uz\" } }]
+    </string>
+</resources>

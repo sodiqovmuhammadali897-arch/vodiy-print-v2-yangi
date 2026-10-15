@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles, Bot, Percent, Megaphone, Clapperboard, Coins } from "lucide-react";
+import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Settings as SettingsIcon, X, Sparkles, Bot, Percent, Megaphone, Clapperboard, Coins, Smartphone } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import { canViewMargin } from "../../lib/rolePermissions";
 import { canSeeOwnKpi, type ModuleKey } from "../../lib/permissions";
@@ -39,6 +39,20 @@ export function visibleNav(auth: ReturnType<typeof UseAuth>) {
           (("everyone" in item && item.everyone) || can(item.module, "view") || ("kpiToo" in item && item.kpiToo && canSeeOwnKpi(staff)))),
   );
 }
+
+// Android phones in the browser get a link to the Vodiyprint app (built by
+// .github/workflows/android.yml). The app opens the site with an
+// android-app:// referrer — remembered for the tab, so it's hidden there.
+const inApp = (() => {
+  const fromApp = document.referrer.startsWith("android-app://");
+  try {
+    if (fromApp) sessionStorage.setItem("vp_in_app", "1");
+    return sessionStorage.getItem("vp_in_app") === "1";
+  } catch {
+    return fromApp;
+  }
+})();
+const offerApk = /Android/i.test(navigator.userAgent) && !inApp;
 
 type Props = {
   mobileOpen: boolean;
@@ -140,6 +154,19 @@ export default function Sidebar({ mobileOpen, onCloseMobile }: Props) {
         </nav>
 
         <div className="border-t border-ink-100 p-4">
+          {offerApk && (
+            <a
+              href="/app.apk"
+              download="Vodiyprint.apk"
+              className="mb-3 flex items-center gap-3 rounded-xl border border-ink-200 px-3 py-2.5 text-sm font-medium text-ink-700 hover:bg-ink-50"
+            >
+              <Smartphone className="text-brand-600" style={{ width: 18, height: 18 }} />
+              <span>
+                Android ilovani yuklab olish
+                <span className="block text-[11px] font-normal text-ink-500">Vodiyprint · APK</span>
+              </span>
+            </a>
+          )}
           <div className="rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 p-4 text-white shadow-sm">
             <div className="text-xs font-semibold uppercase tracking-wide opacity-80">
               Jamoa

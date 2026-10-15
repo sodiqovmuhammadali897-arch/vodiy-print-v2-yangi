@@ -1,0 +1,106 @@
+name: Android APK
+
+# Builds the Vodiyprint Android app (android/ — a Trusted Web Activity that
+# opens printvodiy.uz) and puts it at https://printvodiy.uz/app.apk, with
+# /.well-known/assetlinks.json so Chrome shows it without an address bar.
+# The app only wraps the site, so it is rebuilt only when android/ changes.
+#
+# Signing key: made once by this workflow and kept on the server in
+# ~/vodiyprint-apk (SERVER_USER's home). Every later build reuses it — an
+# APK signed with a different key can't update the installed app.
+
+on:
+  push:
+    branches:
+      - main
+      - claude/server-talabini-ayt-s48oig
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      HOST: ${{ secrets.SERVER_HOST }}
+      USR: ${{ secrets.SERVER_USER }}
+      SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Signing key (from the server, or made once)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          SSH="sshpass -e ssh -o StrictHostKeyChecking=no $USR@$HOST"
+          SCP="sshpass -e scp -o StrictHostKeyChecking=no"
+          $SSH 'mkdir -p ~/vodiyprint-apk && chmod 700 ~/vodiyprint-apk'
+          HAS=$($SSH 'test -f ~/vodiyprint-apk/release.jks && test -f ~/vodiyprint-apk/password && echo yes || echo no')
+          if [ "$HAS" = "yes" ]; then
+            echo "Using the signing key kept on the server"
+            $SCP "$USR@$HOST:vodiyprint-apk/release.jks" "$USR@$HOST:vodiyprint-apk/password" "$RUNNER_TEMP/"
+          elif [ "$HAS" = "no" ]; then
+            echo "No signing key yet — making one and saving it on the server"
+            openssl rand -hex 24 > "$RUNNER_TEMP/password"
+            keytool -genkeypair -keystore "$RUNNER_TEMP/release.jks" -alias vodiyprint \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$(cat "$RUNNER_TEMP/password")" -keypass "$(cat "$RUNNER_TEMP/password")" \
+              -dname "CN=Vodiy Print, O=Vodiy Print, L=Fergana, C=UZ"
+            $SCP "$RUNNER_TEMP/release.jks" "$RUNNER_TEMP/password" "$USR@$HOST:vodiyprint-apk/"
+            $SSH 'chmod 600 ~/vodiyprint-apk/*'
+          else
+            echo "Could not reach the server: $HAS"; exit 1
+          fi
+          PW=$(cat "$RUNNER_TEMP/password")
+          echo "::add-mask::$PW"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=$PW" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: gradle -p android assembleRelease --no-daemon
+
+      - name: Digital asset links
+        run: |
+          FP=$(keytool -list -v -keystore "$KEYSTORE_FILE" -alias vodiyprint -storepass "$KEYSTORE_PASSWORD" | awk '/SHA256:/ {print $2; exit}')
+          test -n "$FP"
+          echo "Signing certificate SHA-256: $FP"
+          cat > "$RUNNER_TEMP/assetlinks.json" <<JSON
+          [{
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": { "namespace": "android_app", "package_name": "uz.printvodiy.app", "sha256_cert_fingerprints": ["$FP"] }
+          }]
+          JSON
+          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/app.apk"
+
+      - name: Publish to printvodiy.uz/app.apk
+        run: |
+          SSH="sshpass -e ssh -o StrictHostKeyChecking=no $USR@$HOST"
+          SCP="sshpass -e scp -o StrictHostKeyChecking=no"
+          $SSH 'mkdir -p /var/www/printvodiy.uz/.well-known'
+          $SCP "$RUNNER_TEMP/assetlinks.json" "$USR@$HOST:/var/www/printvodiy.uz/.well-known/assetlinks.json"
+          $SCP "$RUNNER_TEMP/app.apk" "$USR@$HOST:/var/www/printvodiy.uz/app.apk.new"
+          $SSH 'mv /var/www/printvodiy.uz/app.apk.new /var/www/printvodiy.uz/app.apk && ls -l /var/www/printvodiy.uz/app.apk'
+
+      - name: Keep the APK with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vodiyprint-apk
+          path: ${{ runner.temp }}/app.apk
