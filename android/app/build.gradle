@@ -16,7 +16,7 @@ android {
         applicationId "uz.printvodiy.app"
         minSdk 21
         targetSdk 34
-        versionCode (env.VERSION_CODE ?: "1") as int
+        versionCode Integer.parseInt(env.VERSION_CODE ?: "1")
         versionName "1.0.${env.VERSION_CODE ?: "0"}"
     }
 
