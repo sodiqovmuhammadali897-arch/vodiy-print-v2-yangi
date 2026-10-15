@@ -54,7 +54,9 @@ jobs:
           HAS=$($SSH 'test -f ~/vodiyprint-apk/release.jks && test -f ~/vodiyprint-apk/password && echo yes || echo no')
           if [ "$HAS" = "yes" ]; then
             echo "Using the signing key kept on the server"
-            $SCP "$USR@$HOST:vodiyprint-apk/release.jks" "$USR@$HOST:vodiyprint-apk/password" "$RUNNER_TEMP/"
+            # One file per scp: sshpass answers a single password prompt.
+            $SCP "$USR@$HOST:vodiyprint-apk/release.jks" "$RUNNER_TEMP/release.jks"
+            $SCP "$USR@$HOST:vodiyprint-apk/password" "$RUNNER_TEMP/password"
           elif [ "$HAS" = "no" ]; then
             echo "No signing key yet — making one and saving it on the server"
             openssl rand -hex 24 > "$RUNNER_TEMP/password"
@@ -62,7 +64,8 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass "$(cat "$RUNNER_TEMP/password")" -keypass "$(cat "$RUNNER_TEMP/password")" \
               -dname "CN=Vodiy Print, O=Vodiy Print, L=Fergana, C=UZ"
-            $SCP "$RUNNER_TEMP/release.jks" "$RUNNER_TEMP/password" "$USR@$HOST:vodiyprint-apk/"
+            $SCP "$RUNNER_TEMP/release.jks" "$USR@$HOST:vodiyprint-apk/release.jks"
+            $SCP "$RUNNER_TEMP/password" "$USR@$HOST:vodiyprint-apk/password"
             $SSH 'chmod 600 ~/vodiyprint-apk/*'
           else
             echo "Could not reach the server: $HAS"; exit 1
