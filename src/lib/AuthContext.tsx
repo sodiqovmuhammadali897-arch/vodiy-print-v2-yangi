@@ -12,7 +12,7 @@ import {
   signOut as fbSignOut,
   type User,
 } from "firebase/auth";
-import { auth, clearLocalData } from "./firebase";
+import { auth, claimDeviceData } from "./firebase";
 import { getOne, resetCollectionCache, upsertOne } from "./firestoreDb";
 import {
   BOOTSTRAP_ADMIN_EMAIL,
@@ -48,9 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let uid: string | null = null;
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       if ((u?.uid ?? null) !== uid) resetCollectionCache();
       uid = u?.uid ?? null;
+      // Another person on this phone: wipe the previous one's data first.
+      if (u?.email && (await claimDeviceData(u.email.toLowerCase()))) return;
       setUser(u);
       setInitializing(false);
     });
@@ -105,9 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       },
       signOut: async () => {
+        // The data stays on the phone for this person's next sign-in; it is
+        // wiped only if someone else signs in here (claimDeviceData).
         await fbSignOut(auth);
-        await clearLocalData();
-        window.location.assign("/login");
       },
     }),
     [user, initializing, staff, staffLoading],

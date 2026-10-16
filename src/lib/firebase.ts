@@ -82,9 +82,9 @@ export const db: Firestore = dbInstance ?? proxy<Firestore>();
 export const auth: Auth = authInstance ?? proxy<Auth>();
 export const functions: Functions = functionsInstance ?? proxy<Functions>();
 
-// On sign-out the data kept on this device is wiped, so the next person
-// on the same phone never sees it. The page reloads afterwards (Firestore
-// can't be used again after terminate).
+// Wipes the data kept on this device (another person signed in here, or
+// «Keshni tozalash»). The page must reload afterwards (Firestore can't be
+// used again after terminate).
 export const clearLocalData = async (): Promise<void> => {
   if (!dbInstance) return;
   try {
@@ -93,4 +93,23 @@ export const clearLocalData = async (): Promise<void> => {
   } catch {
     // another tab still holds it — it's cleared on the next start
   }
+};
+
+// The data kept on the device belongs to the last person who signed in on
+// it. The same person signing out and back in keeps it (no slow reload);
+// someone else signing in on the same phone gets it wiped first, so they
+// never see the previous person's data. Returns true when it reloads.
+const OWNER_KEY = "vp_device_owner";
+export const claimDeviceData = async (email: string): Promise<boolean> => {
+  let owner: string | null = null;
+  try {
+    owner = localStorage.getItem(OWNER_KEY);
+    localStorage.setItem(OWNER_KEY, email);
+  } catch {
+    return false; // no storage: nothing to compare — Firestore's own checks still apply
+  }
+  if (owner === null || owner === email) return false;
+  await clearLocalData();
+  window.location.reload();
+  return true;
 };

@@ -88,7 +88,7 @@ export default function AppPanel() {
               {store?.kept === true && " · o'chirmaguningizcha saqlanadi"}
             </p>
             <p className="mt-2 text-sm text-ink-600">
-              Bir marta ochilgan ma'lumotlar telefonda qoladi — internet yo'q paytda ham ko'rinadi. Tizimdan chiqqanda o'chiriladi.
+              Bir marta yuklangan ma'lumotlar telefonda qoladi va o'zi yangilanib turadi — internet sekin yoki yo'q paytda ham darhol ko'rinadi. Tizimdan chiqib qayta kirsangiz ham saqlanadi; shu telefonga boshqa xodim kirsa — o'chiriladi.
             </p>
             <button className="btn-ghost mt-3 text-red-600 hover:bg-red-50" disabled={clearing} onClick={() => void clear()}>
               {clearing ? <Loader className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Keshni tozalash
