@@ -45,7 +45,7 @@ export default function PushBanner({ email }: { email: string }) {
         <div className="text-sm font-semibold">Bildirishnomalarni yoqing</div>
         <div className="text-xs opacity-90">
           Zadacha, vazifa, eslatma va KPI xabarlari telefoningizga kelsin.{" "}
-          <Link to="/notifications" className="underline">
+          <Link to="/settings#notifications" className="underline">
             Sozlash
           </Link>
         </div>

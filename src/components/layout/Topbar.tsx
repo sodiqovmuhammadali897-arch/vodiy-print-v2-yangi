@@ -19,7 +19,6 @@ const titleMap: Record<string, string> = {
   "/ai-office": "AI Ofis",
   "/attendance": "Davomat va KPI",
   "/tasks": "Vazifalar",
-  "/notifications": "Bildirishnomalar",
   "/settings": "Sozlamalar",
 };
 

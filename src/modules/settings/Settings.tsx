@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { Building2, Users, Target, CalendarDays, Shirt, ShieldCheck, Clock, Send, Instagram, FileSpreadsheet, Swords } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Building2, Users, Target, CalendarDays, Shirt, ShieldCheck, Clock, Send, Instagram, FileSpreadsheet, Swords, Bell, Smartphone } from "lucide-react";
+import { useAuth } from "../../lib/AuthContext";
+import NotificationsPage from "../notifications/NotificationsPage";
+import AppPanel from "./AppPanel";
 import CompanySettingsPanel from "./CompanySettingsPanel";
 import ManagersPanel from "./ManagersPanel";
 import MonthlyPlanPanel from "./MonthlyPlanPanel";
@@ -14,6 +18,8 @@ import ImportPanel from "./ImportPanel";
 import CompetitorsPanel from "./CompetitorsPanel";
 
 type Tab =
+  | "notifications"
+  | "app"
   | "company"
   | "managers"
   | "plan"
@@ -26,7 +32,10 @@ type Tab =
   | "import"
   | "competitors";
 
-const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+// The first two are everyone's own; the rest only admins see.
+const tabs: { key: Tab; label: string; icon: React.ReactNode; everyone?: boolean }[] = [
+  { key: "notifications", label: "Bildirishnomalar", icon: <Bell className="h-4 w-4" />, everyone: true },
+  { key: "app", label: "Ilova va yangilanish", icon: <Smartphone className="h-4 w-4" />, everyone: true },
   { key: "company", label: "Kompaniya ma'lumotlari", icon: <Building2 className="h-4 w-4" /> },
   { key: "managers", label: "Managerlar", icon: <Users className="h-4 w-4" /> },
   { key: "plan", label: "Oylik reja", icon: <Target className="h-4 w-4" /> },
@@ -41,27 +50,38 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function Settings() {
-  const [tab, setTab] = useState<Tab>("company");
+  const { isAdmin } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const visible = tabs.filter((t) => t.everyone || isAdmin);
+  const fromHash = location.hash.replace("#", "");
+  const [tab, setTab] = useState<Tab>(visible.some((t) => t.key === fromHash) ? (fromHash as Tab) : isAdmin ? "company" : "notifications");
 
+  // Links like /settings#notifications open that tab.
   useEffect(() => {
-    const hash = window.location.hash.replace("#", "");
-    if (tabs.some((t) => t.key === hash)) setTab(hash as Tab);
-  }, []);
+    if (visible.some((t) => t.key === fromHash)) setTab(fromHash as Tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromHash]);
+
+  const open = (key: Tab) => {
+    setTab(key);
+    navigate({ hash: `#${key}` }, { replace: true });
+  };
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="font-display text-2xl font-bold text-ink-900">Sozlamalar</h1>
         <p className="text-sm text-ink-500">
-          Kompaniya rekvizitlari, jamoa va rejalarni boshqaring
+          {isAdmin ? "Bildirishnomalar, ilova, kompaniya rekvizitlari, jamoa va rejalar" : "Bildirishnomalar va ilova"}
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2 border-b border-ink-100">
-        {tabs.map((t) => (
+        {visible.map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => open(t.key)}
             className={`flex items-center gap-2 border-b-2 px-3 pb-2.5 pt-1.5 text-sm font-semibold transition ${
               tab === t.key
                 ? "border-brand-600 text-brand-700"
@@ -74,19 +94,21 @@ export default function Settings() {
         ))}
       </div>
 
-      <SeedPanel />
+      {isAdmin && tab === "company" && <SeedPanel />}
 
-      {tab === "company" && <CompanySettingsPanel />}
-      {tab === "managers" && <ManagersPanel />}
-      {tab === "plan" && <MonthlyPlanPanel />}
-      {tab === "holidays" && <HolidaysPanel />}
-      {tab === "textile" && <TextileCompaniesPanel />}
-      {tab === "staff" && <StaffPermissionsPanel />}
-      {tab === "workSchedule" && <WorkSchedulePanel />}
-      {tab === "telegram" && <TelegramGroupPanel />}
-      {tab === "instagram" && <InstagramPanel />}
-      {tab === "import" && <ImportPanel />}
-      {tab === "competitors" && <CompetitorsPanel />}
+      {tab === "notifications" && <NotificationsPage />}
+      {tab === "app" && <AppPanel />}
+      {isAdmin && tab === "company" && <CompanySettingsPanel />}
+      {isAdmin && tab === "managers" && <ManagersPanel />}
+      {isAdmin && tab === "plan" && <MonthlyPlanPanel />}
+      {isAdmin && tab === "holidays" && <HolidaysPanel />}
+      {isAdmin && tab === "textile" && <TextileCompaniesPanel />}
+      {isAdmin && tab === "staff" && <StaffPermissionsPanel />}
+      {isAdmin && tab === "workSchedule" && <WorkSchedulePanel />}
+      {isAdmin && tab === "telegram" && <TelegramGroupPanel />}
+      {isAdmin && tab === "instagram" && <InstagramPanel />}
+      {isAdmin && tab === "import" && <ImportPanel />}
+      {isAdmin && tab === "competitors" && <CompetitorsPanel />}
     </div>
   );
 }

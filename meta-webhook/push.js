@@ -117,7 +117,7 @@ const init = (database) => {
         const email = ch.doc.id;
         ch.doc.ref
           .delete()
-          .then(() => send(email, "test", { title: "🔔 Vodiyprint", body: "Bildirishnomalar ishlayapti!", url: "/notifications" }))
+          .then(() => send(email, "test", { title: "🔔 Vodiyprint", body: "Bildirishnomalar ishlayapti!", url: "/settings#notifications" }))
           .catch((err) => console.error("Push test failed", err.message));
       }
     },

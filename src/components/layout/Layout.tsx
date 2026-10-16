@@ -26,7 +26,7 @@ export default function Layout() {
         <UpdateBar />
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
-            {location.pathname !== "/notifications" && <PushBanner email={user?.email?.toLowerCase() || ""} />}
+            {!(location.pathname === "/settings" && location.hash === "#notifications") && <PushBanner email={user?.email?.toLowerCase() || ""} />}
             <Suspense
               fallback={
                 <div className="flex items-center justify-center py-16 text-ink-500">
