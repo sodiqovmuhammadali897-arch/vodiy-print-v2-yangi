@@ -57,7 +57,9 @@ if (isFirebaseConfigured) {
   // the phone app quick. Falls back to memory only where storage is off.
   try {
     dbInstance = initializeFirestore(appInstance, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      // 200 MB instead of the default 40, so product and task photos stay
+      // too; beyond that the least used documents make room.
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager(), cacheSizeBytes: 200 * 1024 * 1024 }),
     });
   } catch {
     dbInstance = getFirestore(appInstance);
