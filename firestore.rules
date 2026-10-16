@@ -229,6 +229,16 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Darslik: lesson texts edited by admins (the starting text is in the
+    // app), and each person's reading/test progress.
+    match /lessons/{key} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+    match /lesson_progress/{em} {
+      allow read: if isAdmin() || (isSignedIn() && em == email());
+      allow write: if isSignedIn() && em == email();
+    }
     // Push-bildirishnomalar (meta-webhook/push.js): each person manages
     // their own devices and choices; the keys are server-only except the
     // public one.

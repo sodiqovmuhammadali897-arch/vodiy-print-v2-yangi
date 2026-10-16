@@ -27,6 +27,9 @@ const loaders = {
   Pechatnik: () => import("./modules/production/Pechatnik"),
   AttendancePage: () => import("./modules/attendance/AttendancePage"),
   Tasks: () => import("./modules/tasks/Tasks"),
+  DarslikPage: () => import("./modules/darslik/DarslikPage"),
+  LessonPage: () => import("./modules/darslik/LessonPage"),
+  CallMode: () => import("./modules/darslik/CallMode"),
   Settings: () => import("./modules/settings/Settings"),
 };
 

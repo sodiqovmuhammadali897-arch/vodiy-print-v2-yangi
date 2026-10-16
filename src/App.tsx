@@ -7,7 +7,7 @@ import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
 import { pages } from "./pages";
 
-const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, Settings } = pages;
+const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, DarslikPage, LessonPage, CallMode, Settings } = pages;
 
 export default function App() {
   return (
@@ -23,6 +23,10 @@ export default function App() {
 
           <Route element={<PermissionRoute module="leads" />}>
             <Route path="/leads" element={<SalesPipeline />} />
+            {/* Darslik: sales scripts and lessons per product. */}
+            <Route path="/darslik" element={<DarslikPage />} />
+            <Route path="/darslik/:key" element={<LessonPage />} />
+            <Route path="/darslik/:key/call" element={<CallMode />} />
           </Route>
 
           <Route element={<PermissionRoute module="ads" />}>

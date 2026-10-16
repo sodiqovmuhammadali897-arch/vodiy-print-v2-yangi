@@ -32,7 +32,10 @@ export default function ProductsPage() {
     const data = await listAll<Product>("products", { orderBy: ["name", "asc"] });
     setProducts(data);
     setLoading(false);
-    if (!keepSelection || (!selectedId && data.length > 0)) {
+    // /products?id=… (e.g. from Darslik) opens that product.
+    const wanted = new URLSearchParams(window.location.search).get("id");
+    if (!keepSelection && wanted && data.some((p) => p.id === wanted)) setSelectedId(wanted);
+    else if (!keepSelection || (!selectedId && data.length > 0)) {
       setSelectedId(data[0]?.id ?? null);
     }
   };
