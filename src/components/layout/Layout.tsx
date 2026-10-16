@@ -5,6 +5,7 @@ import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import ErrorBoundary from "../ErrorBoundary";
 import PushBanner from "./PushBanner";
+import OfflineBanner from "./OfflineBanner";
 import { useAuth } from "../../lib/AuthContext";
 import { useActivityHeartbeat } from "../../lib/activityTracking";
 import { useWarmup } from "../../lib/warmup";
@@ -20,6 +21,7 @@ export default function Layout() {
       <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar onOpenMobile={() => setMobileOpen(true)} />
+        <OfflineBanner />
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
             {location.pathname !== "/notifications" && <PushBanner email={user?.email?.toLowerCase() || ""} />}

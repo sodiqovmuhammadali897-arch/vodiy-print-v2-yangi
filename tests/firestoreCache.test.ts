@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // One fake listener per collection; tests push snapshots through it.
 const listeners = new Map<string, { next: (snap: unknown) => void; error: (e: unknown) => void; stopped: boolean }>();
-const getDocs = vi.fn(async () => ({ docs: [] }));
+const getDocs = vi.fn(async (): Promise<unknown> => ({ docs: [] }));
+const getDocsFromCache = vi.fn(async (): Promise<unknown> => ({ docs: [{ id: "kept", data: () => ({}) }] }));
 
 vi.mock("../src/lib/firebase", () => ({ db: {} }));
 vi.mock("firebase/firestore", () => ({
@@ -10,6 +11,8 @@ vi.mock("firebase/firestore", () => ({
   doc: vi.fn(),
   getDoc: vi.fn(),
   getDocs: (...a: unknown[]) => getDocs(...(a as [])),
+  getDocsFromCache: (...a: unknown[]) => getDocsFromCache(...(a as [])),
+  getDocFromCache: vi.fn(),
   addDoc: vi.fn(),
   setDoc: vi.fn(),
   updateDoc: vi.fn(),
@@ -39,7 +42,9 @@ const snap = (rows: Record<string, unknown>[], { fromCache = false, changed = tr
 const load = async () => {
   vi.resetModules();
   listeners.clear();
-  getDocs.mockClear();
+  getDocs.mockReset();
+  getDocs.mockImplementation(async () => ({ docs: [] }));
+  getDocsFromCache.mockClear();
   return import("../src/lib/firestoreDb");
 };
 
@@ -145,5 +150,38 @@ describe("shared collection cache", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  describe("without internet", () => {
+    const offline = (on: boolean) => vi.stubGlobal("navigator", { onLine: !on });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("reads from the device at once when offline", async () => {
+      offline(true);
+      expect(await db.listAll("tasks")).toEqual([{ id: "kept" }]);
+      expect(getDocs).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the device when the server can't be reached", async () => {
+      getDocs.mockImplementation(async () => {
+        throw Object.assign(new Error("offline"), { code: "unavailable" });
+      });
+      expect(await db.listAll("tasks")).toEqual([{ id: "kept" }]);
+    });
+
+    it("never covers up a refused read", async () => {
+      getDocs.mockImplementation(async () => {
+        throw Object.assign(new Error("permission-denied"), { code: "permission-denied" });
+      });
+      await expect(db.listAll("tasks")).rejects.toThrow("permission-denied");
+      expect(getDocsFromCache).not.toHaveBeenCalled();
+    });
+
+    it("serves a shared collection's device copy at once when offline", async () => {
+      offline(true);
+      const listed = db.listAll("orders");
+      listeners.get("orders")!.next(snap([{ id: "o" }], { fromCache: true }));
+      expect(await listed).toEqual([{ id: "o" }]);
+    });
   });
 });

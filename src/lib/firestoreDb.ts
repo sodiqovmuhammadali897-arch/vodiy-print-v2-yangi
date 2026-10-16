@@ -3,6 +3,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  getDocFromCache,
+  getDocsFromCache,
   addDoc,
   setDoc,
   updateDoc,
@@ -15,10 +17,47 @@ import {
   QueryConstraint,
   DocumentData,
   QueryDocumentSnapshot,
+  type DocumentReference,
+  type DocumentSnapshot,
+  type Query,
+  type QuerySnapshot,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
 type WithId<T> = T & { id: string };
+
+// ── Without internet ─────────────────────────────────────────────────
+// Data read once stays on the device (see firebase.ts). Reads below ask
+// the server first; with no connection — or a server that hasn't answered
+// in SERVER_WAIT_MS — they answer from the device's copy instead of
+// waiting. A refused read (no access) is never covered up by the copy.
+const SERVER_WAIT_MS = 5000;
+const isOffline = (): boolean => typeof navigator !== "undefined" && navigator.onLine === false;
+const unreachable = (err: unknown): boolean => {
+  const code = (err as { code?: string } | null)?.code;
+  return code === "unavailable" || code === "deadline-exceeded";
+};
+
+const serverOrDevice = async <S>(server: () => Promise<S>, device: () => Promise<S>): Promise<S> => {
+  if (isOffline()) return device().catch(() => server());
+  const asked = server();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<null>((res) => {
+    timer = setTimeout(() => res(null), SERVER_WAIT_MS);
+  });
+  try {
+    const first = await Promise.race([asked, slow]);
+    if (first !== null) return first;
+  } catch (err) {
+    if (!unreachable(err)) throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+  return device().catch(() => asked);
+};
+
+const readDocs = <T>(q: Query<T>): Promise<QuerySnapshot<T>> => serverOrDevice(() => getDocs(q), () => getDocsFromCache(q));
+const readDoc = <T>(ref: DocumentReference<T>): Promise<DocumentSnapshot<T>> => serverOrDevice(() => getDoc(ref), () => getDocFromCache(ref));
 
 const mapDoc = <T>(snap: QueryDocumentSnapshot<DocumentData>): WithId<T> =>
   ({ id: snap.id, ...(snap.data() as T) }) as WithId<T>;
@@ -61,6 +100,8 @@ type Hub = {
   // rows came from the server (not only from the device's copy)
   fresh: boolean;
   ready: Promise<WithId<DocumentData>[]>;
+  // the first rows of any kind (the device's copy when there's no internet)
+  first: Promise<WithId<DocumentData>[]>;
   subscribers: Set<(rows: WithId<DocumentData>[]) => void>;
   stop: () => void;
 };
@@ -76,7 +117,11 @@ const openHub = (name: string): Hub => {
     reject = rej;
   });
   ready.catch(() => undefined);
-  const hub: Hub = { rows: null, fresh: false, ready, subscribers: new Set(), stop: () => undefined };
+  let gotFirst!: (rows: WithId<DocumentData>[]) => void;
+  const first = new Promise<WithId<DocumentData>[]>((res) => {
+    gotFirst = res;
+  });
+  const hub: Hub = { rows: null, fresh: false, ready, first, subscribers: new Set(), stop: () => undefined };
   hubs.set(name, hub);
   // The device's copy arrives first and is shown at once; the server's
   // answer follows. Metadata-only events (cache → server with nothing
@@ -87,6 +132,7 @@ const openHub = (name: string): Hub => {
     (snap) => {
       const changed = hub.rows === null || snap.docChanges().length > 0;
       if (changed) hub.rows = snap.docs.map((d) => mapDoc<DocumentData>(d));
+      gotFirst(hub.rows!);
       if (!snap.metadata.fromCache && !hub.fresh) {
         hub.fresh = true;
         resolve(hub.rows!);
@@ -120,6 +166,7 @@ const loadedRows = (name: string): WithId<DocumentData>[] | null => {
 // device's copy (and live updates replace it as they come).
 const hubRows = async (hub: Hub): Promise<WithId<DocumentData>[]> => {
   if (hub.fresh && hub.rows) return hub.rows;
+  if (isOffline()) return hub.rows ?? Promise.race([hub.first, hub.ready]);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const slow = new Promise<WithId<DocumentData>[] | null>((res) => {
     timer = setTimeout(() => res(hub.rows), FRESH_WAIT_MS);
@@ -172,7 +219,7 @@ export const listAll = async <T>(
   const q = constraints.length
     ? query(collection(db, name), ...constraints)
     : collection(db, name);
-  const snap = await getDocs(q);
+  const snap = await readDocs(q);
   return snap.docs.map((d) => mapDoc<T>(d));
 };
 
@@ -186,7 +233,7 @@ export const listWhere = async <T>(
   const rows = loadedRows(name);
   if (rows && (value === null || typeof value !== "object")) return arrange<T>(rows.filter((r) => r[field] === value), options?.orderBy);
   const constraints: QueryConstraint[] = [where(field, "==", value), ...buildOrder(options?.orderBy)];
-  const snap = await getDocs(query(collection(db, name), ...constraints));
+  const snap = await readDocs(query(collection(db, name), ...constraints));
   return snap.docs.map((d) => mapDoc<T>(d));
 };
 
@@ -195,7 +242,7 @@ export type Unsubscribe = () => void;
 // Documents whose `field` lies between `from` and `to`, both included —
 // e.g. attendance by dateCode for a period.
 export const listRange = async <T>(name: string, field: string, from: string, to: string): Promise<WithId<T>[]> => {
-  const snap = await getDocs(query(collection(db, name), where(field, ">=", from), where(field, "<=", to)));
+  const snap = await readDocs(query(collection(db, name), where(field, ">=", from), where(field, "<=", to)));
   return snap.docs.map((d) => mapDoc<T>(d));
 };
 
@@ -256,7 +303,7 @@ export const getOne = async <T>(
 ): Promise<WithId<T> | null> => {
   const rows = loadedRows(name);
   if (rows) return (rows.find((r) => r.id === id) as WithId<T> | undefined) ?? null;
-  const snap = await getDoc(doc(db, name, id));
+  const snap = await readDoc(doc(db, name, id));
   return snap.exists() ? ({ id: snap.id, ...(snap.data() as T) } as WithId<T>) : null;
 };
 
@@ -340,6 +387,6 @@ export const countWhere = async (
   field: string,
   value: unknown,
 ): Promise<number> => {
-  const snap = await getDocs(query(collection(db, name), where(field, "==", value)));
+  const snap = await readDocs(query(collection(db, name), where(field, "==", value)));
   return snap.size;
 };
