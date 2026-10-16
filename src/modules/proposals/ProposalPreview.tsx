@@ -3,6 +3,11 @@ import { ClipboardList, Mail, MapPin, Phone } from "lucide-react";
 import type { Brand, CompanySettings, Customer, Proposal } from "../../lib/types";
 import { formatMoney } from "../../lib/format";
 
+// The director's signature (fonsiz PNG, from a photo), used unless
+// Sozlamalar → Kompaniya has its own "Imzo rasmi URL". The file name is
+// random so it isn't found by guessing.
+const DIRECTOR_SIGNATURE = "/brand/s-5118b2bf70da092b.png";
+
 // A plain "YYYY-MM-DD" date, matching the reference design exactly —
 // formatDate()'s localized "20-avg, 2026" style doesn't match it.
 const isoDate = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : "-");
@@ -191,11 +196,12 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
               <img src={company.stamp_url} alt="" className="mr-3 h-16 w-16 object-contain opacity-80" />
             )}
             <div className="text-right">
-              {company?.signature_url && (
-                <img src={company.signature_url} alt="" className="ml-auto h-12 object-contain" />
-              )}
               <div className="font-bold text-ink-900">
                 {company?.director_name || "—"} — Rahbar
+              </div>
+              {/* The signature sits on the line above "Imzo", as if signed by hand. */}
+              <div className="relative ml-auto mt-2 h-16 w-48 border-b border-ink-300">
+                <img src={company?.signature_url || DIRECTOR_SIGNATURE} alt="" className="absolute -bottom-4 right-3 h-[78px] max-w-none object-contain" />
               </div>
               <div className="mt-1 text-xs text-ink-400">Imzo</div>
             </div>
