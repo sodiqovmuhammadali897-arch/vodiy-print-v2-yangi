@@ -9,6 +9,10 @@ import ProductList from "./ProductList";
 import ProductDetails from "./ProductDetails";
 import ProductFormModal from "./ProductFormModal";
 import ProductCustomerView from "./ProductCustomerView";
+import ProductSheet from "./ProductSheet";
+
+const DESKTOP = "(min-width: 1024px)";
+const isDesktop = () => typeof window !== "undefined" && window.matchMedia(DESKTOP).matches;
 
 export default function ProductsPage() {
   const auth = useAuth();
@@ -25,6 +29,33 @@ export default function ProductsPage() {
   const [duplicateFrom, setDuplicateFrom] = useState<Product | null>(null);
   const [customerView, setCustomerView] = useState(false);
   const showCustomerView = forcedCustomerView || customerView;
+  // Phones: the chosen product opens in a bottom sheet over the list.
+  const [desktop, setDesktop] = useState(isDesktop);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP);
+    const on = () => setDesktop(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  // The phone's back button closes the sheet instead of leaving the page.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const onPop = () => setSheetOpen(false);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [sheetOpen]);
+
+  const openSheet = () => {
+    if (isDesktop()) return;
+    if (!sheetOpen) window.history.pushState({ ...(window.history.state || {}), productSheet: true }, "");
+    setSheetOpen(true);
+  };
+  const closeSheet = () => {
+    if (window.history.state?.productSheet) window.history.back();
+    else setSheetOpen(false);
+  };
 
   // The spinner is only for the very first load; a reload after saving
   // keeps the list on screen.
@@ -34,8 +65,10 @@ export default function ProductsPage() {
     setLoading(false);
     // /products?id=… (e.g. from Darslik) opens that product.
     const wanted = new URLSearchParams(window.location.search).get("id");
-    if (!keepSelection && wanted && data.some((p) => p.id === wanted)) setSelectedId(wanted);
-    else if (!keepSelection || (!selectedId && data.length > 0)) {
+    if (!keepSelection && wanted && data.some((p) => p.id === wanted)) {
+      setSelectedId(wanted);
+      openSheet();
+    } else if (!keepSelection || (!selectedId && data.length > 0)) {
       setSelectedId(data[0]?.id ?? null);
     }
   };
@@ -87,6 +120,30 @@ export default function ProductsPage() {
     await load(false);
   };
 
+  const details = selected &&
+              (showCustomerView ? (
+                <ProductCustomerView
+                  product={selected}
+                  onClose={forcedCustomerView ? undefined : () => setCustomerView(false)}
+                />
+              ) : (
+                <ProductDetails
+                  product={selected}
+                  allProducts={products}
+                  canEdit={canEdit}
+                  isAdmin={auth.isAdmin}
+                  onEdit={openEdit}
+                  onDuplicate={openDuplicate}
+                  onToggleActive={toggleActive}
+                  onToggleArchive={toggleArchive}
+                  onDelete={deleteProduct}
+                  onSelectUpsell={(p) => {
+                    setSelectedId(p.id);
+                    setCustomerView(false);
+                  }}
+                />
+              ));
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -113,13 +170,15 @@ export default function ProductsPage() {
             onSelect={(p) => {
               setSelectedId(p.id);
               setCustomerView(false);
+              openSheet();
             }}
             canEdit={canEdit}
             onNew={openNew}
           />
         </div>
 
-        <div>
+        {/* On phones the details live in the bottom sheet below. */}
+        <div className="hidden lg:block">
           <AsyncState
             loading={loading}
             empty={!loading && !selected}
@@ -127,32 +186,22 @@ export default function ProductsPage() {
             emptyDescription="Chapdagi ro'yxatdan mahsulot tanlang yoki yangisini qo'shing"
             emptyIcon={<Boxes className="h-5 w-5" />}
           >
-            {selected &&
-              (showCustomerView ? (
-                <ProductCustomerView
-                  product={selected}
-                  onClose={forcedCustomerView ? undefined : () => setCustomerView(false)}
-                />
-              ) : (
-                <ProductDetails
-                  product={selected}
-                  allProducts={products}
-                  canEdit={canEdit}
-                  isAdmin={auth.isAdmin}
-                  onEdit={openEdit}
-                  onDuplicate={openDuplicate}
-                  onToggleActive={toggleActive}
-                  onToggleArchive={toggleArchive}
-                  onDelete={deleteProduct}
-                  onSelectUpsell={(p) => {
-                    setSelectedId(p.id);
-                    setCustomerView(false);
-                  }}
-                />
-              ))}
+            {desktop && details}
           </AsyncState>
         </div>
       </div>
+
+      {!desktop && sheetOpen && selected && (
+        <ProductSheet
+          product={selected}
+          onClose={closeSheet}
+          canShowLesson={auth.isAdmin || auth.can("leads", "view")}
+          customerView={customerView}
+          onCustomerView={!forcedCustomerView && canExportCustomerPrice(auth) ? () => setCustomerView((v) => !v) : undefined}
+        >
+          {details}
+        </ProductSheet>
+      )}
 
       <ProductFormModal
         open={modalOpen}
