@@ -1,0 +1,96 @@
+name: Fix imported order totals
+
+# Run by hand to correct the totals of historical (Excel-imported) orders
+# that were saved with the advance instead of the full sale amount. The
+# payload lists only order ids and amounts — no personal data. With
+# apply=no it only prints what would change; with apply=yes it writes:
+# the order's lines (total, unit price), the order's totals, its import
+# payment, and one audit document per order in data_fixes (the old values,
+# so a change can be undone). An order whose current total or lines no
+# longer match the expected old values is skipped.
+
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: "base64(gzip(JSON [[orderId, oldTotal, newTotal, [[lineQty, newLineTotal], ...]], ...]))"
+        required: true
+      apply:
+        description: "yes = write the changes, no = only show them"
+        required: false
+        default: "no"
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fix order totals
+        uses: appleboy/ssh-action@v1
+        env:
+          PAYLOAD: ${{ inputs.payload }}
+          APPLY: ${{ inputs.apply }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: PAYLOAD,APPLY
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-fix.js <<'JS'
+            const zlib = require("zlib");
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const fixes = JSON.parse(zlib.gunzipSync(Buffer.from(process.env.PAYLOAD || "", "base64")).toString());
+            const apply = process.env.APPLY === "yes";
+            const round2 = (n) => Math.round(n * 100) / 100;
+            (async () => {
+              const now = new Date().toISOString();
+              let ok = 0, skipped = 0, added = 0;
+              for (const [oid, oldTotal, newTotal, lines] of fixes) {
+                const ref = db.collection("orders").doc(oid);
+                const snap = await ref.get();
+                if (!snap.exists) { console.log(`SKIP ${oid} not found`); skipped++; continue; }
+                const o = snap.data();
+                if (!o.is_historical) { console.log(`SKIP ${oid} not historical`); skipped++; continue; }
+                if (Math.abs(Number(o.total_amount || 0) - oldTotal) > 1) { console.log(`SKIP ${oid} total is ${o.total_amount}, expected ${oldTotal}`); skipped++; continue; }
+                const ls = (await db.collection("order_products").where("order_id", "==", oid).get()).docs
+                  .sort((a, b) => Number(a.data().position || 0) - Number(b.data().position || 0));
+                if (ls.length !== lines.length || ls.some((d, k) => Number(d.data().quantity || 0) !== lines[k][0])) {
+                  console.log(`SKIP ${oid} lines differ: ${ls.map((d) => d.data().quantity).join("/")} vs ${lines.map((l) => l[0]).join("/")}`); skipped++; continue;
+                }
+                const pays = (await db.collection("order_payments").where("order_id", "==", oid).get()).docs;
+                if (pays.length > 1 || (pays.length === 1 && Math.abs(Number(pays[0].data().amount || 0) - oldTotal) > 1)) {
+                  console.log(`SKIP ${oid} payments: ${pays.map((p) => p.data().amount).join("/")}`); skipped++; continue;
+                }
+                const disc = Number(o.discount_amount || 0);
+                console.log(`FIX ${oid} ${oldTotal} -> ${newTotal} lines ${ls.map((d, k) => `${lines[k][0]}x${round2(lines[k][1] / lines[k][0])}=${lines[k][1]}`).join(";")} payment ${pays.length ? "update" : "new"}`);
+                ok++; added += newTotal - oldTotal;
+                if (!apply) continue;
+                const b = db.batch();
+                const before = {
+                  order: { subtotal: o.subtotal ?? null, total_amount: o.total_amount ?? null, paid_amount: o.paid_amount ?? null, remaining_amount: o.remaining_amount ?? null },
+                  lines: ls.map((d) => ({ id: d.id, unit_price: d.data().unit_price ?? null, total: d.data().total ?? null })),
+                  payments: pays.map((p) => ({ id: p.id, amount: p.data().amount ?? null })),
+                };
+                ls.forEach((d, k) => {
+                  const [qty, total] = lines[k];
+                  b.update(d.ref, { total, unit_price: qty ? round2(total / qty) : total, updated_at: now });
+                });
+                let newPayment = null;
+                if (pays.length) b.update(pays[0].ref, { amount: newTotal, updated_at: now });
+                else {
+                  const p = db.collection("order_payments").doc();
+                  newPayment = p.id;
+                  b.set(p, { order_id: oid, amount: newTotal, payment_type: o.payment_type || "", payment_date: o.order_date || "", received_by: "Excel import (tuzatish)", note: "PDF hisobot bo'yicha jami summa", created_at: now });
+                }
+                b.update(ref, { subtotal: newTotal + disc, total_amount: newTotal, paid_amount: newTotal, remaining_amount: 0, updated_at: now });
+                b.set(db.collection("data_fixes").doc(), { kind: "order_total_from_pdf", order_id: oid, old_total: oldTotal, new_total: newTotal, before, new_payment_id: newPayment, created_at: now });
+                await b.commit();
+              }
+              console.log(`${apply ? "APPLIED" : "DRY RUN"} fixed=${ok} skipped=${skipped} added=${added}`);
+              process.exit(0);
+            })().catch((e) => { console.error("fix failed", e.message); process.exit(1); });
+            JS
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-fix.js
+            rm -f /tmp/vp-fix.js
