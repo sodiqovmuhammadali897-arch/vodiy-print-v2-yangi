@@ -71,13 +71,16 @@ jobs:
                 }
                 const iso = /^\d{2}\.\d{2}\.\d{4}$/.test(date) ? `${date.slice(6)}-${date.slice(3, 5)}-${date.slice(0, 2)}` : "";
                 let ord = "X";
+                const seen = [];
                 if (ref && refs.has(String(ref).toLowerCase())) ord = "R";
                 else for (const id of ids) {
                   const totals = byCustDay.get(`${id}|${iso}`);
                   if (!totals) continue;
+                  seen.push(...totals);
                   ord = [...totals].some((t) => Math.abs(t - total) <= Math.max(1000, total * 0.02)) ? "M" : ord === "M" ? "M" : "D";
                 }
-                out.push(`${i}${cust}${ord}`);
+                // amounts only (no personal data): what the database has that day
+                out.push(`${i}${cust}${ord}${ord === "D" ? ":" + seen.map((t) => Math.round(t)).join("/") : ""}`);
               }
               console.log("RESULT " + out.join(" "));
               process.exit(0);
