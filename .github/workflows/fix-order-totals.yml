@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       payload:
-        description: "base64(gzip(JSON [[orderId, oldTotal, newTotal, [[lineQty, newLineTotal], ...]], ...]))"
+        description: "base64(gzip(JSON [[orderId, oldTotal, newTotal, [[lineQty, newLineTotal], ...in line document id order]], ...]))"
         required: true
       apply:
         description: "yes = write the changes, no = only show them"
@@ -54,8 +54,9 @@ jobs:
                 const o = snap.data();
                 if (!o.is_historical) { console.log(`SKIP ${oid} not historical`); skipped++; continue; }
                 if (Math.abs(Number(o.total_amount || 0) - oldTotal) > 1) { console.log(`SKIP ${oid} total is ${o.total_amount}, expected ${oldTotal}`); skipped++; continue; }
+                // Same order as the check-import listing the payload was made from (document id).
                 const ls = (await db.collection("order_products").where("order_id", "==", oid).get()).docs
-                  .sort((a, b) => Number(a.data().position || 0) - Number(b.data().position || 0));
+                  .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
                 if (ls.length !== lines.length || ls.some((d, k) => Number(d.data().quantity || 0) !== lines[k][0])) {
                   console.log(`SKIP ${oid} lines differ: ${ls.map((d) => d.data().quantity).join("/")} vs ${lines.map((l) => l[0]).join("/")}`); skipped++; continue;
                 }
