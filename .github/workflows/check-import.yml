@@ -12,6 +12,10 @@ on:
       payload:
         description: "base64(gzip(JSON rows [i, ref, dd.mm.yyyy, [phoneHash], nameHash, brandHash, total]))"
         required: true
+      inspect:
+        description: "Also print the amounts of the database orders whose total differs"
+        required: false
+        default: "no"
 
 jobs:
   check:
@@ -21,11 +25,12 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           PAYLOAD: ${{ inputs.payload }}
+          INSPECT: ${{ inputs.inspect }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          envs: PAYLOAD
+          envs: PAYLOAD,INSPECT
           command_timeout: 5m
           script: |
             cat > /tmp/vp-check.js <<'JS'
@@ -39,7 +44,10 @@ jobs:
             const h = (s) => (s ? crypto.createHash("sha256").update(s).digest("hex").slice(0, 16) : "");
             const p9 = (s) => { const d = String(s || "").replace(/\D/g, ""); return d.length >= 9 ? d.slice(-9) : ""; };
             (async () => {
-              const [cs, os, ops, bs] = await Promise.all(["customers", "orders", "order_products", "brands"].map((c) => db.collection(c).get()));
+              const [cs, os, ops, bs, pays] = await Promise.all(["customers", "orders", "order_products", "brands", "order_payments"].map((c) => db.collection(c).get()));
+              const linesOf = new Map(), paidOf = new Map(), orderAt = new Map();
+              for (const d of ops.docs) { const l = d.data(); if (!linesOf.has(l.order_id)) linesOf.set(l.order_id, []); linesOf.get(l.order_id).push(l); }
+              for (const d of pays.docs) { const p = d.data(); paidOf.set(p.order_id, (paidOf.get(p.order_id) || 0) + Number(p.amount || 0)); }
               const byPhone = new Map(), byName = new Map(), byBrand = new Map();
               const add = (m, k, v) => { if (!k) return; if (!m.has(k)) m.set(k, new Set()); m.get(k).add(v); };
               for (const d of cs.docs) {
@@ -55,6 +63,7 @@ jobs:
                 for (const r of String(o.historical_ref || "").split(/,\s*/)) if (r) refs.add(r.toLowerCase());
                 const day = String(o.order_date || o.created_at || "").slice(0, 10);
                 add(byCustDay, `${o.customer_id}|${day}`, Number(o.total_amount || 0));
+                add(orderAt, `${o.customer_id}|${day}`, d.id);
               }
               for (const d of ops.docs) { const m = String(d.data().note || "").match(/Excel ID:\s*([^\s·]+)/i); if (m) refs.add(m[1].toLowerCase()); }
               console.log(`DB customers=${cs.size} orders=${os.size} brands=${bs.size} refs=${refs.size}`);
@@ -81,6 +90,13 @@ jobs:
                 }
                 // amounts only (no personal data): what the database has that day
                 out.push(`${i}${cust}${ord}${ord === "D" ? ":" + seen.map((t) => Math.round(t)).join("/") : ""}`);
+                if (ord === "D" && process.env.INSPECT === "yes") {
+                  for (const id of ids) for (const oid of orderAt.get(`${id}|${iso}`) || []) {
+                    const o = os.docs.find((x) => x.id === oid).data();
+                    const ls = (linesOf.get(oid) || []).map((l) => `${l.quantity}x${l.unit_price}=${l.total}`).join(";");
+                    console.log(`INSPECT ${i} ${oid} hist=${Boolean(o.is_historical)} batch=${o.import_batch ? "yes" : "no"} total=${o.total_amount} sub=${o.subtotal} disc=${o.discount_amount} paid=${o.paid_amount} rem=${o.remaining_amount} pays=${paidOf.get(oid) || 0} status=${o.status} made=${String(o.created_at || "").slice(0, 16)} lines=${ls}`);
+                  }
+                }
               }
               console.log("RESULT " + out.join(" "));
               process.exit(0);
