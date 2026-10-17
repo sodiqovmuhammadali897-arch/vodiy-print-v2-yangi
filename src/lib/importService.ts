@@ -51,29 +51,62 @@ export type ImportPlan = {
 
 const orderKeyOf = (o: ImportOrder) => `xl:${o.refs[0] || o.rows[0]}:${o.date}:${o.customer_key}`;
 
-const customerMatcher = (existing: Customer[]) => {
+// By phone; a row without a phone by name and brand, then by a brand only
+// one customer has, then by a name only one customer has. Several
+// candidates match nobody (a new customer beats the wrong one).
+const customerMatcher = (existing: Customer[], brands: Pick<Brand, "customer_id" | "name">[] = []) => {
   const byPhone = new Map<string, Customer>();
-  const byName = new Map<string, Customer>();
+  const byName = new Map<string, Customer[]>();
+  const byBrand = new Map<string, Customer[]>();
+  const brandsOf = new Map<string, Set<string>>();
+  const add = <T>(m: Map<string, T[]>, k: string, v: T) => {
+    if (!k) return;
+    const list = m.get(k) || [];
+    if (!list.includes(v)) m.set(k, [...list, v]);
+  };
+  const byId = new Map(existing.map((c) => [c.id, c]));
+  const addBrand = (c: Customer, name: string) => {
+    const k = normText(name);
+    if (!k) return;
+    add(byBrand, k, c);
+    brandsOf.set(c.id, (brandsOf.get(c.id) || new Set()).add(k));
+  };
   for (const c of existing) {
     for (const p of [c.phone, c.extra_phone]) {
       const k = normalizePhone(p || "");
       if (k.length === 9 && !byPhone.has(k)) byPhone.set(k, c);
     }
-    const n = normText(`${c.first_name} ${c.last_name}`);
-    if (n && !byName.has(n)) byName.set(n, c);
+    add(byName, normText(`${c.first_name} ${c.last_name}`), c);
+    addBrand(c, c.company || "");
   }
-  return (c: ImportCustomer): Customer | null =>
-    c.phone ? byPhone.get(normalizePhone(c.phone)) || null : byName.get(normText(`${c.first_name} ${c.last_name}`)) || null;
+  for (const b of brands) {
+    const c = byId.get(b.customer_id);
+    if (c) addBrand(c, b.name);
+  }
+  const only = (list: Customer[] | undefined) => (list && list.length === 1 ? list[0] : null);
+  return (c: ImportCustomer): Customer | null => {
+    if (c.phone) return byPhone.get(normalizePhone(c.phone)) || null;
+    const wanted = c.brands.map(normText).filter(Boolean);
+    const named = byName.get(normText(`${c.first_name} ${c.last_name}`)) || [];
+    const both = named.filter((x) => wanted.some((b) => brandsOf.get(x.id)?.has(b)));
+    if (both.length) return only(both);
+    for (const b of wanted) {
+      const one = only(byBrand.get(b));
+      if (one) return one;
+    }
+    return only(named);
+  };
 };
 
 // Read-only: what the import would do against today's data.
 export const planImport = async (parsed: ParsedWorkbook): Promise<ImportPlan> => {
-  const [customers, orders, products] = await Promise.all([
+  const [customers, orders, products, brands] = await Promise.all([
     listAll<Customer>("customers"),
     listAll<ExistingOrder>("orders"),
     listAll<Product>("products"),
+    listAll<Brand>("brands"),
   ]);
-  const match = customerMatcher(customers);
+  const match = customerMatcher(customers, brands);
   const keys = new Set(orders.map((o) => o.import_key).filter(Boolean));
   const productByName = new Map(products.map((p) => [normText(p.name), p]));
 

@@ -132,6 +132,33 @@ describe("excel import into the ERP", () => {
     expect(col("import_batches").get(batch.id!)!.status).toBe("undone");
   });
 
+  it("matches a row without a phone by name and brand, never a same-named stranger", async () => {
+    col("customers").set("c-a1", { id: "c-a1", first_name: "Azizbek", last_name: "", phone: "+998 90 000 00 01", company: "" });
+    col("customers").set("c-a2", { id: "c-a2", first_name: "Azizbek", last_name: "", phone: "+998 90 000 00 02", company: "" });
+    col("customers").set("c-z", { id: "c-z", first_name: "Ilyos", last_name: "", phone: "+998 90 000 00 03", company: "" });
+    col("brands").set("b-1", { id: "b-1", customer_id: "c-a2", name: "Dubai agro" });
+    col("brands").set("b-2", { id: "b-2", customer_id: "c-z", name: "Ziyokor" });
+    const H: Cell[] = ["Sana", "Ism", "Telefon", "Brend", "Mahsulot", "Soni", "Jami summa"];
+    const plan = await planImport(
+      parseWorkbook([
+        {
+          sheet: "B",
+          data: [
+            H,
+            [d("2026-04-17"), "Azizbek", null, "Dubai agro", "Futbolka", 15, 1635000],
+            [d("2026-04-30"), "Ziyokor", null, "Ziyokor", "Flayer", 6000, 1137200],
+          ] as Cell[][],
+        },
+      ]),
+    );
+    const of = (brand: string) => plan.customers.find((c) => c.item.brands.includes(brand))!.existing?.id ?? null;
+    expect(of("Dubai agro")).toBe("c-a2");
+    expect(of("Ziyokor")).toBe("c-z");
+    // Two Azizbeks, neither with this brand: a new customer, not the first one.
+    const other = await planImport(parseWorkbook([{ sheet: "B", data: [H, [d("2026-05-01"), "Azizbek", null, "Boshqa", "Kepka", 10, 400000]] as Cell[][] }]));
+    expect(other.customers[0].existing).toBeNull();
+  });
+
   it("keeps Excel's unpaid remainder as debt in 'excel' mode", async () => {
     const plan = await planImport(parseWorkbook(sheets()));
     await runImport(plan, { fileName: "t.xlsx", paidMode: "excel", actor: "Admin" });
