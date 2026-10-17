@@ -1,0 +1,87 @@
+name: Check orders list against the database (read only)
+
+# Run by hand with a list of orders (e.g. from a PDF/Excel report) to see
+# which customers and orders are already in Firestore. The list is sent
+# hashed — phones, first names and brands as sha256 — so no personal data
+# shows up in the run or its log. Prints one line per row with the result.
+# Reads only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: "base64(gzip(JSON rows [i, ref, dd.mm.yyyy, [phoneHash], nameHash, brandHash, total]))"
+        required: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compare with customers and orders
+        uses: appleboy/ssh-action@v1
+        env:
+          PAYLOAD: ${{ inputs.payload }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: PAYLOAD
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-check.js <<'JS'
+            const zlib = require("zlib");
+            const crypto = require("crypto");
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const rows = JSON.parse(zlib.gunzipSync(Buffer.from(process.env.PAYLOAD || "", "base64")).toString());
+            const norm = (s) => String(s || "").toLowerCase().replace(/[‘’ʻ`]/g, "'").replace(/[^a-z0-9а-яё]/g, "");
+            const h = (s) => (s ? crypto.createHash("sha256").update(s).digest("hex").slice(0, 16) : "");
+            const p9 = (s) => { const d = String(s || "").replace(/\D/g, ""); return d.length >= 9 ? d.slice(-9) : ""; };
+            (async () => {
+              const [cs, os, ops, bs] = await Promise.all(["customers", "orders", "order_products", "brands"].map((c) => db.collection(c).get()));
+              const byPhone = new Map(), byName = new Map(), byBrand = new Map();
+              const add = (m, k, v) => { if (!k) return; if (!m.has(k)) m.set(k, new Set()); m.get(k).add(v); };
+              for (const d of cs.docs) {
+                const c = d.data();
+                add(byPhone, h(p9(c.phone)), d.id); add(byPhone, h(p9(c.extra_phone)), d.id);
+                add(byName, h(norm(String(c.first_name || "").split(/\s+/)[0])), d.id);
+                add(byBrand, h(norm(c.company)), d.id);
+              }
+              for (const d of bs.docs) add(byBrand, h(norm(d.data().name)), d.data().customer_id);
+              const refs = new Set(), byCustDay = new Map();
+              for (const d of os.docs) {
+                const o = d.data();
+                for (const r of String(o.historical_ref || "").split(/,\s*/)) if (r) refs.add(r.toLowerCase());
+                const day = String(o.order_date || o.created_at || "").slice(0, 10);
+                add(byCustDay, `${o.customer_id}|${day}`, Number(o.total_amount || 0));
+              }
+              for (const d of ops.docs) { const m = String(d.data().note || "").match(/Excel ID:\s*([^\s·]+)/i); if (m) refs.add(m[1].toLowerCase()); }
+              console.log(`DB customers=${cs.size} orders=${os.size} brands=${bs.size} refs=${refs.size}`);
+              const out = [];
+              for (const [i, ref, date, phones, nameH, brandH, total] of rows) {
+                let cust = "X", ids = new Set();
+                for (const ph of phones) for (const id of byPhone.get(ph) || []) ids.add(id);
+                if (ids.size) cust = "P";
+                else {
+                  const n = byName.get(nameH) || new Set(), b = byBrand.get(brandH) || new Set();
+                  const both = [...n].filter((x) => b.has(x));
+                  if (both.length) { cust = "N"; both.forEach((x) => ids.add(x)); }
+                  else if (b.size) { cust = "B"; b.forEach((x) => ids.add(x)); }
+                }
+                const iso = /^\d{2}\.\d{2}\.\d{4}$/.test(date) ? `${date.slice(6)}-${date.slice(3, 5)}-${date.slice(0, 2)}` : "";
+                let ord = "X";
+                if (ref && refs.has(String(ref).toLowerCase())) ord = "R";
+                else for (const id of ids) {
+                  const totals = byCustDay.get(`${id}|${iso}`);
+                  if (!totals) continue;
+                  ord = [...totals].some((t) => Math.abs(t - total) <= Math.max(1000, total * 0.02)) ? "M" : ord === "M" ? "M" : "D";
+                }
+                out.push(`${i}${cust}${ord}`);
+              }
+              console.log("RESULT " + out.join(" "));
+              process.exit(0);
+            })().catch((e) => { console.error("check failed", e.message); process.exit(1); });
+            JS
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-check.js
+            rm -f /tmp/vp-check.js
