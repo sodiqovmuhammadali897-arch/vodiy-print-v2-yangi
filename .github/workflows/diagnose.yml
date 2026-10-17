@@ -1,0 +1,58 @@
+name: Diagnose (read only)
+
+# Run by hand to see why a bot message didn't go out: one employee's
+# attendance record for the day, what the HR agent tried to send them
+# (hr_notifications) and the server log of that day. Reads only — nothing
+# on the server or in Firestore is changed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Employee email"
+        required: true
+      day:
+        description: "Day (YYYY-MM-DD), empty = today in Tashkent"
+        required: false
+        default: ""
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read attendance, HR notifications and the server log
+        uses: appleboy/ssh-action@v1
+        env:
+          EMAIL: ${{ inputs.email }}
+          DAY: ${{ inputs.day }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: EMAIL,DAY
+          script: |
+            cat > /tmp/vp-diagnose.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const email = String(process.env.EMAIL || "").toLowerCase().trim();
+            const day = process.env.DAY || new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+            (async () => {
+              console.log("day", day, "email", email);
+              const r = (await db.collection("attendance").doc(`${email}_${day}`).get()).data() || null;
+              console.log("attendance", JSON.stringify(r && { checkInTime: r.checkInTime, checkInTimestamp: r.checkInTimestamp, createdAt: r.createdAt, updatedAt: r.updatedAt, lateMinutes: r.lateMinutes, lateNotifiedAt: r.lateNotifiedAt, method: r.authenticationMethod, status: r.status }));
+              const s = (await db.collection("staff").doc(email).get()).data() || null;
+              console.log("staff", JSON.stringify(s && { telegramLinked: Boolean(s.telegram_chat_id), attendance_notify: s.attendance_notify, hasPhone: Boolean(s.phone) }));
+              const n = await db.collection("hr_notifications").where("email", "==", email).where("date", "==", day).get();
+              for (const d of n.docs) { const x = d.data(); console.log("hr_notification", x.created_at, x.kind, x.status, x.channel || "-", x.error || ""); }
+              if (!n.size) console.log("hr_notification none");
+              const runs = await db.collection("hr_runs").where(admin.firestore.FieldPath.documentId(), ">=", day).where(admin.firestore.FieldPath.documentId(), "<", day + "~").get();
+              for (const d of runs.docs) { const x = d.data(); console.log("hr_run", d.id, "missing:", (x.missing || []).length, "sent:", x.sent); }
+              process.exit(0);
+            })().catch((e) => { console.error("diagnose failed", e.message); process.exit(1); });
+            JS
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-diagnose.js || true
+            rm -f /tmp/vp-diagnose.js
+            echo "=== meta-webhook log (HR, Telegram, errors) ==="
+            SINCE="${DAY:-today}"
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S journalctl -u meta-webhook --no-pager --since "$SINCE" 2>/dev/null | grep -iE "HR |hr |late|kech|Telegram|failed|error|started|listening" | grep -v "amoCRM sync:" | tail -n 80
