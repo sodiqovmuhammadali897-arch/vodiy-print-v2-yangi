@@ -1,0 +1,117 @@
+name: Business stats (read only)
+
+# Run by hand for reports (e.g. a SWOT): totals by month, product,
+# category, region and source, debt, margin, expenses and leads. Prints
+# aggregates only — no customer names, phones or other personal data.
+# Reads only.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate orders, customers, costs and leads
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-stats.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const all = async (c) => { try { return (await db.collection(c).get()).docs.map((d) => ({ id: d.id, ...d.data() })); } catch { return []; } };
+            const bump = (m, k, by = {}) => { k = String(k || "—").trim() || "—"; const r = m.get(k) || {}; for (const [f, v] of Object.entries(by)) r[f] = (r[f] || 0) + v; m.set(k, r); };
+            const show = (title, m, sortBy, limit = 40) => {
+              const rows = [...m.entries()].sort((a, b) => (sortBy ? (b[1][sortBy] || 0) - (a[1][sortBy] || 0) : a[0] < b[0] ? -1 : 1)).slice(0, limit);
+              console.log(`== ${title}`);
+              for (const [k, v] of rows) console.log(`${k}\t${Object.entries(v).map(([f, x]) => `${f}=${Math.round(x)}`).join(" ")}`);
+            };
+            const month = (s) => String(s || "").slice(0, 7);
+            const productKey = (s) => String(s || "").split("(")[0].replace(/\s+/g, " ").trim().toLowerCase();
+            (async () => {
+              const [orders, lines, customers, costs, expenses, leads, staff, products] = await Promise.all(
+                ["orders", "order_products", "customers", "order_costs", "expenses", "leads", "staff", "products"].map(all));
+              const live = orders.filter((o) => o.status !== "cancelled" && !o.is_draft);
+              const liveIds = new Set(live.map((o) => o.id));
+              console.log(`orders=${orders.length} live=${live.length} cancelled=${orders.filter((o) => o.status === "cancelled").length} historical=${live.filter((o) => o.is_historical).length} customers=${customers.length} products=${products.length} staff=${staff.length} active_staff=${staff.filter((s) => s.active !== false && s.is_active !== false).length} leads=${leads.length}`);
+
+              const byMonth = new Map();
+              for (const o of live) bump(byMonth, month(o.order_date || o.created_at), { orders: 1, revenue: Number(o.total_amount || 0), paid: Number(o.paid_amount || 0), debt: Number(o.remaining_amount || 0) });
+              show("by month (order date)", byMonth);
+
+              const status = new Map();
+              for (const o of orders) bump(status, o.status, { n: 1, sum: Number(o.total_amount || 0) });
+              show("status", status, "n");
+
+              const debt = live.filter((o) => Number(o.remaining_amount || 0) > 0);
+              console.log(`debt orders=${debt.length} debt=${Math.round(debt.reduce((s, o) => s + Number(o.remaining_amount || 0), 0))} closed_with_debt=${debt.filter((o) => o.status === "closed").length}`);
+
+              const cat = new Map(), prod = new Map();
+              for (const l of lines) {
+                if (!liveIds.has(l.order_id)) continue;
+                bump(cat, l.category, { lines: 1, revenue: Number(l.total || 0) });
+                bump(prod, productKey(l.product_name), { lines: 1, qty: Number(l.quantity || 0), revenue: Number(l.total || 0) });
+              }
+              show("category", cat, "revenue");
+              show("products top", prod, "revenue", 30);
+
+              const pay = new Map(), src = new Map(), producer = new Map(), mgr = new Map();
+              for (const o of live) {
+                bump(pay, o.payment_type, { orders: 1, revenue: Number(o.total_amount || 0) });
+                bump(src, o.customer_source, { orders: 1, revenue: Number(o.total_amount || 0) });
+                bump(producer, o.production_company, { orders: 1 });
+                if (!o.is_historical) bump(mgr, o.manager_name ? "manager set" : "no manager", { orders: 1 });
+              }
+              show("payment type", pay, "revenue");
+              show("order customer_source", src, "revenue");
+              show("production company", producer, "orders", 15);
+              show("ERP orders with manager", mgr, "orders");
+
+              const cust = new Map(customers.map((c) => [c.id, c]));
+              const per = new Map();
+              for (const o of live) if (o.customer_id) { const r = per.get(o.customer_id) || { n: 0, sum: 0, first: "9", last: "" }; r.n++; r.sum += Number(o.total_amount || 0); const d = String(o.order_date || ""); if (d < r.first) r.first = d; if (d > r.last) r.last = d; per.set(o.customer_id, r); }
+              const sums = [...per.values()].map((r) => r.sum).sort((a, b) => b - a);
+              const tot = sums.reduce((s, x) => s + x, 0);
+              const share = (k) => Math.round((sums.slice(0, k).reduce((s, x) => s + x, 0) / (tot || 1)) * 1000) / 10;
+              const buyers = per.size, repeat = [...per.values()].filter((r) => r.n >= 2).length;
+              console.log(`buyers=${buyers} repeat_buyers=${repeat} orders_per_buyer=${(live.length / (buyers || 1)).toFixed(2)} top10_share=${share(10)}% top20_share=${share(20)}% top50_share=${share(50)}% median_buyer_sum=${Math.round(sums[Math.floor(sums.length / 2)] || 0)}`);
+              const lastBuy = new Map();
+              for (const r of per.values()) bump(lastBuy, month(r.last), { buyers: 1 });
+              show("buyers by month of their last order", lastBuy);
+              const firstBuy = new Map();
+              for (const r of per.values()) bump(firstBuy, month(r.first), { new_buyers: 1 });
+              show("new buyers by month of first order", firstBuy);
+              const region = new Map(), csrc = new Map();
+              for (const c of customers) { const r = per.get(c.id); bump(region, c.region, { customers: 1, revenue: r ? r.sum : 0 }); bump(csrc, c.source, { customers: 1, revenue: r ? r.sum : 0 }); }
+              show("customer region", region, "revenue", 20);
+              show("customer source", csrc, "revenue", 20);
+
+              let costRev = 0, costSum = 0; const costOrders = new Set();
+              for (const c of costs) if (liveIds.has(c.order_id)) { costSum += Number(c.total_cost || 0); costOrders.add(c.order_id); }
+              for (const o of live) if (costOrders.has(o.id)) costRev += Number(o.total_amount || 0);
+              console.log(`margin: orders_with_cost=${costOrders.size} revenue=${Math.round(costRev)} cost=${Math.round(costSum)} margin=${costRev ? Math.round((1 - costSum / costRev) * 1000) / 10 : 0}%`);
+
+              const exCat = new Map(), exMonth = new Map();
+              for (const e of expenses) { bump(exCat, e.category, { n: 1, sum: Number(e.amount || 0) }); bump(exMonth, month(e.date), { sum: Number(e.amount || 0) }); }
+              show("expenses by category", exCat, "sum", 20);
+              show("expenses by month", exMonth);
+
+              const lSrc = new Map(), lSt = new Map(), lLost = new Map(), lMonth = new Map();
+              let firstContactMin = [];
+              for (const l of leads) {
+                bump(lSrc, l.source, { n: 1 }); bump(lSt, l.status, { n: 1 }); if (l.lost_reason) bump(lLost, l.lost_reason, { n: 1 }); bump(lMonth, month(l.created_at), { n: 1 });
+                if (l.first_contact_at && l.created_at) { const m = (Date.parse(l.first_contact_at) - Date.parse(l.created_at)) / 60000; if (m >= 0 && m < 60 * 24 * 30) firstContactMin.push(m); }
+              }
+              firstContactMin.sort((a, b) => a - b);
+              show("lead source", lSrc, "n"); show("lead status", lSt, "n"); show("lead lost reason", lLost, "n"); show("leads by month", lMonth);
+              console.log(`lead first contact median_min=${Math.round(firstContactMin[Math.floor(firstContactMin.length / 2)] || 0)} n=${firstContactMin.length}`);
+              process.exit(0);
+            })().catch((e) => { console.error("stats failed", e.message); process.exit(1); });
+            JS
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-stats.js
+            rm -f /tmp/vp-stats.js
