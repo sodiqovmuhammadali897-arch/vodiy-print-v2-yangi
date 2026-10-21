@@ -1,5 +1,7 @@
-import { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import Sparkline from "./Sparkline";
+import AnimatedNumber from "./AnimatedNumber";
+import { COUNT_UP_MS, prefersReducedMotion } from "../../lib/countUp";
 
 export type StatCardTone = "brand" | "emerald" | "amber" | "rose" | "sky" | "violet";
 
@@ -23,6 +25,16 @@ type Props = {
   sparkline?: number[];
 };
 
+// The bar fills from 0 to its value together with the counting number.
+const useGrowFromZero = (percent: number) => {
+  const [width, setWidth] = useState(() => (prefersReducedMotion() ? percent : 0));
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setWidth(percent));
+    return () => cancelAnimationFrame(raf);
+  }, [percent]);
+  return width;
+};
+
 export default function StatCard({
   title,
   value,
@@ -34,6 +46,7 @@ export default function StatCard({
   sparkline,
 }: Props) {
   const t = toneMap[tone];
+  const bar = useGrowFromZero(Math.min(100, Math.max(0, progress ?? 0)));
   return (
     <div className="card p-5 animate-fade-in">
       <div className="flex items-start justify-between gap-3">
@@ -41,8 +54,8 @@ export default function StatCard({
           <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
             {title}
           </div>
-          <div className="mt-1.5 font-display text-2xl font-bold text-ink-900">
-            {value}
+          <div className="mt-1.5 font-display text-2xl font-bold tabular-nums text-ink-900">
+            <AnimatedNumber value={value} />
           </div>
           {hint && (
             <div className="mt-1 text-xs text-ink-500">{hint}</div>
@@ -70,7 +83,7 @@ export default function StatCard({
                   ? "bg-emerald-500"
                   : "bg-brand-600"
               }`}
-              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+              style={{ width: `${bar}%`, transitionDuration: `${COUNT_UP_MS}ms`, transitionTimingFunction: "cubic-bezier(.33,1,.68,1)" }}
             />
           </div>
           {progressLabel && (
