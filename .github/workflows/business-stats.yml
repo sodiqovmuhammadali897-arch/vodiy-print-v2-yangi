@@ -44,6 +44,36 @@ jobs:
               for (const o of live) bump(byMonth, month(o.order_date || o.created_at), { orders: 1, revenue: Number(o.total_amount || 0), paid: Number(o.paid_amount || 0), debt: Number(o.remaining_amount || 0) });
               show("by month (order date)", byMonth);
 
+              // Per month: buyers, new vs returning, average and median check, discounts.
+              const firstMonth = new Map();
+              for (const o of live) if (o.customer_id) { const m = month(o.order_date || o.created_at); if (!firstMonth.has(o.customer_id) || m < firstMonth.get(o.customer_id)) firstMonth.set(o.customer_id, m); }
+              const months = [...new Set(live.map((o) => month(o.order_date || o.created_at)))].sort();
+              console.log("== month buyers (orders buyers new returning avg median discount_orders discount_sum)");
+              for (const m of months) {
+                const os = live.filter((o) => month(o.order_date || o.created_at) === m);
+                const ids = new Set(os.map((o) => o.customer_id).filter(Boolean));
+                const fresh = [...ids].filter((id) => firstMonth.get(id) === m).length;
+                const t = os.map((o) => Number(o.total_amount || 0)).sort((a, b) => a - b);
+                const disc = os.filter((o) => Number(o.discount_amount || 0) > 0);
+                console.log(`${m}\torders=${os.length} buyers=${ids.size} new=${fresh} returning=${ids.size - fresh} avg=${Math.round(t.reduce((s, x) => s + x, 0) / (t.length || 1))} median=${Math.round(t[Math.floor(t.length / 2)] || 0)} discount_orders=${disc.length} discount_sum=${Math.round(disc.reduce((s, o) => s + Number(o.discount_amount || 0), 0))}`);
+              }
+              const buckets = [[0, 500e3, "<0.5M"], [500e3, 1e6, "0.5-1M"], [1e6, 3e6, "1-3M"], [3e6, 10e6, "3-10M"], [10e6, Infinity, ">10M"]];
+              for (const [label, from] of [["all", ""], ["since 2026-07", "2026-07"]]) {
+                const b = new Map();
+                for (const o of live) {
+                  if (month(o.order_date || o.created_at) < from) continue;
+                  const v = Number(o.total_amount || 0);
+                  const k = buckets.find(([lo, hi]) => v >= lo && v < hi)[2];
+                  bump(b, k, { orders: 1, revenue: v });
+                }
+                console.log(`== check size ${label}`);
+                for (const [, , k] of buckets) console.log(`${k}\t${Object.entries(b.get(k) || {}).map(([f, x]) => `${f}=${Math.round(x)}`).join(" ")}`);
+              }
+              const lineMonth = new Map();
+              const oMonth = new Map(live.map((o) => [o.id, month(o.order_date || o.created_at)]));
+              for (const l of lines) { const m = oMonth.get(l.order_id); if (m && m >= "2026-07") bump(lineMonth, productKey(l.product_name), { lines: 1, qty: Number(l.quantity || 0), revenue: Number(l.total || 0) }); }
+              show("products since 2026-07", lineMonth, "revenue", 20);
+
               const status = new Map();
               for (const o of orders) bump(status, o.status, { n: 1, sum: Number(o.total_amount || 0) });
               show("status", status, "n");
