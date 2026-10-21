@@ -6,7 +6,7 @@ import { formatMoney } from "../../lib/format";
 // The director's signature (fonsiz PNG, from a photo), used unless
 // Sozlamalar → Kompaniya has its own "Imzo rasmi URL". The file name is
 // random so it isn't found by guessing.
-const DIRECTOR_SIGNATURE = "/brand/s-9dd21da1075582ca.png";
+const DIRECTOR_SIGNATURE = "/brand/s-414d83ded787e7de.png";
 
 // A plain "YYYY-MM-DD" date, matching the reference design exactly —
 // formatDate()'s localized "20-avg, 2026" style doesn't match it.
@@ -201,7 +201,7 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
               </div>
               {/* The signature sits on the line above "Imzo", as if signed by hand. */}
               <div className="relative ml-auto mt-2 h-[76px] w-52 border-b border-ink-300">
-                <img src={company?.signature_url || DIRECTOR_SIGNATURE} alt="" className="absolute -bottom-4 right-2 h-[92px] max-w-none object-contain" />
+                <img src={company?.signature_url || DIRECTOR_SIGNATURE} alt="" className="absolute -bottom-7 -right-2 h-[104px] max-w-none object-contain" />
               </div>
               <div className="mt-1 text-xs text-ink-400">Imzo</div>
             </div>
