@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Loader, ShieldAlert } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import { canSeeOwnKpi, type ModuleKey } from "../../lib/permissions";
-import { visibleNav } from "../layout/Sidebar";
+import { visibleNav } from "../layout/nav";
 
 // kpi: also let in an account that may see its own KPI (Davomat va KPI).
 type Props = { module: ModuleKey; kpi?: boolean };

@@ -55,3 +55,31 @@ export const prefetchPages = (): void => {
   };
   next();
 };
+
+// A finger on a tab: start fetching that page's code before the tap ends.
+const ROUTE_PAGE: Record<string, keyof typeof loaders> = {
+  "/leads": "SalesPipeline",
+  "/ads": "AdsPage",
+  "/content": "ContentPage",
+  "/orders": "Orders",
+  "/customers": "Customers",
+  "/products": "Products",
+  "/proposals": "Proposals",
+  "/textile": "Textile",
+  "/warehouse": "Warehouse",
+  "/finance": "Finance",
+  "/reports": "Reports",
+  "/margin": "MarginPage",
+  "/kpi": "KpiPage",
+  "/ai-office": "AiOffice",
+  "/production": "Production",
+  "/pechatnik": "Pechatnik",
+  "/attendance": "AttendancePage",
+  "/tasks": "Tasks",
+  "/darslik": "DarslikPage",
+  "/settings": "Settings",
+};
+export const preloadRoute = (path: string): void => {
+  const key = ROUTE_PAGE[path];
+  if (key) loaders[key]().catch(() => undefined);
+};

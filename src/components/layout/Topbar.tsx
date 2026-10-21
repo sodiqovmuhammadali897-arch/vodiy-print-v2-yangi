@@ -1,4 +1,4 @@
-import { Menu, Search, Bell, Plus, LogOut, Sun, Moon } from "lucide-react";
+import { Search, Bell, Plus, LogOut, Sun, Moon } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/AuthContext";
 import { useTheme } from "../../lib/ThemeContext";
@@ -23,9 +23,7 @@ const titleMap: Record<string, string> = {
   "/settings": "Sozlamalar",
 };
 
-type Props = { onOpenMobile: () => void };
-
-export default function Topbar({ onOpenMobile }: Props) {
+export default function Topbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
@@ -43,12 +41,6 @@ export default function Topbar({ onOpenMobile }: Props) {
 
   return (
     <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-ink-100 bg-surface/80 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
-      <button
-        onClick={onOpenMobile}
-        className="rounded-lg p-2 text-ink-600 hover:bg-ink-100 lg:hidden"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
       <div className="flex-1">
         <div className="font-display text-lg font-bold text-ink-900">{title}</div>
         <div className="text-xs text-ink-500">

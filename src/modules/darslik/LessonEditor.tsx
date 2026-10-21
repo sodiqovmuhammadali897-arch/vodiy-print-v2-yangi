@@ -131,7 +131,7 @@ export default function LessonEditor({ lesson, onClose }: { lesson: LiveLesson; 
         <p className="text-xs text-ink-500">Doiracha — to'g'ri javob.</p>
       </Box>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink-200 bg-surface/95 px-4 py-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-[var(--tabbar)] z-20 border-t border-ink-200 bg-surface/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2">
           <button className="btn-primary" disabled={busy} onClick={() => void save()}>
             {busy ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Saqlash

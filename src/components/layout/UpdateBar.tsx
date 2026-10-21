@@ -13,7 +13,7 @@ export default function UpdateBar() {
 
   if (!ready) return null;
   return (
-    <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+    <div className="fixed inset-x-0 bottom-[calc(var(--tabbar)_+_1rem)] z-50 flex justify-center px-4">
       <div className="flex items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-sm text-white shadow-lg">
         <RefreshCw className="h-4 w-4 shrink-0" />
         <span>Yangi versiya tayyor</span>

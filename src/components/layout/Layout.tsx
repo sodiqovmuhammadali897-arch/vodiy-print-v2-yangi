@@ -1,7 +1,8 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { Loader } from "lucide-react";
 import Sidebar from "./Sidebar";
+import TabBar from "./TabBar";
 import Topbar from "./Topbar";
 import ErrorBoundary from "../ErrorBoundary";
 import PushBanner from "./PushBanner";
@@ -12,20 +13,25 @@ import { useActivityHeartbeat } from "../../lib/activityTracking";
 import { useWarmup } from "../../lib/warmup";
 
 export default function Layout() {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const { user, staff } = useAuth();
   const location = useLocation();
   useActivityHeartbeat(user?.email?.toLowerCase() || null, staff?.full_name || "");
   useWarmup();
+  // A new page starts at its top.
+  const main = useRef<HTMLElement>(null);
+  useEffect(() => {
+    main.current?.scrollTo({ top: 0 });
+  }, [location.pathname]);
   return (
     <div className="flex h-screen w-full overflow-hidden bg-ink-50">
-      <Sidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
+      <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar onOpenMobile={() => setMobileOpen(true)} />
+        <Topbar />
         <OfflineBanner />
         <UpdateBar />
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
+        <main ref={main} className="flex-1 overflow-y-auto pb-[var(--tabbar)]">
+          {/* Keyed by the page, so each opened page slides in. */}
+          <div key={location.pathname} className="page-enter mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
             {!(location.pathname === "/settings" && location.hash === "#notifications") && <PushBanner email={user?.email?.toLowerCase() || ""} />}
             <Suspense
               fallback={
@@ -41,6 +47,7 @@ export default function Layout() {
           </div>
         </main>
       </div>
+      <TabBar />
     </div>
   );
 }
