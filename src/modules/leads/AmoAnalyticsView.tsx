@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Clock3, Flame, Inbox, Layers, Link2, PhoneCall, PhoneIncoming, Target, TrendingDown, TrendingUp, Trophy, UserRound, Users, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Clock3, Flame, Inbox, Layers, Link2, PhoneCall, Target, TrendingDown, TrendingUp, Trophy, UserRound, Users, XCircle } from "lucide-react";
 import { subscribeOne, subscribeWhere } from "../../lib/firestoreDb";
 import { formatMoneyShort, initialsOf } from "../../lib/format";
 import { tashkentDay } from "../../lib/salesPeriod";
@@ -9,12 +9,12 @@ import {
   formatAvgCall,
   formatTalk,
   funnelRows,
-  minutesSince,
   sortedEntries,
   sumStats,
   type AmoStat,
   type AmoStatus,
 } from "../../lib/amoStats";
+import CallsDayReport from "./CallsDayReport";
 
 // Sotuv bo'limi: amoCRM, read only. The server pulls counts every couple of
 // minutes (meta-webhook/amocrm.js); admins see everyone and can pick a
@@ -205,11 +205,6 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
   const chartMax = Math.max(1, ...days.map((d) => (chart === "leads" ? d.leads : d.talk)));
   const chartTotal = shownDays.reduce((n, d) => n + (chart === "leads" ? d.leads : d.talk), 0);
 
-  const todayTalk = (p: AmoStat) => (p.today?.day === today ? p.today.talk_sec : 0);
-  const todayPeople = pick(isCurrent ? cur : current)
-    .filter((p) => p.amo_user_id !== 0)
-    .sort((a, b) => todayTalk(b) - todayTalk(a));
-  const maxTodayTalk = Math.max(1, ...todayPeople.map(todayTalk));
   const maxLeads = Math.max(1, ...people.map((p) => p.leads.created));
   const maxTalk = Math.max(1, ...people.map((p) => p.calls.talk_sec));
   const sources = sortedEntries(t.sources);
@@ -381,40 +376,16 @@ export default function AmoAnalyticsView({ isAdmin, email }: { isAdmin: boolean;
         </div>
       </div>
 
-      {isCurrent && todayPeople.length > 0 && (
-        <Card>
-          <CardTitle icon={<PhoneIncoming className="h-4 w-4" />} title="Bugun · menejerlar faolligi" hint="amoCRM dagi qo'ng'iroqlar bo'yicha. Gaplashgan — javob berilgan qo'ng'iroqdagi alohida raqamlar." />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {todayPeople.map((p) => {
-              const td = p.today && p.today.day === today ? p.today : null;
-              const ago = minutesSince(td?.last || null, now);
-              const active = ago !== null && ago <= 15;
-              return (
-                <div key={p.amo_user_id} className="rounded-2xl border border-ink-100 bg-ink-50/50 p-4 transition hover:border-ink-200 hover:shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <Avatar name={p.name} i={colorIndex.get(p.amo_user_id) || 0} size={38} live={active} />
-                    <div className="min-w-0">
-                      <div className="truncate font-semibold text-ink-900">{p.name}</div>
-                      <div className={`text-[11px] font-semibold ${active ? "text-emerald-600 dark:text-emerald-400" : "text-ink-400"}`}>
-                        {ago === null ? "bugun qo'ng'iroq yo'q" : active ? "hozir faol" : `${formatTalk(ago * 60)} jim`}
-                        {td?.last ? ` · oxirgi ${td.last}` : ""}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <Metric k="Gaplashgan" v={String(td?.talked || 0)} />
-                    <Metric k="Qo'ng'iroq" v={String(td?.total || 0)} sub={td && td.total - td.answered ? `${td.total - td.answered} javobsiz` : undefined} />
-                    <Metric k="Suhbat" v={formatTalk(td?.talk_sec || 0)} />
-                  </div>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink-200/70">
-                    <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-sky-500 transition-all" style={{ width: `${((td?.talk_sec || 0) / maxTodayTalk) * 100}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
+      <CallsDayReport
+        people={pick(cur)}
+        month={month}
+        today={today}
+        now={now}
+        isAdmin={isAdmin}
+        email={email}
+        host={status.host}
+        avatar={(name, user, size, live) => <Avatar name={name} i={colorIndex.get(user) || 0} size={size} live={live} />}
+      />
 
       {isCurrent && <TasksToday rows={tasks.filter((r) => !(isAdmin && userFilter !== "all" && String(r.amo_user_id) !== userFilter))} colorIndex={colorIndex} />}
 
@@ -691,16 +662,6 @@ function Kpi({ icon, tone, label, value, hint }: { icon: React.ReactNode; tone: 
       </div>
       <div className="mt-2 font-display text-4xl font-extrabold tabular-nums tracking-tight text-ink-900">{value}</div>
       <div className="mt-1 text-xs text-ink-500">{hint}</div>
-    </div>
-  );
-}
-
-function Metric({ k, v, sub }: { k: string; v: string; sub?: string }) {
-  return (
-    <div className="min-w-0">
-      <div className="truncate text-[11px] font-medium text-ink-500">{k}</div>
-      <div className="font-display text-lg font-extrabold leading-tight tabular-nums text-ink-900">{v}</div>
-      {sub && <div className="text-[10px] text-amber-600 dark:text-amber-400">{sub}</div>}
     </div>
   );
 }

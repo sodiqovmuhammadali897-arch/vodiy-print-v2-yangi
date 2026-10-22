@@ -1,8 +1,64 @@
 // Counts the server writes from amoCRM (meta-webhook/amocrm.js), one doc
 // per amoCRM user per month, and how the "amoCRM tahlil" tab adds them up.
 
-export type AmoDay = { leads: number; calls: number; talk_sec: number };
-export type AmoToday = { day: string; total: number; answered: number; talk_sec: number; talked: number; first: string | null; last: string | null };
+// A day of one manager. The fields after talk_sec come from the detailed
+// call report (meta-webhook/amoCalls.js); older docs don't have them.
+export type AmoDayDetail = {
+  first?: string | null;
+  last?: string | null;
+  answered?: number;
+  talked?: number; // people (phone numbers) talked to
+  leads_talked?: number;
+  gaps?: number; // pauses of 30+ minutes between calls
+  missed_in?: number;
+  longest?: number;
+};
+export type AmoDay = { leads: number; calls: number; talk_sec: number } & AmoDayDetail;
+export type AmoMissed = { at: string; phone: string; lead_id: number | string | null; lead_name: string; waiting_min: number };
+export type AmoNewLeads = {
+  count: number;
+  called: number;
+  avg_first_min: number | null;
+  waiting: { id: number; name: string; source: string; created: string; wait_min: number }[];
+};
+export type AmoToday = {
+  day: string;
+  total: number;
+  answered: number;
+  talk_sec: number;
+  talked: number;
+  first: string | null;
+  last: string | null;
+  in?: number;
+  out?: number;
+  missed_in?: number;
+  longest?: number;
+  leads_talked?: number;
+  gaps?: number;
+  hours?: Record<string, number>;
+  new_leads?: AmoNewLeads;
+  missed_open?: AmoMissed[];
+  missed_returned?: number;
+  missed_back_min?: number;
+};
+// One call (amo_calls), written by the server for the last 31 days.
+export type AmoCall = {
+  id: string;
+  day: string;
+  at: string;
+  hm: string;
+  amo_user_id: number;
+  manager: string;
+  staff_email: string | null;
+  dir: "in" | "out";
+  duration: number;
+  answered: boolean;
+  phone: string;
+  contact: string;
+  lead_id: number | string | null;
+  lead_name: string;
+  stage: string;
+};
 export type AmoStat = {
   id: string;
   month: string; // YYYY-MM
@@ -117,3 +173,61 @@ export function minutesSince(hm: string | null, now: Date): number | null {
   const [h, m] = hm.split(":").map(Number);
   return Math.max(0, nowMin - (h * 60 + m));
 }
+
+// A manager's row for one day of the call report: today's live numbers,
+// or the day from the month's daily record.
+export type DayRow = {
+  user: number;
+  name: string;
+  first: string | null;
+  last: string | null;
+  total: number;
+  answered: number;
+  talked: number;
+  leads_talked: number;
+  talk_sec: number;
+  longest: number;
+  gaps: number;
+};
+export function dayRows(people: AmoStat[], day: string): DayRow[] {
+  const rows: DayRow[] = [];
+  for (const p of people) {
+    if (!p.amo_user_id) continue;
+    const t = p.today && p.today.day === day ? p.today : null;
+    const d = t ? { ...t, calls: t.total } : p.daily?.[day];
+    if (!d || !(d.calls || 0)) continue;
+    rows.push({
+      user: p.amo_user_id,
+      name: p.name,
+      first: d.first ?? null,
+      last: d.last ?? null,
+      total: d.calls || 0,
+      answered: d.answered ?? 0,
+      talked: d.talked ?? 0,
+      leads_talked: d.leads_talked ?? 0,
+      talk_sec: d.talk_sec || 0,
+      longest: d.longest ?? 0,
+      gaps: d.gaps ?? 0,
+    });
+  }
+  return rows.sort((a, b) => b.talk_sec - a.talk_sec);
+}
+
+// Calls per hour of the working day, per manager: { user: { "09": 4, … } }.
+export function hourGrid(calls: AmoCall[]): Map<number, Record<string, number>> {
+  const out = new Map<number, Record<string, number>>();
+  for (const c of calls) {
+    const h = c.hm.slice(0, 2);
+    const row = out.get(c.amo_user_id) || {};
+    row[h] = (row[h] || 0) + 1;
+    out.set(c.amo_user_id, row);
+  }
+  return out;
+}
+
+// "08:52" or later than the start of the working day.
+export const LATE_START = "09:30";
+export const isLateStart = (first: string | null) => Boolean(first && first > LATE_START);
+
+// "2:13" — minutes and seconds.
+export const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, "0")}`;

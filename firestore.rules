@@ -218,6 +218,12 @@ service cloud.firestore {
       allow read: if isAdmin() || (isStaff() && resource.data.staff_email == email());
       allow write: if false;
     }
+    // amoCRM calls one by one, last 31 days (meta-webhook/amocrm.js): the
+    // same as the counts — admins all, an employee only their own.
+    match /amo_calls/{id} {
+      allow read: if isAdmin() || (isStaff() && resource.data.staff_email == email());
+      allow write: if false;
+    }
     // amoCRM tasks per manager and month (meta-webhook/amocrm.js), for the
     // KPI; the missed-task memory is server-only.
     match /amo_tasks/{id} {

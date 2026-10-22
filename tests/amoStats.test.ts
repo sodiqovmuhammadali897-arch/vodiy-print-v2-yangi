@@ -41,3 +41,27 @@ describe("amoCRM stats", () => {
     expect(minutesSince("11:48", new Date("2026-10-01T07:00:00Z"))).toBe(12); // 12:00 Tashkent
   });
 });
+
+describe("amoCRM call report", () => {
+  it("builds a day's manager rows from today or the daily record", async () => {
+    const { dayRows } = await import("../src/lib/amoStats");
+    const p = stat(7, {
+      name: "Dilnoza",
+      today: { day: "2026-10-22", total: 58, answered: 46, talk_sec: 6480, talked: 31, first: "08:52", last: "18:41", leads_talked: 22, gaps: 1, longest: 665 },
+      daily: { "2026-10-21": { leads: 3, calls: 40, talk_sec: 3000, first: "09:41", talked: 20, leads_talked: 12, answered: 30, gaps: 2 } },
+    });
+    const empty = stat(8, { daily: {} });
+    expect(dayRows([p, empty], "2026-10-22")).toEqual([
+      { user: 7, name: "Dilnoza", first: "08:52", last: "18:41", total: 58, answered: 46, talked: 31, leads_talked: 22, talk_sec: 6480, longest: 665, gaps: 1 },
+    ]);
+    expect(dayRows([p], "2026-10-21")[0]).toMatchObject({ first: "09:41", total: 40, talked: 20, leads_talked: 12, gaps: 2, last: null });
+  });
+
+  it("counts calls per hour and spots a late start", async () => {
+    const { hourGrid, isLateStart, mmss } = await import("../src/lib/amoStats");
+    const c = (user: number, hm: string) => ({ amo_user_id: user, hm }) as never;
+    expect(hourGrid([c(7, "09:05"), c(7, "09:40"), c(8, "10:00")]).get(7)).toEqual({ "09": 2 });
+    expect([isLateStart("09:30"), isLateStart("09:31"), isLateStart(null)]).toEqual([false, true, false]);
+    expect(mmss(133)).toBe("2:13");
+  });
+});

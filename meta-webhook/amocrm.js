@@ -22,6 +22,7 @@
 const crypto = require("crypto");
 const push = require("./push");
 const T = require("./amoTasks");
+const C = require("./amoCalls");
 
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Tashkent
 const WON = 142;
@@ -95,12 +96,15 @@ const toCall = (n) => ({
   duration: Math.max(0, Number((n.params && n.params.duration) || 0)),
   dir: n.note_type === "call_in" ? "in" : "out",
   key: callKey(n),
+  entity: n.entity_type || null, // "l" lead, "c" contact
+  entityId: Number(n.entity_id || 0) || null,
+  phone: phoneLabel(n.params && n.params.phone),
 });
 
 // Counts for one month, one doc per amoCRM user (0 = no manager). `open`,
 // `stale` and `funnel` are the state right now; everything else is what
 // happened in the month.
-function computeStats(month, { leads, calls, now }) {
+function computeStats(month, { leads, calls, now, leadOf = () => null }) {
   const start = monthStartMs(month);
   const end = monthStartMs(nextMonth(month));
   const inMonth = (ms) => ms >= start && ms < end;
@@ -180,8 +184,41 @@ function computeStats(month, { leads, calls, now }) {
     }
   }
 
+  // Each day in detail (first/last call, people, leads, pauses …), and for
+  // today also the new leads and the missed calls not followed up.
+  const perDay = new Map();
+  for (const c of calls) {
+    if (!inMonth(c.at)) continue;
+    const k = `${c.user}|${dayOf(c.at)}`;
+    if (!perDay.has(k)) perDay.set(k, []);
+    perDay.get(k).push(c);
+  }
+  for (const [k, list] of perDay) {
+    const [user, d] = [Number(k.split("|")[0]), k.split("|")[1]];
+    const sum = C.summarizeDay(list);
+    const s = of(user);
+    Object.assign(day(s, d), { first: sum.first, last: sum.last, answered: sum.answered, talked: sum.talked, leads_talked: sum.leads_talked, gaps: sum.gaps, missed_in: sum.missed_in, longest: sum.longest });
+    if (d === today) s.today = { ...s.today, ...sum };
+  }
+  if (isCurrent) {
+    for (const [user, nl] of C.newLeads(leads, calls, today, now, leadOf)) of(user).today.new_leads = nl;
+    const { open, returned } = C.missedIncoming(calls, today, now);
+    const ownerOf = (c) => c.user || ((leadOf(c) || {}).user ?? 0);
+    for (const m of open) {
+      const t = of(ownerOf(m)).today;
+      const l = leadOf(m);
+      (t.missed_open = t.missed_open || []).push({ at: hmOf(m.at), phone: m.phone || "", lead_id: l ? l.id : null, lead_name: l ? l.name || "" : "", waiting_min: Math.round(m.waiting / 60000) });
+    }
+    for (const r of returned) {
+      const t = of(ownerOf(r)).today;
+      t.missed_returned = (t.missed_returned || 0) + 1;
+      t.missed_back_min = (t.missed_back_min || 0) + Math.round(r.back_after / 60000);
+    }
+  }
+
   const out = new Map();
   for (const [user, s] of by) {
+    if (s.today && s.today.missed_returned) s.today.missed_back_min = Math.round(s.today.missed_back_min / s.today.missed_returned);
     s.calls.talked = s._talked.size;
     s.today.talked = s._todayTalked.size;
     delete s._talked;
@@ -539,11 +576,12 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     const cur = monthOf(now);
     const months = [cur, prevMonth(cur)];
     const leadList = [...leads.values(), ...[...unsorted.values()].filter((u) => !leads.has(u.id))];
-    const callList = [...calls.values()];
+    const leadOf = C.leadIndex(leadList);
+    const callList = [...calls.values()].map((c) => ({ ...c, lead: (leadOf(c) || {}).id ?? null }));
     const batch = db.batch();
     let changed = 0;
     for (const month of months) {
-      const stats = computeStats(month, { leads: leadList, calls: callList, now });
+      const stats = computeStats(month, { leads: leadList, calls: callList, now, leadOf });
       for (const [user, s] of stats) {
         const id = `${month}_${user}`;
         const doc = {
@@ -562,6 +600,149 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     }
     if (changed) await batch.commit();
     return changed;
+  };
+
+  // Every call of the last 31 days, one doc each (amo_calls), for the
+  // call-by-call list on the page: who, when, which way, how long, the
+  // customer and the lead's stage. Only new or changed calls are written.
+  const CALL_DAYS = 31;
+  const writeCalls = async (now) => {
+    const from = now - CALL_DAYS * 86400000;
+    const today = dayOf(now);
+    const leadOf = C.leadIndex([...leads.values()]);
+    const recent = [...calls.values()].filter((c) => c.at >= from);
+    await loadContacts(
+      recent.filter((c) => dayOf(c.at) === today && c.entityId).map((c) => ({ entity: c.entity === "c" ? "contacts" : "leads", entityId: c.entityId })),
+      now,
+    );
+    let batch = db.batch();
+    let inBatch = 0;
+    let changed = 0;
+    for (const c of recent) {
+      const l = leadOf(c);
+      const contactId = c.entity === "c" ? c.entityId : l ? l.contact : null;
+      const ct = contactId ? contacts.get(contactId) : null;
+      const st = l ? statuses[`${l.pipeline}:${l.status}`] : null;
+      const doc = {
+        day: dayOf(c.at),
+        at: new Date(c.at).toISOString(),
+        hm: hmOf(c.at),
+        amo_user_id: c.user,
+        manager: c.user ? (users.get(c.user) || {}).name || `#${c.user}` : "",
+        staff_email: staffByUser.get(c.user) || null,
+        dir: c.dir,
+        duration: c.duration,
+        answered: c.duration > 0,
+        phone: c.phone || (ct && ct.phone) || "",
+        contact: (ct && ct.name) || "",
+        lead_id: l ? l.id : null,
+        lead_name: l ? l.name || "" : "",
+        stage: !l ? "" : l.status === WON ? "Yutildi" : l.status === LOST ? "Yo'qotildi" : st ? st.name : "",
+      };
+      const id = `c_${String(c.id).replace(/[^A-Za-z0-9_-]/g, "_")}`.slice(0, 200);
+      const json = JSON.stringify(doc);
+      if (written.get(`k:${id}`) === json) continue;
+      batch.set(db.collection("amo_calls").doc(id), doc);
+      written.set(`k:${id}`, json);
+      changed++;
+      if (++inBatch >= 400) {
+        await batch.commit();
+        batch = db.batch();
+        inBatch = 0;
+      }
+    }
+    if (inBatch) await batch.commit();
+    return changed;
+  };
+
+  // Telegram notices about calls (amo_meta/call_alerts keeps what was sent):
+  // • a missed incoming call nobody followed up in 15 minutes → its manager
+  //   and the admins (08:00–20:00, calls of the last two hours only);
+  // • 09:30 — managers without a single call yet → the admins (not on
+  //   Sundays, holidays or approved leave);
+  // • 19:00 — the day in short → the admins.
+  let alerts = null;
+  const toAdmins = async (text) => {
+    for (const info of staffInfo.values()) if (info.admin && info.chat) await notify("sendMessage", { chat_id: info.chat, text }).catch(() => undefined);
+    await push.toAdmins("admin", text, "/leads");
+  };
+  const callAlerts = async (now) => {
+    if (!notify) return;
+    const today = dayOf(now);
+    const hm = hmOf(now);
+    if (!alerts || alerts.day !== today) {
+      const snap = await db.collection("amo_meta").doc("call_alerts").get();
+      const data = snap.exists ? snap.data() : {};
+      alerts = data.day === today ? { missed: {}, ...data } : { day: today, missed: {} };
+    }
+    const save = (fields) => db.collection("amo_meta").doc("call_alerts").set({ day: today, ...fields }, { merge: true });
+    const leadOf = C.leadIndex([...leads.values()]);
+    const todayCalls = [...calls.values()].filter((c) => dayOf(c.at) === today);
+    const nameOf = (user) => (users.get(user) || {}).name || (staffInfo.get(staffByUser.get(user)) || {}).name || null;
+
+    if (hm >= "08:00" && hm < "20:00") {
+      const { open } = C.missedIncoming(todayCalls, today, now);
+      const due = open.filter((m) => m.waiting >= C.MISSED_ALERT_MS && m.waiting < 2 * 3600 * 1000 && !alerts.missed[m.id]);
+      if (due.length) {
+        await loadContacts(due.map((m) => ({ entity: m.entity === "c" ? "contacts" : "leads", entityId: m.entityId })), now);
+        const sent = {};
+        for (const m of due) sent[m.id] = true;
+        await save({ missed: sent });
+        for (const m of due) {
+          alerts.missed[m.id] = true;
+          const l = leadOf(m);
+          const user = m.user || (l ? l.user : 0);
+          const email = staffByUser.get(user);
+          const info = email && staffInfo.get(email);
+          const contactId = m.entity === "c" ? m.entityId : l ? l.contact : null;
+          const ct = contactId ? contacts.get(contactId) : null;
+          const who = [ct && ct.name, m.phone || (ct && ct.phone)].filter(Boolean).join(", ") || (l && l.name) || null;
+          const text = C.missedText(m, { manager: nameOf(user), who, now });
+          if (info && info.chat && !info.admin) await notify("sendMessage", { chat_id: info.chat, text }).catch((err) => log.error("amoCRM missed-call notice failed", err.message));
+          if (email) await push.toEmail(email, "amo", text, "/leads");
+          await toAdmins(text);
+        }
+      }
+    }
+
+    if (hm >= "09:30" && hm < "11:30" && alerts.late_start !== today) {
+      alerts.late_start = today;
+      await save({ late_start: today });
+      const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+      const holiday = !(await db.collection("holidays").where("date", "==", today).get()).empty;
+      if (weekday !== 0 && !holiday) {
+        const leave = await db.collection("leave_requests").where("status", "==", "approved").get();
+        const away = new Set(leave.docs.map((d) => d.data()).filter((x) => x.fromDate <= today && today <= x.toDate).map((x) => String(x.employeeId).toLowerCase()));
+        // Managers who call: anyone with calls in the last two weeks.
+        const callers = new Set([...calls.values()].filter((c) => c.at > now - 14 * 86400000).map((c) => c.user));
+        const calledToday = new Set(todayCalls.map((c) => c.user));
+        const names = [];
+        for (const [user, email] of staffByUser) {
+          const info = staffInfo.get(email);
+          if (!callers.has(user) || calledToday.has(user) || away.has(email) || (info && info.admin)) continue;
+          names.push(nameOf(user) || email);
+        }
+        const text = C.lateStartText(names, today);
+        if (text) await toAdmins(text);
+      }
+    }
+
+    if (hm >= "19:00" && hm < "21:00" && alerts.summary !== today) {
+      alerts.summary = today;
+      await save({ summary: today });
+      const rows = [];
+      for (const [user, d] of C.byUserDay(todayCalls.map((c) => ({ ...c, lead: (leadOf(c) || {}).id ?? null })), today)) {
+        if (user) rows.push({ name: nameOf(user) || `#${user}`, ...d });
+      }
+      const nl = { count: 0, called: 0, waiting: 0 };
+      for (const s of C.newLeads([...leads.values()], [...calls.values()], today, now, leadOf).values()) {
+        nl.count += s.count;
+        nl.called += s.called;
+        nl.waiting += s.waiting.length;
+      }
+      const text = C.daySummaryText(today, rows, { missedOpen: C.missedIncoming(todayCalls, today, now).open.length, newLeads: nl });
+      if (text) await toAdmins(text);
+    }
   };
 
   const writeStatus = (fields) =>
@@ -594,6 +775,13 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       leadsSince = startedAt;
       notesSince = startedAt;
       const changed = await writeStats(now);
+      let callDocs = 0;
+      try {
+        callDocs = await writeCalls(now);
+        await callAlerts(now);
+      } catch (err) {
+        log.error("amoCRM calls/alerts failed", err.message || err);
+      }
       let taskDocs = 0;
       try {
         const moved = await pullTasks(tasksSince, now);
@@ -629,6 +817,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
         calls_loaded: calls.size,
         calls_this_month: [...calls.values()].filter((c) => monthOf(c.at) === month).length,
         stats_docs_written: changed,
+        call_docs_written: callDocs,
         tasks_loaded: tasks.size,
         task_docs_written: taskDocs,
         tasks_error: tasksError,
