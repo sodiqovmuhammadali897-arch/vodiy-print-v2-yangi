@@ -4,6 +4,7 @@
 // /webhooks/telegram; Claude reads the question, calls the read-only
 // Firestore tools below for real numbers, and the answer is posted as a
 // reply. Only chats listed in ASSISTANT_CHAT_IDS are ever answered.
+const ai = require("./ai");
 const crypto = require("crypto");
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
@@ -409,6 +410,11 @@ const TOOL_VISIT = { product_price_sheet: "sales", receivables: "fin", cash_flow
 // proposed change, and emit the AI Ofis events.
 const handleQuestion = async (db, { chatId, threadId = null, replyTo, text, context = "", source = "telegram" }) => {
   const thread = threadId ? { message_thread_id: threadId } : {};
+  if (!ai.on("hisobchi")) {
+    const off = ai.offText("hisobchi");
+    await telegram("sendMessage", { chat_id: chatId, ...thread, text: off, reply_parameters: { message_id: replyTo, allow_sending_without_reply: true } });
+    return { reply: off, pending: [] };
+  }
   await emitEvent(db, { agent: "bot", kind: "question", text: clip(text, 160), bubble: clip(text, 90), source });
   await telegram("sendChatAction", { chat_id: chatId, action: "typing", ...thread });
   const ctx = { chatId, text, pending: [], toolsUsed: [], files: [] };
@@ -603,6 +609,15 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
       let owner = null;
       for (const [key, agent] of owners) {
         if (agent && msg.message_thread_id && msg.message_thread_id === (await groups.topicId(key))) owner = agent;
+      }
+      if (owner && !ai.on(owner === marketing ? "marketolog" : "bosh")) {
+        await telegram("sendMessage", {
+          chat_id: msg.chat.id,
+          message_thread_id: msg.message_thread_id,
+          text: ai.offText(owner === marketing ? "marketolog" : "bosh"),
+          reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true },
+        });
+        return;
       }
       if (owner) {
         const q = botUsername ? text.replace(new RegExp(`@${botUsername}`, "ig"), "").trim() : text;

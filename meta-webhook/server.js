@@ -47,6 +47,7 @@ initializeApp({ credential: cert(require(SERVICE_ACCOUNT_PATH)) });
 const db = getFirestore();
 // Phone notifications alongside the Telegram ones — see push.js.
 require("./push").init(db);
+const ai = require("./ai");
 
 const app = express();
 // Keep the raw body around (needed to check Meta's signature) while
@@ -195,7 +196,7 @@ app.post("/webhooks/meta-leads", async (req, res) => {
   res.sendStatus(200);
 
   if (req.body && req.body.object === "instagram") {
-    instagram.handleWebhook(req.body);
+    if (ai.on("instagram")) instagram.handleWebhook(req.body);
     return;
   }
 
@@ -358,12 +359,13 @@ app.listen(PORT, () => {
   void assistant.start();
   if (groups) groups.ensureTopics().catch((err) => console.error("Telegram topics check failed", err.message));
   if (hr) void hr.start();
-  void instagram.start();
-  if (marketing) void marketing.start().catch((err) => console.error("Marketolog start failed", err));
-  if (chief) void chief.start().catch((err) => console.error("Bosh agent start failed", err));
+  console.log(`AI agents on: ${ai.enabled().join(", ") || "none"}`);
+  if (ai.on("instagram")) void instagram.start();
+  if (marketing && ai.on("marketolog")) void marketing.start().catch((err) => console.error("Marketolog start failed", err));
+  if (chief && ai.on("bosh")) void chief.start().catch((err) => console.error("Bosh agent start failed", err));
   if (tasks) tasks.start();
   if (bonus) bonus.start();
   salesKpi.start();
   void amocrm.start().catch((err) => console.error("amoCRM start failed", err));
-  if (targetolog) void targetolog.start().catch((err) => console.error("Targetolog start failed", err));
+  if (targetolog && ai.on("targetolog")) void targetolog.start().catch((err) => console.error("Targetolog start failed", err));
 });

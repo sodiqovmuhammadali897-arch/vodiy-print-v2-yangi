@@ -4,6 +4,7 @@
 // score, what to fix, and ready post texts. Results are kept in
 // content_analyses/{id} for the Kontent page. Only the picture is judged —
 // the sound is not.
+const ai = require("./ai");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -158,6 +159,7 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
   const claude =
     callClaude ||
     (async (body) => {
+      if (!ai.on("kontent")) throw new Error(ai.offText("kontent"));
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
@@ -315,6 +317,10 @@ const create = (db, { telegram = tgDefault, callClaude = null, staffFrom = staff
     if (!v) return false;
     const chat = { chat_id: msg.chat.id, ...(msg.is_topic_message ? { message_thread_id: msg.message_thread_id } : {}) };
     const reply = (text, extra = {}) => telegram("sendMessage", { ...chat, text, reply_parameters: { message_id: msg.message_id, allow_sending_without_reply: true }, link_preview_options: { is_disabled: true }, ...extra });
+    if (!callClaude && !ai.on("kontent")) {
+      await reply(ai.offText("kontent"));
+      return true;
+    }
     if (!ANTHROPIC_API_KEY && !callClaude) {
       await reply("Video tahlili uchun AI kaliti sozlanmagan.");
       return true;
