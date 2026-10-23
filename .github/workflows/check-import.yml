@@ -13,7 +13,7 @@ on:
         description: "base64(gzip(JSON rows [i, ref, dd.mm.yyyy, [phoneHash], nameHash, brandHash, total]))"
         required: true
       inspect:
-        description: "Also print the amounts of the database orders whose total differs"
+        description: "yes = also print the database amounts of orders whose total differs; ref = print the orders found by Excel ID with their lines"
         required: false
         default: "no"
 
@@ -57,15 +57,18 @@ jobs:
                 add(byBrand, h(norm(c.company)), d.id);
               }
               for (const d of bs.docs) add(byBrand, h(norm(d.data().name)), d.data().customer_id);
-              const refs = new Set(), byCustDay = new Map();
+              const refs = new Set(), byCustDay = new Map(), refOrders = new Map();
               for (const d of os.docs) {
                 const o = d.data();
-                for (const r of String(o.historical_ref || "").split(/,\s*/)) if (r) refs.add(r.toLowerCase());
+                for (const r of String(o.historical_ref || "").split(/,\s*/)) if (r) { refs.add(r.toLowerCase()); add(refOrders, r.toLowerCase(), d.id); }
                 const day = String(o.order_date || o.created_at || "").slice(0, 10);
                 add(byCustDay, `${o.customer_id}|${day}`, Number(o.total_amount || 0));
                 add(orderAt, `${o.customer_id}|${day}`, d.id);
               }
-              for (const d of ops.docs) { const m = String(d.data().note || "").match(/Excel ID:\s*([^\s·]+)/i); if (m) refs.add(m[1].toLowerCase()); }
+              const refOf = (l) => { const m = String(l.note || "").match(/Excel ID:\s*([^\s·]+)/i); return m ? m[1] : ""; };
+              for (const d of ops.docs) { const r = refOf(d.data()); if (r) { refs.add(r.toLowerCase()); add(refOrders, r.toLowerCase(), d.data().order_id); } }
+              const paysOf = new Map();
+              for (const d of pays.docs) { const p = d.data(); if (!paysOf.has(p.order_id)) paysOf.set(p.order_id, []); paysOf.get(p.order_id).push(Number(p.amount || 0)); }
               console.log(`DB customers=${cs.size} orders=${os.size} brands=${bs.size} refs=${refs.size}`);
               const out = [];
               for (const [i, ref, date, phones, nameH, brandH, total] of rows) {
@@ -87,6 +90,16 @@ jobs:
                   if (!totals) continue;
                   seen.push(...totals);
                   ord = [...totals].some((t) => Math.abs(t - total) <= Math.max(1000, total * 0.02)) ? "M" : ord === "M" ? "M" : "D";
+                }
+                // ref: the orders behind an Excel ID, with each line's Excel ID, quantity and amount
+                if (ord === "R" && process.env.INSPECT === "ref") {
+                  for (const oid of refOrders.get(String(ref).toLowerCase()) || []) {
+                    const doc = os.docs.find((x) => x.id === oid);
+                    if (!doc) continue;
+                    const o = doc.data();
+                    const ls = (linesOf.get(oid) || []).map((l) => `${refOf(l) || "-"}|${l.quantity}|${l.total}`).join(";");
+                    console.log(`REF ${i} ${oid} day=${String(o.order_date || "").slice(0, 10)} hist=${Boolean(o.is_historical)} total=${o.total_amount} sub=${o.subtotal} disc=${o.discount_amount || 0} paid=${o.paid_amount} rem=${o.remaining_amount} pays=${(paysOf.get(oid) || []).join("/")} lines=${ls}`);
+                  }
                 }
                 // amounts only (no personal data): what the database has that day
                 out.push(`${i}${cust}${ord}${ord === "D" ? ":" + seen.map((t) => Math.round(t)).join("/") : ""}`);
