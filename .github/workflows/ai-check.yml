@@ -1,0 +1,44 @@
+name: AI check (read only)
+
+# Run by hand after topping up the Anthropic balance: sends one tiny request
+# with the server's key to each model the agents use and prints only the
+# HTTP status and error text (never the key), whether an OpenAI key is set,
+# and the last AI-related lines of the server log.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Anthropic with the server's key
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            cat > /tmp/vp-ai-check.js <<'JS'
+            const fs = require("fs");
+            const env = Object.fromEntries(
+              fs.readFileSync("/opt/meta-webhook/.env", "utf8").split("\n").filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]),
+            );
+            const key = env.ANTHROPIC_API_KEY || "";
+            console.log(`anthropic key set: ${Boolean(key)} · openai key set: ${Boolean(env.OPENAI_API_KEY)}`);
+            (async () => {
+              for (const model of [env.ASSISTANT_MODEL || "claude-sonnet-5", env.CHIEF_MODEL || "claude-opus-5"]) {
+                const res = await fetch("https://api.anthropic.com/v1/messages", {
+                  method: "POST",
+                  headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+                  body: JSON.stringify({ model, max_tokens: 8, messages: [{ role: "user", content: "Salom de" }] }),
+                });
+                const data = await res.json().catch(() => ({}));
+                console.log(`${model}: HTTP ${res.status} ${res.ok ? "OK — " + JSON.stringify((data.content || [])[0]?.text || "") : (data.error && data.error.type) + ": " + (data.error && data.error.message)}`);
+              }
+            })().catch((e) => console.log("check failed", e.message));
+            JS
+            node /tmp/vp-ai-check.js
+            rm -f /tmp/vp-ai-check.js
+            echo "=== AI-related server log, last 24 h ==="
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S journalctl -u meta-webhook --no-pager --since "24 hours ago" 2>/dev/null | grep -iE "anthropic|credit|Bosh agent|AI agents on" | tail -n 20
