@@ -110,6 +110,45 @@ jobs:
               const share = (k) => Math.round((sums.slice(0, k).reduce((s, x) => s + x, 0) / (tot || 1)) * 1000) / 10;
               const buyers = per.size, repeat = [...per.values()].filter((r) => r.n >= 2).length;
               console.log(`buyers=${buyers} repeat_buyers=${repeat} orders_per_buyer=${(live.length / (buyers || 1)).toFixed(2)} top10_share=${share(10)}% top20_share=${share(20)}% top50_share=${share(50)}% median_buyer_sum=${Math.round(sums[Math.floor(sums.length / 2)] || 0)}`);
+              // Repeat buying by when the customer first came (B2B buys every
+              // 6–12 months, so only older customers can show it), the gap
+              // between the first and the second order, and how many are due
+              // again now (last order 5–11 months ago).
+              const datesOf = new Map();
+              for (const o of live) if (o.customer_id) {
+                const d = String(o.order_date || o.created_at || "").slice(0, 10);
+                if (!datesOf.has(o.customer_id)) datesOf.set(o.customer_id, new Set());
+                datesOf.get(o.customer_id).add(d);
+              }
+              const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+              const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400e3);
+              const cohort = new Map(), gaps = [];
+              let due = 0, dueRecent = 0;
+              for (const set of datesOf.values()) {
+                const ds = [...set].sort();
+                const first = ds[0], m = first.slice(0, 7);
+                const back = ds.length > 1 && daysBetween(ds[0], ds[ds.length - 1]) >= 7;
+                bump(cohort, m, { buyers: 1, came_back: back ? 1 : 0 });
+                if (back) gaps.push(daysBetween(ds[0], ds.find((d) => daysBetween(ds[0], d) >= 7)));
+                const sinceLast = daysBetween(ds[ds.length - 1], today);
+                if (sinceLast >= 150 && sinceLast <= 330) due++;
+                if (sinceLast >= 60 && sinceLast < 150) dueRecent++;
+              }
+              show("cohort by first order month", cohort);
+              gaps.sort((a, b) => a - b);
+              const q = (p) => gaps[Math.floor((gaps.length - 1) * p)] || 0;
+              console.log(`second order gap days: n=${gaps.length} p25=${q(0.25)} median=${q(0.5)} p75=${q(0.75)}`);
+              for (const [label, minAge] of [["6+ months", 180], ["9+ months", 270], ["12+ months", 365]]) {
+                let b = 0, back = 0;
+                for (const set of datesOf.values()) {
+                  const ds = [...set].sort();
+                  if (daysBetween(ds[0], today) < minAge) continue;
+                  b++;
+                  if (ds.length > 1 && daysBetween(ds[0], ds[ds.length - 1]) >= 7) back++;
+                }
+                console.log(`customers first seen ${label} ago: ${b}, came back: ${back} (${b ? Math.round((back / b) * 100) : 0}%)`);
+              }
+              console.log(`due again now (last order 5-11 months ago): ${due}; last order 2-5 months ago: ${dueRecent}`);
               const lastBuy = new Map();
               for (const r of per.values()) bump(lastBuy, month(r.last), { buyers: 1 });
               show("buyers by month of their last order", lastBuy);
