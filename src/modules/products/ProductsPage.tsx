@@ -141,6 +141,7 @@ export default function ProductsPage() {
                     setSelectedId(p.id);
                     setCustomerView(false);
                   }}
+                  onSaved={() => void load()}
                 />
               ));
 

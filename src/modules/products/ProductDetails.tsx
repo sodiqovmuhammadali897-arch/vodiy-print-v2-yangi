@@ -4,7 +4,7 @@ import ProductHeader from "./ProductHeader";
 import ProductSpecs from "./ProductSpecs";
 import ProductPricingTable from "./ProductPricingTable";
 import ProductSupplierCard from "./ProductSupplierCard";
-import ProductDescription from "./ProductDescription";
+import SalesGuide from "./SalesGuide";
 import ProductSalesStats from "./ProductSalesStats";
 import ProductRecentOrders from "./ProductRecentOrders";
 
@@ -19,6 +19,7 @@ type Props = {
   onToggleArchive: () => void;
   onDelete: () => void;
   onSelectUpsell: (p: Product) => void;
+  onSaved?: () => void;
 };
 
 export default function ProductDetails({
@@ -32,6 +33,7 @@ export default function ProductDetails({
   onToggleArchive,
   onDelete,
   onSelectUpsell,
+  onSaved,
 }: Props) {
   const [primaryVendor, setPrimaryVendor] = useState<ProductVendor | null>(null);
 
@@ -49,14 +51,14 @@ export default function ProductDetails({
         onDelete={onDelete}
       />
 
+      <SalesGuide product={product} allProducts={allProducts} canEdit={canEdit} onSelectUpsell={onSelectUpsell} onSaved={onSaved} />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ProductSpecs product={product} />
         <ProductSupplierCard productId={product.id} canEdit={canEdit} onPrimaryChange={setPrimaryVendor} />
       </div>
 
       <ProductPricingTable product={product} />
-
-      <ProductDescription product={product} allProducts={allProducts} onSelectUpsell={onSelectUpsell} />
 
       <ProductSalesStats product={product} />
       <ProductRecentOrders product={product} />

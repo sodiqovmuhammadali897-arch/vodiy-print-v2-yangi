@@ -237,6 +237,9 @@ export type Product = {
   sales_notes: string;
   manager_tip: string;
   upsell_product_ids: string[];
+  // SPIN questions for sellers (src/lib/salesGuide.ts); empty → the
+  // suggestion of the product's kind.
+  spin?: { s: string[]; p: string[]; i: string[]; n: string[] } | null;
   is_active: boolean;
   archived_at: string | null;
   created_at: string;
