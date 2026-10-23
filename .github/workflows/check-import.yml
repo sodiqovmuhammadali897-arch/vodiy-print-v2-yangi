@@ -13,7 +13,7 @@ on:
         description: "base64(gzip(JSON rows [i, ref, dd.mm.yyyy, [phoneHash], nameHash, brandHash, total]))"
         required: true
       inspect:
-        description: "yes = also print the database amounts of orders whose total differs; ref = print the orders found by Excel ID with their lines"
+        description: "yes = also print the database amounts of orders whose total differs; ref = print the orders found by Excel ID with their lines; near = the customer orders within 45 days"
         required: false
         default: "no"
 
@@ -99,6 +99,17 @@ jobs:
                     const o = doc.data();
                     const ls = (linesOf.get(oid) || []).map((l) => `${refOf(l) || "-"}|${l.quantity}|${l.total}`).join(";");
                     console.log(`REF ${i} ${oid} day=${String(o.order_date || "").slice(0, 10)} hist=${Boolean(o.is_historical)} total=${o.total_amount} sub=${o.subtotal} disc=${o.discount_amount || 0} paid=${o.paid_amount} rem=${o.remaining_amount} pays=${(paysOf.get(oid) || []).join("/")} lines=${ls}`);
+                  }
+                }
+                // near: the customer's orders within 45 days of the row's date (amounts only)
+                if (process.env.INSPECT === "near" && iso) {
+                  for (const id of ids) for (const d of os.docs) {
+                    const o = d.data();
+                    if (o.customer_id !== id) continue;
+                    const day = String(o.order_date || o.created_at || "").slice(0, 10);
+                    if (Math.abs(Date.parse(day) - Date.parse(iso)) > 45 * 86400e3) continue;
+                    const ls = (linesOf.get(d.id) || []).map((l) => `${l.quantity}x${l.unit_price}=${l.total}`).join(";");
+                    console.log(`NEAR ${i} ${d.id} day=${day} hist=${Boolean(o.is_historical)} total=${o.total_amount} status=${o.status} lines=${ls}`);
                   }
                 }
                 // amounts only (no personal data): what the database has that day
