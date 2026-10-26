@@ -39,9 +39,10 @@ import { backfillOrderBrand } from "../../lib/brandSync";
 import { nextOrderNumber } from "../../lib/numbering";
 import RequireCustomerModal from "./RequireCustomerModal";
 import OrdersSidePanel from "./OrdersSidePanel";
-import { formatDate, formatMoneyShort, initialsOf } from "../../lib/format";
+import { formatDate, formatDateTime, formatMoneyShort, initialsOf } from "../../lib/format";
 import { remainingTimeLabel } from "../../lib/remainingTime";
 import { useAuth } from "../../lib/AuthContext";
+import { clearDraft, draftSummary, readDraft } from "../../lib/orderDraft";
 import { useOrderScope } from "../../lib/orderScope";
 import { isOrderNumber, orderNumberQuery, textMatches } from "../../lib/search";
 
@@ -86,6 +87,13 @@ export default function Orders() {
   const { user, staff, can } = useAuth();
   const canEdit = can("orders", "edit");
   const canDelete = can("orders", "delete");
+  // A new order left half-typed in the wizard (lib/orderDraft.ts).
+  const [draft, setDraft] = useState(() => readDraft(user?.email || "", "new"));
+  const dropDraft = () => {
+    if (!confirm("Tugallanmagan buyurtmadagi barcha kiritilgan ma'lumotlar o'chadi. Tasdiqlaysizmi?")) return;
+    clearDraft(user?.email || "", "new");
+    setDraft(null);
+  };
   const scope = useOrderScope();
   const [orders, setOrders] = useState<Order[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -437,6 +445,23 @@ export default function Orders() {
           </button>
         )}
       </div>
+
+      {draft && canEdit && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span>
+            <b>Tugallanmagan yangi buyurtma</b> — {draftSummary(draft)} ·{" "}
+            {formatDateTime(draft.saved_at)}
+          </span>
+          <span className="flex shrink-0 items-center gap-3">
+            <button type="button" className="font-semibold text-ink-500 hover:underline" onClick={dropDraft}>
+              O'chirish
+            </button>
+            <button type="button" className="btn-primary" onClick={() => navigate("/orders/new")}>
+              Davom ettirish
+            </button>
+          </span>
+        </div>
+      )}
 
       {created.length > 0 && (
         <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

@@ -17,7 +17,8 @@ import { saveOrder } from "../../../lib/orderService";
 import { splitOrder } from "../../../lib/orderSplit";
 import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
 import { computeOrderTotals, discountShare } from "../../../lib/orderCalculations";
-import { formatMoney } from "../../../lib/format";
+import { formatDateTime, formatMoney } from "../../../lib/format";
+import { clearDraft, readDraft, writeDraft } from "../../../lib/orderDraft";
 import { useAuth } from "../../../lib/AuthContext";
 import type { Staff } from "../../../lib/permissions";
 import CustomerStep from "./CustomerStep";
@@ -101,6 +102,12 @@ export default function OrderWizard() {
   const [payload, setPayload] = useState<OrderPayload>(emptyPayload());
   const [products, setProducts] = useState<WizardProduct[]>([]);
   const [payments, setPayments] = useState<WizardPayment[]>([]);
+  // What was typed is kept on the device (lib/orderDraft.ts) and brought
+  // back when the wizard opens again, until the order is saved.
+  const draftId = isNew ? "new" : id || "new";
+  const email = user?.email || "";
+  const ready = useRef(false);
+  const [restoredAt, setRestoredAt] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -234,11 +241,49 @@ export default function OrderWizard() {
               })),
           );
         }
+        restore();
         setLoading(false);
       }
     };
+    // A new order «for this customer» starts fresh when the kept one is for
+    // someone else; that one stays in the orders list to continue later.
+    const restore = () => {
+      const d = readDraft(email, draftId);
+      if (d && !(isNew && preselectedCustomerId && d.payload.customer_id !== preselectedCustomerId)) {
+        setPayload(d.payload);
+        setProducts(d.products);
+        setPayments(d.payments);
+        setStep(d.step);
+        setRestoredAt(d.saved_at);
+      }
+      ready.current = true;
+    };
+    if (isNew) restore();
     void load();
   }, [id, isNew]);
+
+  // Written on every change (a few KB), so even leaving right after typing
+  // keeps the last letter. Only what the person changed: just opening an
+  // order to look at it keeps nothing, so a later change made elsewhere is
+  // never covered by an old copy.
+  const baseline = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready.current) return;
+    const now = JSON.stringify({ payload, products, payments });
+    if (baseline.current === null) baseline.current = now;
+    else if (now !== baseline.current) writeDraft(email, draftId, { payload, products, payments, step });
+  }, [email, draftId, payload, products, payments, step]);
+
+  const startOver = () => {
+    clearDraft(email, draftId);
+    if (!isNew) return window.location.reload();
+    setPayload(emptyPayload());
+    setProducts([]);
+    setPayments([]);
+    setStep(0);
+    setRestoredAt(null);
+    baseline.current = null;
+  };
 
   const onPayloadChange = (patch: Partial<OrderPayload>) =>
     setPayload((p) => ({ ...p, ...patch }));
@@ -303,6 +348,8 @@ export default function OrderWizard() {
         }
         saved.push(r.order_number);
       }
+      ready.current = false;
+      clearDraft(email, draftId);
       setSaving(false);
       savingRef.current = false;
       navigate(`/orders?created=${encodeURIComponent(saved.join(","))}`, { replace: true });
@@ -330,6 +377,8 @@ export default function OrderWizard() {
       setError(res.error);
       return;
     }
+    ready.current = false;
+    clearDraft(email, draftId);
     navigate(`/orders/${res.id}`, { replace: true });
   };
 
@@ -396,6 +445,17 @@ export default function OrderWizard() {
           })}
         </div>
       </div>
+
+      {restoredAt && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm text-brand-800">
+          <span>
+            Avval kiritilgan ma'lumotlar tiklandi — {formatDateTime(restoredAt)} holati. Qolgan joyidan davom eting.
+          </span>
+          <button type="button" className="shrink-0 font-semibold hover:underline" onClick={startOver}>
+            {isNew ? "Yangidan boshlash" : "Saqlangan holatga qaytarish"}
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
