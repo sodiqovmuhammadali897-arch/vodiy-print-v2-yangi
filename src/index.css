@@ -201,6 +201,9 @@ body {
   animation-duration: 0.36s;
   animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
 }
+::view-transition-group(nav-pill) {
+  animation-duration: 0.5s;
+}
 ::view-transition-old(page),
 ::view-transition-new(page) {
   animation-duration: 0.36s;
@@ -216,8 +219,8 @@ html[data-nav="push"]::view-transition-old(page) { animation-name: vtPushedBack;
 html[data-nav="push"]::view-transition-new(page) { animation-name: vtInRight; }
 html[data-nav="pop"]::view-transition-old(page) { animation-name: vtOutRight; z-index: 1; }
 html[data-nav="pop"]::view-transition-new(page) { animation-name: vtComeForward; }
-html[data-nav="fade"]::view-transition-old(page) { animation: vtFadeOut 0.14s ease-out both; }
-html[data-nav="fade"]::view-transition-new(page) { animation: vtRise 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) 0.04s both; }
+html[data-nav="fade"]::view-transition-old(page) { animation: vtFadeOut 0.28s ease-out both; }
+html[data-nav="fade"]::view-transition-new(page) { animation: vtRise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s both; }
 @keyframes vtInRight { from { transform: translateX(100%); } }
 @keyframes vtInLeft { from { transform: translateX(-100%); } }
 @keyframes vtOutLeft { to { transform: translateX(-100%); } }
@@ -225,7 +228,7 @@ html[data-nav="fade"]::view-transition-new(page) { animation: vtRise 0.24s cubic
 @keyframes vtPushedBack { to { transform: translateX(-30%); filter: brightness(0.9); } }
 @keyframes vtComeForward { from { transform: translateX(-30%); filter: brightness(0.9); } }
 @keyframes vtFadeOut { to { opacity: 0; } }
-@keyframes vtRise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes vtRise { from { opacity: 0; transform: translateY(14px); } }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
