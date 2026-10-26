@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import TransitionRouter from "./components/layout/TransitionRouter";
 import ConfigError from "./components/ui/ConfigError";
 import { isFirebaseConfigured } from "./lib/firebase";
 import { AuthProvider } from "./lib/AuthContext";
@@ -28,9 +28,9 @@ if (!isFirebaseConfigured) {
     <React.StrictMode>
       <ThemeProvider>
         <AuthProvider>
-          <BrowserRouter>
+          <TransitionRouter>
             <App />
-          </BrowserRouter>
+          </TransitionRouter>
         </AuthProvider>
       </ThemeProvider>
     </React.StrictMode>,

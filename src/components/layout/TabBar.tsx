@@ -4,6 +4,7 @@ import { CircleEllipsis } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import { pickTabs, tabOf } from "../../lib/tabBar";
 import { preloadRoute } from "../../pages";
+import { setNavTabs } from "../../lib/pageTransition";
 import { visibleNav } from "./nav";
 import MoreSheet from "./MoreSheet";
 
@@ -31,6 +32,7 @@ export default function TabBar() {
   const tabItems = tabs.map((t) => items.find((i) => i.to === t)!).filter(Boolean);
   const active = tabOf(pathname, tabs);
   const [moreOpen, setMoreOpen] = useState(false);
+  setNavTabs(tabs);
 
   // The phone's back button closes the sheet instead of leaving the page.
   useEffect(() => {
@@ -58,7 +60,7 @@ export default function TabBar() {
   return (
     <>
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-ink-200/70 bg-surface/90 backdrop-blur-xl lg:hidden"
+        className="vt-tabbar fixed inset-x-0 bottom-0 z-30 border-t border-ink-200/70 bg-surface/90 backdrop-blur-xl lg:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         aria-label="Bo'limlar"
       >

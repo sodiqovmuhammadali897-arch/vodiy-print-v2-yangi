@@ -12,6 +12,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@remix-run/router": "^1.23.3",
     "firebase": "^12.16.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",

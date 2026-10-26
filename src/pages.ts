@@ -79,7 +79,8 @@ const ROUTE_PAGE: Record<string, keyof typeof loaders> = {
   "/darslik": "DarslikPage",
   "/settings": "Settings",
 };
-export const preloadRoute = (path: string): void => {
+export const loadRoute = (path: string): Promise<unknown> => {
   const key = ROUTE_PAGE[path];
-  if (key) loaders[key]().catch(() => undefined);
+  return key ? loaders[key]().catch(() => undefined) : Promise.resolve();
 };
+export const preloadRoute = (path: string): void => void loadRoute(path);
