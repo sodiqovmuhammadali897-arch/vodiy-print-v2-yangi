@@ -1,7 +1,8 @@
 // Eski mijozlarga qo'ng'iroq.
 //
 // Every working day at 09:00 (Tashkent; not on Sundays or holidays) each
-// sales manager — staff linked to a Managerlar record with a Telegram chat —
+// sales manager — staff linked to a Managerlar record with a Telegram chat,
+// limited to RECALL_MANAGERS (names; set in deploy.yml) —
 // gets PER_DAY old customers to call, one message each: who, phone, what
 // they bought last time and when, all their orders, and what to offer now.
 // The longest-silent customers come first; a customer goes to the manager
