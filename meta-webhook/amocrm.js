@@ -104,7 +104,7 @@ const toCall = (n) => ({
 // Counts for one month, one doc per amoCRM user (0 = no manager). `open`,
 // `stale` and `funnel` are the state right now; everything else is what
 // happened in the month.
-function computeStats(month, { leads, calls, now, leadOf = () => null }) {
+function computeStats(month, { leads, calls, now, leadOf = () => null, stageOf = () => "" }) {
   const start = monthStartMs(month);
   const end = monthStartMs(nextMonth(month));
   const inMonth = (ms) => ms >= start && ms < end;
@@ -151,7 +151,10 @@ function computeStats(month, { leads, calls, now, leadOf = () => null }) {
     if (isCurrent && l.status !== WON && l.status !== LOST) {
       const s = of(l.user);
       s.leads.open++;
-      if (now - l.updated > STALE_DAYS * 86400000) s.leads.stale++;
+      if (now - l.updated > STALE_DAYS * 86400000) {
+        s.leads.stale++;
+        (s.stale_list = s.stale_list || []).push(T.leadBrief(l, stageOf));
+      }
       const k = `${l.pipeline}:${l.status}`;
       s.funnel[k] = (s.funnel[k] || 0) + 1;
     }
@@ -224,6 +227,7 @@ function computeStats(month, { leads, calls, now, leadOf = () => null }) {
     delete s._talked;
     delete s._todayTalked;
     if (!isCurrent) s.today = null;
+    if (s.stale_list) s.stale_list = s.stale_list.sort((a, b) => b.price - a.price).slice(0, T.LIST_MAX);
     out.set(user, s);
   }
   return out;
@@ -263,6 +267,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   const written = new Map(); // doc id → JSON last written
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const stageOf = (l) => (statuses[`${l.pipeline}:${l.status}`] || {}).name || "";
 
   const api = async (path, params = {}) => {
     const qs = new URLSearchParams();
@@ -509,7 +514,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     const batch = db.batch();
     let changed = 0;
     for (const month of [cur, prevMonth(cur)]) {
-      for (const [user, s] of T.computeTasks(month, { tasks: list, misses, leads: leadList, now })) {
+      for (const [user, s] of T.computeTasks(month, { tasks: list, misses, leads: leadList, now, stageOf })) {
         if (!user) continue;
         const id = `${month}_${user}`;
         const doc = { month, amo_user_id: user, name: (users.get(user) || {}).name || `#${user}`, staff_email: staffByUser.get(user) || null, ...s };
@@ -581,7 +586,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     const batch = db.batch();
     let changed = 0;
     for (const month of months) {
-      const stats = computeStats(month, { leads: leadList, calls: callList, now, leadOf });
+      const stats = computeStats(month, { leads: leadList, calls: callList, now, leadOf, stageOf });
       for (const [user, s] of stats) {
         const id = `${month}_${user}`;
         const doc = {

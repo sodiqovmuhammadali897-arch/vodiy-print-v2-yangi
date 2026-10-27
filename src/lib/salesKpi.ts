@@ -1,4 +1,5 @@
 import type { Manager } from "./types";
+import type { AmoLeadBrief } from "./amoStats";
 
 // KPI (sotuv menejerlari): two parts.
 //  • Sotuv — sales_rate % (7,5) of every order the manager enters in the
@@ -48,6 +49,7 @@ export type AmoTaskDoc = {
   tomorrow_due: number;
   postponed_today: number; // moved off today to a later day, undone
   no_task_leads: number;
+  no_task_list?: AmoLeadBrief[]; // which open leads have no next task
   updated_at?: string;
 };
 

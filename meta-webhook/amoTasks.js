@@ -69,10 +69,14 @@ const empty = () => ({
   no_task_leads: 0,
 });
 
+// A lead as the Sotuv nazorati page lists it (no contact details).
+const LIST_MAX = 30;
+const leadBrief = (l, stageOf) => ({ id: l.id, name: l.name || `#${l.id}`, price: l.price || 0, stage: stageOf(l) || "", updated: l.updated ? dayOf(l.updated) : "" });
+
 // Per amoCRM user, the month's task numbers. `misses`: task id → { month }.
 // Current-state counts (overdue now, today, leads without a task) only for
 // the current month.
-function computeTasks(month, { tasks, misses: all, leads = [], now }) {
+function computeTasks(month, { tasks, misses: all, leads = [], now, stageOf = () => "" }) {
   // An excused postponement (approved by an admin) is not a miss.
   const misses = new Map([...all].filter(([, m]) => !m.excused));
   const by = new Map();
@@ -108,8 +112,13 @@ function computeTasks(month, { tasks, misses: all, leads = [], now }) {
     const withTask = new Set(tasks.filter((t) => !t.done && t.entity === "leads").map((t) => t.entityId));
     for (const l of leads) {
       if (l.status === WON || l.status === LOST || l.status === -1 || !l.user) continue;
-      if (!withTask.has(l.id)) of(l.user).no_task_leads++;
+      if (!withTask.has(l.id)) {
+        const s = of(l.user);
+        s.no_task_leads++;
+        (s.no_task_list = s.no_task_list || []).push(leadBrief(l, stageOf));
+      }
     }
+    for (const s of by.values()) if (s.no_task_list) s.no_task_list = s.no_task_list.sort((a, b) => b.price - a.price).slice(0, LIST_MAX);
   }
   for (const s of by.values()) s.pct = s.due ? Math.round((s.on_time / s.due) * 1000) / 10 : null;
   return by;
@@ -171,4 +180,4 @@ function adminText(rows) {
   return ["📊 Bugun amoCRM zadachalari", ...rows.map((r) => `• ${r.name}: ${r.open ? `${r.open} ta qoldi` : "hammasi bajarildi ✅"} (${r.total} tadan)${r.noTask ? `, zadachasiz lid: ${r.noTask}` : ""}`)].join("\n");
 }
 
-module.exports = { toTask, newMisses, postponed, computeTasks, morningText, eveningText, adminText, postponeText, adminPostponeText, dayOf, monthOf, hmOf, dayLabel };
+module.exports = { leadBrief, LIST_MAX, toTask, newMisses, postponed, computeTasks, morningText, eveningText, adminText, postponeText, adminPostponeText, dayOf, monthOf, hmOf, dayLabel };

@@ -59,6 +59,8 @@ export type AmoCall = {
   lead_name: string;
   stage: string;
 };
+// An open lead as the server lists it for Sotuv nazorati (no contacts).
+export type AmoLeadBrief = { id: number; name: string; price: number; stage: string; updated: string };
 export type AmoStat = {
   id: string;
   month: string; // YYYY-MM
@@ -72,6 +74,7 @@ export type AmoStat = {
   sources: Record<string, number>;
   loss: Record<string, number>;
   daily: Record<string, AmoDay>;
+  stale_list?: AmoLeadBrief[]; // open leads untouched 3+ days, current month only
   updated_at?: string;
 };
 export type AmoStatus = {
