@@ -274,6 +274,12 @@ service cloud.firestore {
     match /tg_kb/{id} {
       allow read, write: if false;
     }
+    // Eski mijozlarga qo'ng'iroq (meta-webhook/recall.js): each manager's
+    // daily calls and their results; written by the server only.
+    match /recall_calls/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     // Surilgan zadacha sababi va admin qarori (meta-webhook/postpones.js).
     match /amo_postpones/{id} {
       allow read, write: if false;

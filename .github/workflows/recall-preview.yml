@@ -1,0 +1,45 @@
+name: Recall preview (sinov)
+
+# Run by hand to see the daily old-customer lists (meta-webhook/recall.js)
+# before they go to the managers: today's lists are sent to the admins'
+# Telegram marked SINOV, without buttons, and nothing is written. The log
+# shows only which managers are linked and how many customers each got —
+# no customer names or phones.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send today's lists to the admins
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-recall-preview.js <<'JS'
+            const fs = require("fs");
+            for (const l of fs.readFileSync("/opt/meta-webhook/.env", "utf8").split("\n")) {
+              const i = l.indexOf("=");
+              if (i > 0 && !l.trim().startsWith("#")) process.env[l.slice(0, i).trim()] = l.slice(i + 1).trim().replace(/^"(.*)"$/, "$1");
+            }
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const recall = require("/opt/meta-webhook/recall.js").create(admin.firestore());
+            const { todayCode } = require("/opt/meta-webhook/shared.js");
+            (async () => {
+              const team = await recall.managers();
+              console.log(`managers linked: ${team.length} — ${team.map((m) => m.name).join(", ") || "none"}`);
+              const chats = await recall.admins();
+              console.log(`admin chats: ${chats.length}`);
+              if (!chats.length) return;
+              const out = await recall.sendDay(todayCode(), chats);
+              console.log("preview sent", JSON.stringify(out));
+            })().then(() => process.exit(0)).catch((e) => { console.log("preview failed", e.message); process.exit(1); });
+            JS
+            node /tmp/vp-recall-preview.js
+            rm -f /tmp/vp-recall-preview.js
