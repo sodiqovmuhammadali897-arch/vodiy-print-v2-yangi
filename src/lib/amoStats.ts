@@ -14,7 +14,9 @@ export type AmoDayDetail = {
   longest?: number;
 };
 export type AmoDay = { leads: number; calls: number; talk_sec: number } & AmoDayDetail;
-export type AmoMissed = { at: string; phone: string; lead_id: number | string | null; lead_name: string; waiting_min: number };
+// status (from 2 November): the manager's answer to the bot — "claimed"
+// (said called back, not seen in amoCRM yet), "snoozed", "unconfirmed".
+export type AmoMissed = { at: string; phone: string; lead_id: number | string | null; lead_name: string; waiting_min: number; status?: string };
 export type AmoNewLeads = {
   count: number;
   called: number;

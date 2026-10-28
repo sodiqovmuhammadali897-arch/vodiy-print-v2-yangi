@@ -160,6 +160,18 @@ const newLeads = (leads, calls, day, now, leadOf) => {
 
 // ── Telegram texts ─────────────────────────────────────────
 
+// The first call after a missed incoming one with the same number that
+// counts as following it up: an outgoing call (answered or not) or an
+// answered incoming one. Null while there is none.
+const followUpOf = (calls, m) =>
+  calls
+    .filter((c) => c.key === m.key && c.at > m.at && (c.dir === "out" || c.duration > 0))
+    .sort((a, b) => a.at - b.at)[0] || null;
+
+// The line that closes a missed-call message once it is followed up.
+const followUpLine = (c) =>
+  c.duration > 0 ? `✅ Javob qaytarildi — ${hmOf(c.at)}, ${talk(c.duration)} gaplashildi` : `☎️ ${hmOf(c.at)} da qo'ng'iroq qilindi, mijoz ko'tarmadi — yana urinib ko'ring`;
+
 const missedText = (m, { manager, who, now }) =>
   [
     "📵 Javobsiz qo'ng'iroq qaytarilmadi",
@@ -192,4 +204,4 @@ const daySummaryText = (day, rows, { missedOpen, newLeads: nl }) => {
   return lines.join("\n");
 };
 
-module.exports = { leadIndex, summarizeDay, byUserDay, missedIncoming, newLeads, missedText, lateStartText, daySummaryText, talk, dayOf, hmOf, dayLabel, MISSED_ALERT_MS, GAP_MS };
+module.exports = { followUpOf, followUpLine, leadIndex, summarizeDay, byUserDay, missedIncoming, newLeads, missedText, lateStartText, daySummaryText, talk, dayOf, hmOf, dayLabel, MISSED_ALERT_MS, GAP_MS };

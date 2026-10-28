@@ -107,7 +107,7 @@ const toCall = (n) => ({
 // Counts for one month, one doc per amoCRM user (0 = no manager). `open`,
 // `stale` and `funnel` are the state right now; everything else is what
 // happened in the month.
-function computeStats(month, { leads, calls, now, leadOf = () => null, stageOf = () => "" }) {
+function computeStats(month, { leads, calls, now, leadOf = () => null, stageOf = () => "", missedNote = () => "" }) {
   const start = monthStartMs(month);
   const end = monthStartMs(nextMonth(month));
   const inMonth = (ms) => ms >= start && ms < end;
@@ -213,7 +213,7 @@ function computeStats(month, { leads, calls, now, leadOf = () => null, stageOf =
     for (const m of open) {
       const t = of(ownerOf(m)).today;
       const l = leadOf(m);
-      (t.missed_open = t.missed_open || []).push({ at: hmOf(m.at), phone: m.phone || "", lead_id: l ? l.id : null, lead_name: l ? l.name || "" : "", waiting_min: Math.round(m.waiting / 60000) });
+      (t.missed_open = t.missed_open || []).push({ at: hmOf(m.at), phone: m.phone || "", lead_id: l ? l.id : null, lead_name: l ? l.name || "" : "", waiting_min: Math.round(m.waiting / 60000), status: missedNote(m) });
     }
     for (const r of returned) {
       const t = of(ownerOf(r)).today;
@@ -589,7 +589,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     const batch = db.batch();
     let changed = 0;
     for (const month of months) {
-      const stats = computeStats(month, { leads: leadList, calls: callList, now, leadOf, stageOf });
+      const stats = computeStats(month, { leads: leadList, calls: callList, now, leadOf, stageOf, missedNote });
       for (const [user, s] of stats) {
         const id = `${month}_${user}`;
         const doc = {
@@ -674,6 +674,111 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     for (const info of staffInfo.values()) if (info.admin && info.chat) await notify("sendMessage", { chat_id: info.chat, text }).catch(() => undefined);
     await push.toAdmins("admin", text, "/leads");
   };
+  // Javobsiz qo'ng'iroq: from MISSED_BUTTONS_START the manager's notice
+  // has ✅ Javob qaytardim · ⏰ Keyinroq eslat. Every sync checks amoCRM
+  // for a later call to that number (amoCalls.followUpOf): found → the
+  // notice closes with the time and talk; «Javob qaytardim» with no call
+  // 10 minutes later → the manager and the admins are told; «Keyinroq» →
+  // the notice comes again at the chosen time; still open after an hour →
+  // the admins once. State per call in amo_missed/{id} (today's only).
+  const MISSED_BUTTONS_START = process.env.MISSED_BUTTONS_START || "2026-11-02";
+  const CLAIM_GRACE_MS = 10 * 60 * 1000;
+  const missedDocId = (id) => crypto.createHash("sha1").update(String(id)).digest("hex").slice(0, 16);
+  const missedButtons = (id) => ({ inline_keyboard: [[{ text: "✅ Javob qaytardim", callback_data: `mc:ok:${id}` }, { text: "⏰ Keyinroq eslat", callback_data: `mc:later:${id}` }]] });
+  const laterButtons = (id) => ({
+    inline_keyboard: [[30, 60, 180].map((min) => ({ text: min < 60 ? `${min} daqiqa` : `${min / 60} soat`, callback_data: `mc:L:${id}:${min}` })), [{ text: "↩️ Orqaga", callback_data: `mc:back:${id}` }]],
+  });
+  const missedState = new Map(); // doc id → state, today's
+  let missedDay = null;
+  const loadMissed = async (today) => {
+    if (missedDay === today) return;
+    missedState.clear();
+    const snap = await db.collection("amo_missed").where("day", "==", today).get();
+    for (const d of snap.docs) missedState.set(d.id, d.data());
+    missedDay = today;
+  };
+  const saveMissed = async (id, fields) => {
+    const next = { ...(missedState.get(id) || {}), ...fields };
+    missedState.set(id, next);
+    await db.collection("amo_missed").doc(id).set(fields, { merge: true });
+    return next;
+  };
+  const trackMissed = async (m, { user, email, chat, message_id, text, who, manager }) => {
+    await loadMissed(dayOf(m.at));
+    await saveMissed(missedDocId(m.id), { day: dayOf(m.at), call_id: String(m.id), key: m.key, at: m.at, user, staff_email: email || null, chat: Number(chat), message_id, text, who: who || "", manager: manager || "", status: "open", created_at: new Date().toISOString() });
+  };
+  const editMissed = (st, text, markup) =>
+    st.chat && st.message_id ? notify("editMessageText", { chat_id: st.chat, message_id: st.message_id, text, ...(markup ? { reply_markup: markup } : {}) }).catch(() => undefined) : undefined;
+  // The status the "Javobsiz" list shows per missed call (computeStats).
+  const missedNote = (m) => (missedState.get(missedDocId(m.id)) || {}).status || "";
+
+  const followMissed = async (now, todayCalls) => {
+    if (!notify) return;
+    const today = dayOf(now);
+    if (today < MISSED_BUTTONS_START) return;
+    await loadMissed(today);
+    for (const [id, st] of missedState) {
+      if (st.status === "returned") continue;
+      const back = C.followUpOf(todayCalls, st);
+      if (back) {
+        await saveMissed(id, { status: "returned", returned_at: back.at, returned_talk: back.duration });
+        await editMissed(st, `${st.text}\n\n${C.followUpLine(back)}`);
+        continue;
+      }
+      if (st.status === "claimed" && now - Date.parse(st.claimed_at) > CLAIM_GRACE_MS) {
+        const next = await saveMissed(id, { status: "unconfirmed" });
+        await editMissed(next, `${st.text}\n\n❗ «Javob qaytardim» deb belgilandi, lekin amoCRM'da bu raqamga qo'ng'iroq ko'rinmayapti. Ish raqamidan qo'ng'iroq qiling.`, missedButtons(id));
+        await toAdmins(`❗ ${st.manager || "Menejer"} «javob qaytardim» dedi, lekin amoCRM'da qo'ng'iroq yo'q: ${st.who || "noma'lum raqam"} (${hmOf(st.at)} da qo'ng'iroq qilgan).`);
+        continue;
+      }
+      if (st.status === "snoozed" && now >= Number(st.remind_at)) {
+        const r = await notify("sendMessage", { chat_id: st.chat, text: `⏰ Eslatma: ${st.text}`, reply_markup: missedButtons(id) }).catch(() => null);
+        await saveMissed(id, { status: "open", message_id: r && r.result ? r.result.message_id : st.message_id });
+        continue;
+      }
+      if ((st.status === "open" || st.status === "snoozed") && !st.hour_sent && now - Number(st.at) > 60 * 60 * 1000) {
+        await saveMissed(id, { hour_sent: true });
+        await toAdmins(`📵 1 soatdan beri javob qaytarilmadi: ${st.who || "noma'lum raqam"} (${hmOf(st.at)}) · ${st.manager || "menejer belgilanmagan"}${st.status === "snoozed" ? " · keyinroqqa qoldirilgan" : ""}`);
+      }
+    }
+  };
+
+  const handleCallback = async (cq) => {
+    const chatId = cq.message && cq.message.chat && cq.message.chat.id;
+    const answer = (text) => notify("answerCallbackQuery", { callback_query_id: cq.id, ...(text ? { text } : {}) });
+    const m = (cq.data || "").match(/^mc:(ok|later|back|L):([0-9a-f]+)(?::(\d+))?$/);
+    if (!m || !chatId) return answer();
+    const [, act, id, arg] = m;
+    let st = missedState.get(id);
+    if (!st) {
+      const snap = await db.collection("amo_missed").doc(id).get();
+      if (!snap.exists) return answer("Topilmadi");
+      st = snap.data();
+      missedState.set(id, st);
+    }
+    if (Number(st.chat) !== Number(chatId)) return answer("Bu qo'ng'iroq boshqa menejerda");
+    const here = { ...st, message_id: cq.message.message_id };
+    if (act === "later") return Promise.all([answer(), editMissed(here, `${st.text}\n\n⏰ Qachon eslatay?`, laterButtons(id))]);
+    if (act === "back") return Promise.all([answer(), editMissed(here, st.text, missedButtons(id))]);
+    if (act === "L") {
+      const min = Number(arg);
+      await saveMissed(id, { status: "snoozed", remind_at: Date.now() + min * 60000, message_id: cq.message.message_id });
+      await answer("Eslataman");
+      return editMissed(here, `${st.text}\n\n⏰ ${min < 60 ? `${min} daqiqadan` : `${min / 60} soatdan`} keyin eslataman.`);
+    }
+    // ✅ Javob qaytardim: check amoCRM now; if the call is not there yet,
+    // wait a little (calls reach amoCRM with a delay).
+    const back = C.followUpOf([...calls.values()], st);
+    if (back) {
+      await saveMissed(id, { status: "returned", returned_at: back.at, returned_talk: back.duration, message_id: cq.message.message_id });
+      await answer("Tasdiqlandi");
+      return editMissed(here, `${st.text}\n\n${C.followUpLine(back)}`);
+    }
+    await saveMissed(id, { status: "claimed", claimed_at: new Date().toISOString(), message_id: cq.message.message_id });
+    await answer("Tekshiryapman");
+    return editMissed(here, `${st.text}\n\n⏳ amoCRM'da qo'ng'iroq ko'rinishi bilan tasdiqlanadi (10 daqiqa ichida).`);
+  };
+
   const callAlerts = async (now) => {
     if (!notify) return;
     const today = dayOf(now);
@@ -706,12 +811,18 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
           const ct = contactId ? contacts.get(contactId) : null;
           const who = [ct && ct.name, m.phone || (ct && ct.phone)].filter(Boolean).join(", ") || (l && l.name) || null;
           const text = C.missedText(m, { manager: nameOf(user), who, now });
-          if (info && info.chat && !info.admin) await notify("sendMessage", { chat_id: info.chat, text }).catch((err) => log.error("amoCRM missed-call notice failed", err.message));
+          if (info && info.chat && !info.admin) {
+            const withButtons = today >= MISSED_BUTTONS_START;
+            const r = await notify("sendMessage", { chat_id: info.chat, text, ...(withButtons ? { reply_markup: missedButtons(missedDocId(m.id)) } : {}) }).catch((err) => log.error("amoCRM missed-call notice failed", err.message));
+            if (withButtons) await trackMissed(m, { user, email, chat: info.chat, message_id: r && r.result ? r.result.message_id : null, text, who, manager: nameOf(user) });
+          }
           if (email) await push.toEmail(email, "amo", text, "/leads");
           await toAdmins(text);
         }
       }
     }
+
+    await followMissed(now, todayCalls).catch((err) => log.error("amoCRM missed follow-up failed", err.message));
 
     if (hm >= "09:30" && hm < "11:30" && alerts.late_start !== today) {
       alerts.late_start = today;
@@ -907,7 +1018,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   };
   const stop = () => clearInterval(timer);
 
-  return { start, stop, tick, enabled, _test: { leads, calls, users, statuses, tasks, misses } };
+  return { start, stop, tick, enabled, handleCallback, _test: { leads, calls, users, statuses, tasks, misses } };
 };
 
 module.exports = { create, computeStats, hostOf, toLead, toCall };

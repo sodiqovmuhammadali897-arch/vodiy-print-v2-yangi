@@ -97,3 +97,21 @@ describe("amoCRM calls in detail", () => {
     expect(C.talk(6480)).toBe("1 s 48 daq");
   });
 });
+
+describe("javobsiz qo'ng'iroqni qaytarish", () => {
+  const missed = { key: "k1", at: Date.parse("2026-11-02T10:00:00+05:00") };
+  const c = (min: number, dir: string, duration: number, key = "k1") => ({ key, at: missed.at + min * 60000, dir, duration });
+
+  it("finds the first call back to the same number", () => {
+    const calls = [c(-5, "out", 60), c(3, "in", 0), c(7, "out", 0, "k2"), c(12, "out", 95), c(20, "out", 30)];
+    const back = C.followUpOf(calls, missed);
+    expect(back.at).toBe(missed.at + 12 * 60000);
+    expect(C.followUpLine(back)).toBe("✅ Javob qaytarildi — 10:12, 1 daq gaplashildi");
+  });
+
+  it("counts an unanswered call back as tried, and an answered incoming call as handled", () => {
+    expect(C.followUpLine(C.followUpOf([c(4, "out", 0)], missed))).toContain("mijoz ko'tarmadi");
+    expect(C.followUpOf([c(4, "in", 40)], missed)).not.toBeNull();
+    expect(C.followUpOf([c(4, "in", 0)], missed)).toBeNull();
+  });
+});

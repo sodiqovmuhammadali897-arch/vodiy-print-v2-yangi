@@ -90,7 +90,7 @@ content.register(app);
 const recall = process.env.TELEGRAM_BOT_TOKEN ? require("./recall").create(db) : null;
 // Qarz undirish: each sales manager's debts, daily (debts.js).
 const debts = recall ? require("./debts").create(db, { team: recall.managers, admins: recall.admins }) : null;
-const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts);
+const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
 // same Meta callback below (object "instagram").

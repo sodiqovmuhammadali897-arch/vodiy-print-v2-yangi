@@ -19,6 +19,8 @@ const REFRESH_MS = 2 * 60 * 1000;
 const mln = formatMoneyShort;
 const talk = (sec: number) => (sec >= 3600 ? `${Math.floor(sec / 3600)} s ${Math.round((sec % 3600) / 60)} d` : `${Math.round(sec / 60)} d`);
 const nowHm = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(11, 16);
+// The manager's answer to the bot's missed-call notice (amocrm.js).
+const MISSED_STATUS: Record<string, string> = { claimed: "«javob qaytardim» — amoCRM'da tekshirilmoqda", snoozed: "keyinroqqa qoldirildi", unconfirmed: "«javob qaytardim» dedi, qo'ng'iroq yo'q" };
 const RESULT: Record<string, string> = { order: "✅ buyurtma", later: "🕒 keyinroq", no: "❌ kerak emas", noanswer: "📵 javob bermadi" };
 
 type Detail = { title: string; description?: string; items: { main: string; sub?: string; tag?: string }[] };
@@ -109,7 +111,7 @@ export default function SalesControl() {
 
   const open = {
     missed: (r: ControlRow) =>
-      setDetail({ title: `${r.name} · javobsiz qo'ng'iroqlar`, description: "Kiruvchi qo'ng'iroq, hali qayta qo'ng'iroq qilinmagan.", items: r.missed.map((m) => ({ main: `${m.at} — ${m.lead_name || m.phone || "noma'lum"}`, sub: m.phone, tag: `${m.waiting_min} daqiqa kutyapti` })) }),
+      setDetail({ title: `${r.name} · javobsiz qo'ng'iroqlar`, description: "Kiruvchi qo'ng'iroq, hali qayta qo'ng'iroq qilinmagan.", items: r.missed.map((m) => ({ main: `${m.at} — ${m.lead_name || m.phone || "noma'lum"}`, sub: m.phone, tag: MISSED_STATUS[m.status || ""] || `${m.waiting_min} daqiqa kutyapti` })) }),
     noTask: (r: ControlRow) =>
       setDetail({
         title: `${r.name} · vazifasiz bitimlar`,
