@@ -10,6 +10,8 @@
 // amo_tasks/{YYYY-MM}_{amoUserId} — how many came due, how many were done
 // on time (see amoTasks.js) — and, with the Telegram bot on, each manager
 // gets the day's tasks at 09:00 and what is left of them at 18:00.
+// At 10:00 and 15:00 they also get their open deals without a next task
+// and the ones untouched for 3+ days, by name (amoDeals.js).
 //
 // For those Telegram notes the server also looks up the customer (the
 // lead's main contact: name and phone) when a task is named in a message;
@@ -23,6 +25,7 @@ const crypto = require("crypto");
 const push = require("./push");
 const T = require("./amoTasks");
 const C = require("./amoCalls");
+const D = require("./amoDeals");
 
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Tashkent
 const WON = 142;
@@ -750,6 +753,54 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     }
   };
 
+  // Bitim nazorati (amoDeals.js): at 10:00 each manager's deals without a
+  // next task and untouched 3+ days, by name, and one line per manager to
+  // the admins; at 15:00 the deals still without a task; a deal lost with
+  // no reason → the admins at once. Working days only for the lists;
+  // amo_meta/deal_alerts keeps what was sent.
+  let dealSent = null;
+  const dealAlerts = async (now) => {
+    if (!notify) return;
+    const today = dayOf(now);
+    const hm = hmOf(now);
+    if (!dealSent || dealSent.day !== today) {
+      const snap = await db.collection("amo_meta").doc("deal_alerts").get();
+      const data = snap.exists ? snap.data() : {};
+      dealSent = data.day === today ? { lost: {}, ...data } : { day: today, lost: {} };
+    }
+    const save = (fields) => db.collection("amo_meta").doc("deal_alerts").set({ day: today, ...fields }, { merge: true });
+    const nameOf = (user) => (users.get(user) || {}).name || `#${user}`;
+
+    if (hm >= "08:00" && hm < "21:00") {
+      const fresh = D.lostNoReason([...leads.values()], today).filter((l) => !dealSent.lost[l.id]);
+      if (fresh.length) {
+        const ids = Object.fromEntries(fresh.map((l) => [l.id, true]));
+        Object.assign(dealSent.lost, ids);
+        await save({ lost: ids });
+        for (const l of fresh) await toAdmins(D.lostText(l, nameOf(l.user)));
+      }
+    }
+
+    const slot = hm >= "10:00" && hm < "12:00" && dealSent.morning !== today ? "morning" : hm >= "15:00" && hm < "17:00" && dealSent.afternoon !== today ? "afternoon" : null;
+    if (!slot) return;
+    dealSent[slot] = today;
+    await save({ [slot]: today });
+    const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+    if (weekday === 0 || !(await db.collection("holidays").where("date", "==", today).get()).empty) return;
+    const rows = [];
+    for (const [user, s] of D.dealLists([...leads.values()], [...tasks.values()], now, stageOf)) {
+      const email = staffByUser.get(user);
+      const info = email && staffInfo.get(email);
+      const name = nameOf(user);
+      rows.push({ name, noTask: s.noTask.length, stale: s.stale.length });
+      const text = D.managerText(name, s, slot === "afternoon");
+      if (!text || !info || !info.chat || info.admin) continue;
+      await notify("sendMessage", { chat_id: info.chat, text }).catch((err) => log.error("amoCRM deal notice failed", err.message));
+      await push.toEmail(email, "amo", text, "/leads");
+    }
+    if (slot === "morning") await toAdmins(D.adminText(rows));
+  };
+
   const writeStatus = (fields) =>
     db.collection("amo_meta").doc("status").set(
       {
@@ -797,6 +848,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
         await recordMisses(now);
         taskDocs = await writeTasks(now);
         await remind(now);
+        await dealAlerts(now);
         if (postpones) await postpones.tick(now);
         tasksError = null;
       } catch (err) {
