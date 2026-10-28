@@ -88,7 +88,9 @@ const content = require("./content").create(db);
 content.register(app);
 // Eski mijozlarga qo'ng'iroq: each sales manager's daily list (recall.js).
 const recall = process.env.TELEGRAM_BOT_TOKEN ? require("./recall").create(db) : null;
-const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall);
+// Qarz undirish: each sales manager's debts, daily (debts.js).
+const debts = recall ? require("./debts").create(db, { team: recall.managers, admins: recall.admins }) : null;
+const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
 // same Meta callback below (object "instagram").
@@ -368,6 +370,7 @@ app.listen(PORT, () => {
   if (tasks) tasks.start();
   if (bonus) bonus.start();
   if (recall) recall.start();
+  if (debts) debts.start();
   salesKpi.start();
   void amocrm.start().catch((err) => console.error("amoCRM start failed", err));
   if (targetolog && ai.on("targetolog")) void targetolog.start().catch((err) => console.error("Targetolog start failed", err));

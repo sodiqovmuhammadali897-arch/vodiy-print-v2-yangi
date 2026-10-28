@@ -10,7 +10,7 @@ import {
   Package,
   ClipboardCheck,
 } from "lucide-react";
-import { listAll, getOne } from "../../../lib/firestoreDb";
+import { listAll, listWhere, getOne } from "../../../lib/firestoreDb";
 import type { Brand, Customer, Manager, Order, OrderFile, OrderProduct, OrderPayment, OrderStatus, TextileCompany } from "../../../lib/types";
 import { ORDER_STATUSES } from "../../../lib/orderConstants";
 import { saveOrder } from "../../../lib/orderService";
@@ -108,6 +108,26 @@ export default function OrderWizard() {
   const email = user?.email || "";
   const ready = useRef(false);
   const [restoredAt, setRestoredAt] = useState<string | null>(null);
+  // Qarz undirish: a customer owing for an order handed over 30+ days ago —
+  // warn before taking a new order (full prepayment is the rule then).
+  const [oldDebt, setOldDebt] = useState<{ sum: number; days: number } | null>(null);
+  useEffect(() => {
+    setOldDebt(null);
+    if (!payload.customer_id) return;
+    let alive = true;
+    void listWhere<Order>("orders", "customer_id", payload.customer_id)
+      .then((list) => {
+        const today = todayISO();
+        const old = list.filter((o) => o.id !== payload.id && Number(o.remaining_amount || 0) > 0 && (o.status === "delivered" || o.status === "closed"))
+          .map((o) => ({ rest: Number(o.remaining_amount || 0), days: Math.round((Date.parse(today) - Date.parse(String(o.order_date || o.created_at).slice(0, 10))) / 86400e3) }))
+          .filter((d) => d.days > 30);
+        if (alive && old.length) setOldDebt({ sum: old.reduce((t, d) => t + d.rest, 0), days: Math.max(...old.map((d) => d.days)) });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [payload.customer_id, payload.id]);
 
   useEffect(() => {
     const load = async () => {
@@ -445,6 +465,12 @@ export default function OrderWizard() {
           })}
         </div>
       </div>
+
+      {oldDebt && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+          <b>Bu mijozning eski qarzi bor: {formatMoney(oldDebt.sum)}</b> — {oldDebt.days} kundan beri to'lanmagan. Yangi buyurtma faqat to'liq oldindan to'lov bilan olinadi.
+        </div>
+      )}
 
       {restoredAt && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm text-brand-800">

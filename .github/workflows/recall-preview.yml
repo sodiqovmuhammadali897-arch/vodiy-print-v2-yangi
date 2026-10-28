@@ -1,10 +1,10 @@
-name: Recall preview (sinov)
+name: Recall and debts preview (sinov)
 
 # Run by hand to see the daily old-customer lists (meta-webhook/recall.js)
-# before they go to the managers: today's lists are sent to the admins'
-# Telegram marked SINOV, without buttons, and nothing is written. The log
-# shows only which managers are linked and how many customers each got —
-# no customer names or phones.
+# and debt lists (debts.js) before they go to the managers: today's lists
+# are sent to the admins' Telegram marked SINOV, without buttons, and
+# nothing is written. The log shows only which managers are linked and how
+# many customers each got — no customer names or phones.
 
 on:
   workflow_dispatch:
@@ -38,7 +38,9 @@ jobs:
               console.log(`admin chats: ${chats.length}`);
               if (!chats.length) return;
               const out = await recall.sendDay(todayCode(), chats);
-              console.log("preview sent", JSON.stringify(out));
+              console.log("old customers preview sent", JSON.stringify(out));
+              const debts = require("/opt/meta-webhook/debts.js").create(admin.firestore(), { team: recall.managers, admins: recall.admins });
+              console.log("debts preview sent", JSON.stringify(await debts.sendDay(todayCode(), chats)));
             })().then(() => process.exit(0)).catch((e) => { console.log("preview failed", e.message); process.exit(1); });
             JS
             node /tmp/vp-recall-preview.js
