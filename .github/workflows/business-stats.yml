@@ -80,6 +80,10 @@ jobs:
 
               const debt = live.filter((o) => Number(o.remaining_amount || 0) > 0);
               console.log(`debt orders=${debt.length} debt=${Math.round(debt.reduce((s, o) => s + Number(o.remaining_amount || 0), 0))} closed_with_debt=${debt.filter((o) => o.status === "closed").length}`);
+              // Debts by status and by manager (names of managers only).
+              const debtBy = new Map();
+              for (const o of debt) bump(debtBy, `${o.status} | ${o.manager_name || (o.manager_id ? "id:" + o.manager_id.slice(0, 6) : "menejersiz")}`, { orders: 1, sum: Number(o.remaining_amount || 0) });
+              show("debt by status | manager", debtBy, "sum", 40);
 
               const cat = new Map(), prod = new Map();
               for (const l of lines) {
