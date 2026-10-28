@@ -16,7 +16,7 @@ const stat = (email: string, extra: Partial<AmoStat> = {}) =>
     ...extra,
   }) as unknown as AmoStat;
 const task = (email: string, extra: Partial<AmoTaskDoc> = {}) => ({ month: "2026-11", amo_user_id: 1, staff_email: email, today_due: 8, today_open: 3, overdue_open: 1, no_task_leads: 4, ...extra }) as unknown as AmoTaskDoc;
-const order = (id: string, manager_id: string, order_date: string, total: number, extra: Partial<Order> = {}) => ({ id, manager_id, order_date, total_amount: total, remaining_amount: 0, status: "closed", order_number: id, title: "Paket", ...extra }) as unknown as Order;
+const order = (id: string, manager_id: string, order_date: string, total: number, extra: Partial<Order> = {}) => ({ id, manager_id: "", manager_name: manager_id === "m1" ? "Maryam" : manager_id, order_date, total_amount: total, remaining_amount: 0, status: "closed", order_number: id, title: "Paket", ...extra }) as unknown as Order;
 
 describe("salesControl", () => {
   const managers = [{ id: "m1", name: "Maryam", monthly_plan: 200_000_000 }] as Manager[];

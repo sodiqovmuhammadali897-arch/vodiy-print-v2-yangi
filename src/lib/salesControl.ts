@@ -7,6 +7,7 @@ import type { AmoLeadBrief, AmoMissed, AmoStat } from "./amoStats";
 import type { AmoTaskDoc } from "./salesKpi";
 import type { Manager, Order } from "./types";
 import { saleDay } from "./salesPeriod";
+import { isManagersOrder } from "./orderScope";
 
 export type Flag = "bad" | "warn" | null;
 export type StaffLite = { id: string; full_name?: string; report_manager_id?: string | null };
@@ -97,7 +98,8 @@ export function buildRows({
     const st = statOf.get(email);
     const tk = taskOf.get(email);
     const t = st?.today && st.today.day === today ? st.today : null;
-    const mine = managerId ? orders.filter((o) => o.manager_id === managerId && live(o)) : [];
+    // An order belongs to its manager by name, as everywhere in the ERP.
+    const mine = m ? orders.filter((o) => live(o) && (isManagersOrder(o, m) || (Boolean(managerId) && o.manager_id === managerId))) : [];
     const inMonth = mine.filter((o) => dayOfOrder(o).slice(0, 7) === month);
     const todays = inMonth.filter((o) => dayOfOrder(o) === today);
     const monthSales = inMonth.reduce((a, o) => a + Number(o.total_amount || 0), 0);

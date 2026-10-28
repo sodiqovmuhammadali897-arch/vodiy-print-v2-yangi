@@ -4,8 +4,8 @@
 // or closed); its days count from the day it was handed over (the order's
 // status history, else its delivery date, else its date). An order that is
 // ready but not handed over yet with money still owed is «collect on
-// delivery» — listed apart, without buttons. The manager of the order is
-// the owner of the debt.
+// delivery» — listed apart, without buttons. The order's manager (by
+// name, as in the ERP) is the owner of the debt.
 //
 // Every working day at 10:00 (Tashkent) each sales manager gets their
 // debts, oldest first: customer, phone, order, sum, days — with
@@ -26,6 +26,9 @@ const MAX_MSGS = 8;
 const TICK_MS = 60 * 1000;
 const SITE = process.env.PUBLIC_SITE_URL || "https://printvodiy.uz";
 const HANDED = new Set(["delivered", "closed"]);
+const READY = new Set(["ready", "ready_to_deliver"]);
+// Orders belong to their manager by name, as everywhere in the ERP.
+const nameKey = (s) => String(s || "").trim().toLowerCase();
 const PROMISE = { 1: "Ertaga", 3: "3 kundan keyin", 7: "1 haftadan keyin" };
 
 const dayMs = (day) => Date.parse(`${day}T00:00:00Z`);
@@ -47,7 +50,7 @@ const handedDay = (o, history) => {
   return moves[0] || String(o.delivery_date || "").slice(0, 10) || String(o.order_date || "").slice(0, 10) || tkDay(o.created_at);
 };
 
-// { debts: [...], onDelivery: [...] } per manager_id. Each debt:
+// { debts: [...], onDelivery: [...] } per manager name (lower case). Each debt:
 // { order_id, number, title, customer_id, rest, day, days }.
 const debtsByManager = (orders, historyOf, today) => {
   const out = new Map();
@@ -57,12 +60,13 @@ const debtsByManager = (orders, historyOf, today) => {
   };
   for (const o of orders) {
     const rest = Number(o.remaining_amount || 0);
-    if (rest <= 0 || o.status === "cancelled" || o.is_draft || !o.manager_id) continue;
+    const owner = nameKey(o.manager_name);
+    if (rest <= 0 || o.status === "cancelled" || o.is_draft || !owner) continue;
     const base = { order_id: o.id, number: o.order_number || "", title: o.title || "", customer_id: o.customer_id || null, rest };
     if (HANDED.has(o.status)) {
       const day = handedDay(o, historyOf.get(o.id) || []);
-      of(o.manager_id).debts.push({ ...base, day, days: Math.max(0, daysBetween(day, today)) });
-    } else if (o.status === "ready_to_deliver") of(o.manager_id).onDelivery.push(base);
+      of(owner).debts.push({ ...base, day, days: Math.max(0, daysBetween(day, today)) });
+    } else if (READY.has(o.status)) of(owner).onDelivery.push(base);
   }
   for (const v of out.values()) v.debts.sort((a, b) => b.days - a.days || b.rest - a.rest);
   return out;
@@ -131,7 +135,7 @@ const create = (db, { team, admins }) => {
     const data = await load(today);
     const counts = {};
     for (const m of people) {
-      const mine = data.byManager.get(m.manager_id) || { debts: [], onDelivery: [] };
+      const mine = data.byManager.get(nameKey(m.name)) || { debts: [], onDelivery: [] };
       const due = dueToday(mine.debts, data.state, today);
       const waiting = mine.debts.length - due.length;
       const shown = due.slice(0, MAX_MSGS);
@@ -164,8 +168,8 @@ const create = (db, { team, admins }) => {
     const ordersById = new Map(data.orders.map((o) => [o.id, o]));
     const paidToday = data.payments.filter((p) => (String(p.payment_date || "").slice(0, 10) || tkDay(p.created_at)) === today);
     const rows = people.map((m) => {
-      const mine = (data.byManager.get(m.manager_id) || { debts: [] }).debts;
-      const collected = paidToday.filter((p) => (ordersById.get(p.order_id) || {}).manager_id === m.manager_id).reduce((t, p) => t + Number(p.amount || 0), 0);
+      const mine = (data.byManager.get(nameKey(m.name)) || { debts: [] }).debts;
+      const collected = paidToday.filter((p) => nameKey((ordersById.get(p.order_id) || {}).manager_name) === nameKey(m.name)).reduce((t, p) => t + Number(p.amount || 0), 0);
       return { name: m.name, collected, debt: mine.reduce((t, d) => t + d.rest, 0), count: mine.length, old: mine.filter((d) => d.days > OLD_DAYS).length };
     });
     // Promises for a day already gone, still unpaid — told once.

@@ -84,7 +84,7 @@ const customerStats = (orders, lines) => {
     if (!o.customer_id || o.is_draft || o.status === "cancelled") continue;
     const day = String(o.order_date || o.created_at || "").slice(0, 10);
     if (!day) continue;
-    const s = by.get(o.customer_id) || { count: 0, sum: 0, last: "", lastOrders: [], manager_id: null, open: false };
+    const s = by.get(o.customer_id) || { count: 0, sum: 0, last: "", lastOrders: [], manager_id: null, manager_name: "", open: false };
     s.count++;
     s.sum += Number(o.total_amount || 0);
     if (!CLOSED.has(o.status)) s.open = true;
@@ -92,6 +92,7 @@ const customerStats = (orders, lines) => {
       s.last = day;
       s.lastOrders = [o];
       s.manager_id = o.manager_id || s.manager_id;
+      s.manager_name = o.manager_name || s.manager_name;
     } else if (day === s.last) s.lastOrders.push(o);
     by.set(o.customer_id, s);
   }
@@ -269,6 +270,10 @@ const create = (db) => {
     const team = await managers();
     if (!team.length) return { sent: 0, note: "no managers" };
     const data = await load(today);
+    // Orders name their manager (manager_name); point each customer's last
+    // manager at the bot's manager record.
+    const idByName = new Map(team.map((m) => [m.name.trim().toLowerCase(), m.manager_id]));
+    for (const s of data.stats.values()) s.manager_id = idByName.get(String(s.manager_name || "").trim().toLowerCase()) || s.manager_id;
     const { plan } = planDay({ ...data, managerIds: team.map((m) => m.manager_id), today });
     let sent = 0;
     const counts = {};
