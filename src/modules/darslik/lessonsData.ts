@@ -32,11 +32,21 @@ export type Lesson = {
 };
 
 // ── shared pieces ───────────────────────────────────────────────────
-const hello = (what: string): LessonStep => ({
-  title: "Salomlashish",
-  say: `Assalomu alaykum! Vodiy Print'dan, ismim ___. ${what} bo'yicha murojaat qilgan ekansiz — 2 daqiqa gaplasha olamizmi?`,
-  note: "Ismingizni aniq ayting, ovozda tabassum bo'lsin. Band bo'lsa — qachon qo'ng'iroq qilishni so'rab, amoCRM'ga zadacha qo'ying.",
-});
+// Every call opens the same way before SPIN: contact (who, why, may we
+// talk), then the frame (a few questions, then options and price) and the
+// first situation questions.
+const opening = (what: string): LessonStep[] => [
+  {
+    title: "Kontakt",
+    say: `Assalomu alaykum, ___ aka (opa), to'g'rimi? Men ___, Vodiy Print'danman. ${what} bo'yicha qiziqish qoldirgan ekansiz. Hozir 2 daqiqa gaplasha olamizmi?`,
+    note: "Mijozning ismini lid kartasidan oling va o'zingiz ayting — «ismingiz shunaqamidi?» deb so'ramang. Ovozda tabassum bo'lsin. Band bo'lsa — qachon qo'ng'iroq qilishni so'rab, amoCRM'ga zadacha qo'ying.",
+  },
+  {
+    title: "Ramka va vaziyat",
+    say: "Sizga aynan keragini tavsiya qilishim uchun avval 3–4 ta savol beraman, keyin variantlar va narxni aytaman — maylimi? Qaysi shahardasiz? Kompaniyangiz nima bilan shug'ullanadi?",
+    note: "Bu SPIN'ning boshlanishi — vaziyat savollari. Jami 4 tadan ko'p savol bermang, aks holda so'roqqa aylanadi. «Pulingizni muzlatib qo'ymaslik uchun» demang — «aynan keragini tavsiya qilish uchun» deng.",
+  },
+];
 
 const close = (what: string): LessonStep => ({
   title: "Yopish",
@@ -92,7 +102,7 @@ export const LESSONS: Lesson[] = [
       "Ruchka qanaqa bo'lsin?",
     ],
     steps: [
-      hello("Paket"),
+      ...opening("Paket"),
       {
         title: "Ehtiyojni aniqlash",
         say: "Paket nima uchun kerak — do'kon, kafe yoki tadbir? Ichiga nima solinadi? Taxminan nechta va qachonga kerak?",
@@ -175,7 +185,7 @@ export const LESSONS: Lesson[] = [
       "Logotip va kontaktlar tayyormi?",
     ],
     steps: [
-      hello("Vizitka"),
+      ...opening("Vizitka"),
       { title: "Ehtiyojni aniqlash", say: "Vizitka kimlar uchun — o'zingizgami yoki bir nechta xodimgami? Dizayn tayyormi? Qachonga kerak?" },
       { title: "Tavsiya", say: "Ko'pchilik qalin qog'oz, mat laminatsiya, ikki tomonlama variantni tanlaydi — qo'lga yoqimli, uzoq saqlanadi. Ko'zga tashlansin desangiz — logotipni zarhal (folga) bilan qilamiz." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan boshlanadi. Tayyor bo'lishi — {muddat}. Bir nechta xodimga birga qilsak, maket va bosma bir yo'la — arzonroq." },
@@ -225,7 +235,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Tiraj — eng katta ta'sir", "O'lcham va qog'oz turi", "Ikki tomonlama bosma", "Buklash va laminatsiya"],
     ask: ["Nima reklama qilinadi — aksiya, xizmat, ochilish?", "Qanday tarqatiladi?", "Nechta va qachonga?", "Matn va rasm tayyormi?", "Bir yoki ikki tomon?"],
     steps: [
-      hello("Flayer"),
+      ...opening("Flayer"),
       { title: "Ehtiyojni aniqlash", say: "Flayerda nima reklama qilinadi va uni qanday tarqatasiz — ko'chada, do'konda yoki ko'rgazmada? Nechta kerak?" },
       { title: "Tavsiya", say: "Aksiya uchun A5 flayer, melovan qog'oz, ikki tomonlama — eng samarali: yorqin, ko'zga tashlanadi. Xizmatlaringiz ko'p bo'lsa — uch bo'lakli buklet, hammasi sig'adi." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan. Tayyor bo'lishi {muddat}. Tiraj ko'paysa, donasi tez arzonlashadi — flayerda bu juda sezilarli." },
@@ -271,7 +281,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Betlar soni va tiraj", "Qog'oz va muqova turi", "Tikish usuli", "Dizayn hajmi (katalog dizayni alohida xizmat)"],
     ask: ["Katalogda nechta mahsulot bo'ladi?", "Rasm va matnlar tayyormi?", "Nechta nusxa, qachonga?", "Ko'rgazmaga kerakmi (muddat qat'iy)?", "Elektron (PDF) varianti ham kerakmi?"],
     steps: [
-      hello("Katalog"),
+      ...opening("Katalog"),
       { title: "Ehtiyojni aniqlash", say: "Katalogda nechta mahsulot bo'ladi? Rasm va matnlar tayyormi? Qachonga kerak — ko'rgazmagami?" },
       { title: "Tavsiya", say: "Mahsulotingiz soniga qarab 16–24 betlik A4 katalog, laminatsiyali muqova bilan yaxshi chiqadi. Dizaynini ham o'zimiz qilamiz va PDF variantini Telegram'da tarqatish uchun beramiz." },
       { title: "Narx va muddat", say: "Narx betlar soni va tirajga bog'liq — {narx}. Tayyor bo'lishi {muddat}, dizayn bilan birga biroz ko'proq. Ko'rgazma sanasini ayting — muddatni shunga moslaymiz." },
@@ -317,7 +327,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Tiraj", "Muqova turi va varaqlar soni", "Ruchka materiali", "Logotip usuli (bosma, lazer, folga)"],
     ask: ["Kim uchun: xodimlar, mijozlar yoki tadbir?", "Nechta va qachonga (tadbir sanasi)?", "Bloknot o'lchami va muqovasi?", "Ruchka bilan to'plammi?", "Qutiga solinsinmi?"],
     steps: [
-      hello("Bloknot"),
+      ...opening("Bloknot"),
       { title: "Ehtiyojni aniqlash", say: "Bloknot kim uchun — xodimlarmi, mijozlarmi yoki tadbir ishtirokchilari? Nechta va qaysi sanaga kerak?" },
       { title: "Tavsiya", say: "Tadbir uchun A5 prujinali bloknot, logotipli muqova va logotipli ruchka — to'plam bo'lib eng yaxshi ko'rinadi. Muhim mijozlar uchun eko-teri muqovali variant bor." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan. Tayyor bo'lishi {muddat}. Tadbir sanasini ayting — biroz oldinroq tayyorlaymiz." },
@@ -363,7 +373,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Tiraj", "Material (qog'oz yoki plyonka)", "Ranglar soni", "Yorliq shakli va kesish"],
     ask: ["Blank yoki yorliq — nima uchun?", "Yorliq qaysi mahsulotga, qanday sharoitda (sovuq, nam)?", "O'lcham va shakl?", "Oyiga taxminan nechta kerak?", "Rekvizitlar va logotip tayyormi?"],
     steps: [
-      hello("Blank va yorliq"),
+      ...opening("Blank va yorliq"),
       { title: "Ehtiyojni aniqlash", say: "Yorliq qaysi mahsulotga yopishtiriladi — idishga, qutiga, shishaga? Sovuqda yoki namda turadimi? Oyiga taxminan nechta kerak?" },
       { title: "Tavsiya", say: "Nam yoki sovuq joyda turadigan mahsulot uchun plyonka yorliq kerak — qog'oz ko'chib ketadi. Quruq qutiga qog'oz yorliq yetadi va arzonroq." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan. Tayyor bo'lishi {muddat}. Har oy olsangiz, doimiy mijoz narxi va navbatsiz ishlab beramiz." },
@@ -409,7 +419,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Tiraj", "Karton turi (yupqa yoki qattiq)", "Ichki joylar (lojement)", "Ishlov: folga, laminatsiya, magnit, lenta"],
     ask: ["Qutiga nima solinadi (o'lcham)?", "Nechta va qaysi bayram/sanaga?", "Sovg'a uchunmi yoki mahsulot sotish uchun?", "Byudjet bir quti uchun taxminan qancha?", "Ichini ham to'ldirib beraylikmi?"],
     steps: [
-      hello("Sovg'a qutisi"),
+      ...opening("Sovg'a qutisi"),
       { title: "Ehtiyojni aniqlash", say: "Qutiga nima solinadi va qaysi bayramga — Navro'zgami, Yangi yilgami? Nechta kerak va bir quti uchun taxminan qancha byudjet ajratgansiz?" },
       { title: "Tavsiya", say: "Kompaniya sovg'asi uchun qattiq kartonli, magnitli qopqoqli quti, logotip zarhal (folga) bilan — ochganda «voy» degan taassurot beradi. Ichiga bloknot, ruchka, bakal qo'shib, tayyor to'plam qilib beramiz." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan. Tayyor bo'lishi {muddat}. Bayram oldidan navbat uzayadi — hozir buyurtma qilsangiz, vaqtida ulguramiz." },
@@ -456,7 +466,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Mato sifati va zichligi", "Bosma usuli va bosma joylari soni", "Tiraj", "O'lchamlar (katta o'lchamlar qimmatroq bo'lishi mumkin)"],
     ask: ["Nechta va qanday o'lchamlarda (XS–XXXL)?", "Rang va mato?", "Logotip qayerga: ko'krak, orqa, yeng?", "Kundalik kiyishgami yoki bir martalik tadbirga?", "Qachonga kerak?"],
     steps: [
-      hello("Futbolka"),
+      ...opening("Futbolka"),
       { title: "Ehtiyojni aniqlash", say: "Futbolka kimlar uchun — xodimlarmi yoki tadbirgami? Nechta kerak va o'lchamlar qanday? Logotip qayerda bo'lsin — ko'krakda, orqada?" },
       { title: "Tavsiya", say: "Har kuni kiyiladigan bo'lsa, zich paxta mato va DTF bosma — rangli logotip yuvilganda ham saqlanadi. Ofis xodimlariga polo, logotip tikib (vyshivka) — ancha rasmiy ko'rinadi." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan. Tayyor bo'lishi {muddat}. O'lchamlar ro'yxatini tashlasangiz, aniq hisob qilaman." },
@@ -503,7 +513,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Mato qalinligi va sifati", "Logotip usuli (vyshivka qimmatroq)", "Bosma joylari soni", "Tiraj"],
     ask: ["Qaysi mavsumga va kim uchun?", "Nechta, o'lchamlar?", "Rang?", "Logotip: bosma yoki tikilgan?", "Qachonga?"],
     steps: [
-      hello("Xudi"),
+      ...opening("Xudi"),
       { title: "Ehtiyojni aniqlash", say: "Xudi kimlar uchun — xodimlargami yoki sotish uchun merchmi? Nechta, qanday o'lchamlarda va qachonga kerak?" },
       { title: "Tavsiya", say: "Kundalik kiyish uchun qalin, ichi yumshoq futer va ko'krakda tikilgan (vyshivka) logotip — sifatli ko'rinadi va yuvishda buzilmaydi. Orqasiga katta rangli bosma qo'shsa ham bo'ladi." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan. Tayyor bo'lishi {muddat}. O'lchamlarni yuborsangiz, aniq hisoblayman." },
@@ -549,7 +559,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Mato va model", "Raqam/ism/logotip soni", "Tiraj", "Qo'shimcha: aks qaytaruvchi lenta, cho'ntaklar"],
     ask: ["Qaysi soha va qanday sharoitda kiyiladi?", "Nechta xodim, o'lchamlar?", "Logotip, ism, raqam kerakmi?", "Rang va model?", "Qachonga?"],
     steps: [
-      hello("Forma"),
+      ...opening("Forma"),
       { title: "Ehtiyojni aniqlash", say: "Forma qaysi xodimlar uchun va qanday sharoitda kiyiladi — oshxonada, ko'chada, sport zalda? Nechta va qanday o'lchamlarda?" },
       { title: "Tavsiya", say: "Kafe uchun polo va fartuk, logotip bilan — toza va bir xil ko'rinish. Ko'chada ishlaydiganlar uchun aks qaytaruvchi lentali jilet — xavfsiz va logotip ham ko'rinadi." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan. Tayyor bo'lishi {muddat}. Dizaynni saqlab qo'yamiz — yangi xodim kelsa, tez qo'shib beramiz." },
@@ -595,7 +605,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Mahsulot turi (keramika, metall)", "Bosma usuli (sublimatsiya, lazer)", "Tiraj", "Quti/qadoq"],
     ask: ["Kimga sovg'a — xodim yoki mijoz?", "Qaysi bayram yoki tadbirga?", "Nechta va qachonga?", "Har biriga ism yozilsinmi?", "Qutiga solinsinmi?"],
     steps: [
-      hello("Bakal"),
+      ...opening("Bakal"),
       { title: "Ehtiyojni aniqlash", say: "Bakal kimga sovg'a — xodimlargami yoki mijozlargami? Qaysi bayramga va nechta kerak?" },
       { title: "Tavsiya", say: "Xodimlarga har biriga ismi yozilgan bakal — juda yoqadi. Muhim mijozlarga logotip lazer bilan yozilgan termos, chiroyli qutida — qimmatbaho sovg'a." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan. Tayyor bo'lishi {muddat}. Quti bilan birga to'plam qilsak, tayyor sovg'a bo'ladi." },
@@ -641,7 +651,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Material", "Logotip usuli", "Tiraj — kichik suvenirlarda ta'siri katta", "Qadoq"],
     ask: ["Kimga tarqatiladi?", "Nechta va qachonga?", "Material va shakl?", "Logotip rangli yoki bir rang?", "Qadoq kerakmi?"],
     steps: [
-      hello("Suvenir"),
+      ...opening("Suvenir"),
       { title: "Ehtiyojni aniqlash", say: "Suvenirni kimga berasiz — mijozlargami, xodimlargami, ko'rgazmadami? Nechta kerak?" },
       { title: "Tavsiya", say: "Avtosalon yoki uy sotuvi uchun logotipli metall brelok — kalit bilan har kuni qo'lda bo'ladi. Ofisga logotipli devor soati yoki stol bayrog'i — kompaniya maqomini ko'rsatadi." },
       { title: "Narx va muddat", say: "Narxi {narx}, {tiraj} donadan. Tayyor bo'lishi {muddat}. Ko'p olsangiz, donasi sezilarli arzonlashadi." },
@@ -687,7 +697,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["O'lcham (kvadrat metr)", "Material va bosma sifati", "Konstruksiya (roll-up, X-banner)", "Montaj kerakmi"],
     ask: ["Qayerda turadi — ko'chada yoki ichkarida?", "O'lcham?", "Qachonga kerak?", "Dizayn tayyormi?", "O'rnatib berish kerakmi?"],
     steps: [
-      hello("Banner"),
+      ...opening("Banner"),
       { title: "Ehtiyojni aniqlash", say: "Banner qayerda turadi — ko'chadami yoki ichkaridami? O'lchami qancha va qachonga kerak?" },
       { title: "Tavsiya", say: "Tadbir va ko'rgazma uchun roll-up eng qulay: 1 daqiqada yig'iladi, sumkada olib yurasiz, keyingi aksiyada faqat bosmasini almashtirasiz. Ko'cha uchun mustahkam banner, chetlari ilgakli." },
       { title: "Narx va muddat", say: "Narxi {narx}. Tayyor bo'lishi {muddat}. Shoshilinch bo'lsa ayting — ishlab chiqarish bilan tekshirib, aniq vaqtini aytaman." },
@@ -733,7 +743,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Harflar balandligi va soni", "Yorug'lik (LED) bormi", "Material", "Montaj balandligi va murakkabligi"],
     ask: ["Obyekt qayerda, bino qanday?", "Yozuv matni va o'lchami?", "Kechasi yonib tursinmi?", "Ochilish sanasi?", "Ruxsatnomalar bilan masala hal qilinganmi?"],
     steps: [
-      hello("Peshlavha"),
+      ...opening("Peshlavha"),
       { title: "Ehtiyojni aniqlash", say: "Peshlavha qaysi obyekt uchun — qayerda joylashgan? Yozuv qanday bo'ladi va ochilish qachon?" },
       { title: "Tavsiya", say: "Kechasi ham ko'rinishi uchun yorug'li hajmli harflar eng samarali — do'koningiz uzoqdan ko'rinadi. Aniq o'lchov uchun mutaxassisimiz obyektga borib o'lchaydi va dizayn variantini binoning rasmi ustida ko'rsatamiz." },
       { title: "Narx va muddat", say: "Narx o'lcham, yorug'lik va montajga bog'liq — o'lchovdan keyin aniq smeta beramiz. Taxminiy muddat {muddat}. Ochilish sanangizni ayting — shunga rejalashtiramiz." },
@@ -779,7 +789,7 @@ export const LESSONS: Lesson[] = [
     priceNote: ["Ish hajmi (logo, katalog betlari)", "Variantlar va tuzatishlar soni", "Muddat (shoshilinch qimmatroq)", "Fayllar formati (bosma va raqamli)"],
     ask: ["Biznes nima bilan shug'ullanadi?", "Qanday uslub yoqadi — namunalar bormi?", "Ranglar bo'yicha istak?", "Qayerda ishlatiladi: bosma, Instagram, peshlavha?", "Qachonga kerak?"],
     steps: [
-      hello("Dizayn"),
+      ...opening("Dizayn"),
       { title: "Ehtiyojni aniqlash", say: "Biznesingiz nima bilan shug'ullanadi? Qanday uslub yoqadi — yoqqan logolar yoki namunalar bormi? Dizayn qayerlarda ishlatiladi?" },
       { title: "Tavsiya", say: "Logo bilan birga asosiy ranglar va shriftlarni ham belgilab beramiz — keyin vizitka, paket, Instagram hammasi bir xil uslubda bo'ladi. Bu brendni esda qoladigan qiladi." },
       { title: "Narx va muddat", say: "Narxi ish hajmiga qarab — {narx}. Muddati {muddat}. Bir nechta variant ko'rsatamiz, tanlaganingizni tuzatib, tayyor fayllarni beramiz." },
