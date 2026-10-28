@@ -756,12 +756,15 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   // Bitim nazorati (amoDeals.js): at 10:00 each manager's deals without a
   // next task and untouched 3+ days, by name, and one line per manager to
   // the admins; at 15:00 the deals still without a task; a deal lost with
-  // no reason → the admins at once. Working days only for the lists;
+  // no reason → the admins at once. From DEAL_ALERTS_START (2 November);
+  // working days only for the lists;
   // amo_meta/deal_alerts keeps what was sent.
   let dealSent = null;
+  const DEALS_START = process.env.DEAL_ALERTS_START || "2026-11-02";
   const dealAlerts = async (now) => {
     if (!notify) return;
     const today = dayOf(now);
+    if (today < DEALS_START) return;
     const hm = hmOf(now);
     if (!dealSent || dealSent.day !== today) {
       const snap = await db.collection("amo_meta").doc("deal_alerts").get();
