@@ -1,30 +1,53 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Coins, Loader2, Lock } from "lucide-react";
+import { Banknote, CalendarCheck, Check, ChevronDown, ListChecks, Loader2, Lock, TrendingUp, X } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import { currentMonth } from "../../lib/salesPeriod";
 import { formatDate } from "../../lib/format";
-import { rateLabel, short, so } from "../../lib/salesKpi";
+import { dateCodeOf } from "../../utils/attendanceCalculations";
+import { boostTips, canForecast, daysLeft, forecastPayout, monthLabel, monthProgress, num, rateLabel, short, so, type BoostTip, type KpiMonthStatus } from "../../lib/salesKpi";
 import { useKpiMonth, type KpiRow } from "./useKpiMonth";
 
-// Mening KPI — a manager's own month, live: every order entered adds its
-// sales %, every payment its collect % (while attendance and amoCRM hold).
-// Shown on Davomat va KPI → KPI for accounts linked to a Managerlar record.
+// Mening KPI — a manager's own month, live: the money earned so far up
+// front, then what each part is made of, what would raise it, and the
+// orders behind it. Works for any month the server has sums for.
 
-const pct = (n: number | null) => (n === null ? "—" : `${String(Math.round(n * 10) / 10).replace(".", ",")}%`);
+export const pct = (n: number | null) => (n === null ? "—" : `${String(Math.round(n * 10) / 10).replace(".", ",")}%`);
+const MONTHS_GEN = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentyabr", "oktyabr", "noyabr", "dekabr"];
+// "2026-11-22" → "22-noyabr".
+export const dayLabel = (day: string) => `${Number(day.slice(8, 10))}-${MONTHS_GEN[Number(day.slice(5, 7)) - 1] || ""}`;
 
 export function Gauge({ value, threshold, color = "bg-brand-600" }: { value: number; threshold?: number; color?: string }) {
   return (
-    <div className="relative h-2.5 rounded-full bg-ink-100">
+    <div className="relative h-2.5 rounded-full bg-ink-100 dark:bg-ink-200">
       <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
       {threshold !== undefined && <span className="absolute -top-1 h-[18px] w-0.5 rounded bg-rose-500" style={{ left: `${threshold}%` }} title={`${threshold}% chegarasi`} />}
     </div>
   );
 }
 
+// The plan bar with a tick where the calendar is today.
+export function PlanBar({ value, today, color }: { value: number; today?: number; color: string }) {
+  return (
+    <div className="relative h-2.5 rounded-full bg-ink-100 dark:bg-ink-200">
+      <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+      {today !== undefined && today > 0 && today < 100 && (
+        <span className="absolute -top-1.5 h-[22px] w-0.5 rounded bg-ink-900 dark:bg-white" style={{ left: `${today}%` }} title={`bugungi kunga kerak ${Math.round(today)}%`} />
+      )}
+    </div>
+  );
+}
+
+const STEPS: { key: KpiMonthStatus; label: string }[] = [
+  { key: "open", label: "Hisoblanmoqda" },
+  { key: "approved", label: "Tasdiqlandi" },
+  { key: "paid", label: "To'landi" },
+];
+
 export default function MyKpi() {
   const { staff, user } = useAuth();
   const [month, setMonth] = useState(currentMonth());
+  const [all, setAll] = useState(false);
   const managerId = staff?.report_manager_id || "";
   const email = (user?.email || "").toLowerCase();
   const { rows, settings, error } = useKpiMonth(month, managerId ? { managerId, email } : null);
@@ -34,10 +57,7 @@ export default function MyKpi() {
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Coins className="h-5 w-5 text-amber-500" />
-          <h2 className="font-display text-lg font-bold text-ink-900">Mening KPI</h2>
-        </div>
+        <h2 className="font-display text-lg font-bold text-ink-900">Mening KPI</h2>
         <input type="month" className="input w-auto" value={month} max={currentMonth()} onChange={(e) => e.target.value && setMonth(e.target.value)} aria-label="Oy" />
       </div>
       {error && <div className="card p-4 text-sm font-semibold text-rose-600">{error}</div>}
@@ -48,136 +68,307 @@ export default function MyKpi() {
           </div>
         )
       ) : (
-        <>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,1fr)_1.4fr]">
-            <div className="card p-5">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-500">
-                {r.frozen && <Lock className="h-3 w-3" />}
-                {r.frozen ? (r.kpiMonth?.status === "paid" ? "To'langan" : "Tasdiqlangan") : "Bugungacha"}
-              </div>
-              <div className="mt-1 font-display text-[34px] font-extrabold tabular-nums text-ink-900">{so(r.result.payout)}</div>
-              <div className="text-sm text-ink-500">
-                {so(r.result.salesBonus)} sotuvdan + {so(r.result.collectBonus)} kirimdan
-              </div>
-              {r.rates.plan > 0 && (
-                <div className="mt-5">
-                  <div className="flex justify-between text-[13px]">
-                    <b className="text-ink-900">
-                      Reja: {short(r.salesSum)} / {short(r.rates.plan)}
-                    </b>
-                    <span className="text-ink-500">{Math.round(r.result.planPct || 0)}%</span>
-                  </div>
-                  <div className="mt-1.5">
-                    <Gauge value={r.result.planPct || 0} color={(r.result.planPct || 0) >= 100 ? "bg-emerald-500" : "bg-brand-600"} />
-                  </div>
-                  {!r.frozen && r.salesSum < r.rates.plan && (
-                    <div className="mt-1 text-xs text-ink-500">
-                      qoldi {short(r.rates.plan - r.salesSum)} → yana +{short(((r.rates.plan - r.salesSum) * r.rates.sales_rate) / 100)}
-                    </div>
-                  )}
-                </div>
-              )}
-              <Warning row={r} threshold={settings.threshold} />
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Part
-                title={`Sotuvdan ${rateLabel(r.rates.sales_rate)} — aniq`}
-                value={so(r.result.salesBonus)}
-                note={`${r.sales?.order_count || 0} ta buyurtma, jami ${so(r.salesSum)}. Har yangi buyurtma darhol qo'shiladi.`}
-              />
-              <Part
-                title={`Kirimdan ${rateLabel(r.rates.collect_rate)} — intizom`}
-                value={so(r.result.eligible ? r.result.collectBonus : r.result.collectPotential)}
-                strike={!r.result.eligible}
-                note={
-                  r.result.eligible
-                    ? `Shu oy kelgan pul ${so(r.collectedSum)}.${r.sales && r.sales.debt > 0 && !r.frozen ? ` Mijozlar qarzi ${short(r.sales.debt)} — undirsangiz +${short((r.sales.debt * r.rates.collect_rate) / 100)}.` : ""}`
-                    : `Davomat yoki amoCRM ${settings.threshold}% dan past — bu qism berilmaydi.`
-                }
-              />
-              <div className="card p-4">
-                <div className="flex justify-between text-[11px] font-bold uppercase tracking-wide text-ink-500">
-                  <span>Davomat</span>
-                  <span>chegara {settings.threshold}%</span>
-                </div>
-                <div className={`mt-1 font-display text-2xl font-extrabold tabular-nums ${r.result.attendanceOk ? "text-ink-900" : "text-rose-600"}`}>{pct(r.attendancePct)}</div>
-                <div className="mt-2">
-                  <Gauge value={r.attendancePct ?? 0} threshold={settings.threshold} color={r.result.attendanceOk ? "bg-emerald-500" : "bg-rose-500"} />
-                </div>
-                {r.attendance && (
-                  <p className="mt-2 text-xs text-ink-500">
-                    {r.attendance.lateCount} marta kech ({r.attendance.lateMinutes} daq), {r.attendance.earlyCount} marta erta ketdi, {r.attendance.absent} kun kelmagan.
-                  </p>
-                )}
-              </div>
-              <div className="card p-4">
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-500">amoCRM zadachalar</div>
-                <div className={`mt-1 font-display text-2xl font-extrabold tabular-nums ${r.amoPct === null ? "text-ink-400" : r.result.amoOk ? "text-ink-900" : "text-rose-600"}`}>{pct(r.amoPct)}</div>
-                {r.amoPct !== null && (
-                  <div className="mt-2">
-                    <Gauge value={r.amoPct} threshold={settings.threshold} color={r.result.amoOk ? "bg-emerald-500" : "bg-rose-500"} />
-                  </div>
-                )}
-                {r.amo ? (
-                  <>
-                    <p className="mt-2 text-xs text-ink-500">
-                      {r.amo.due ? `${r.amo.due} ta zadachadan ${r.amo.on_time} tasi vaqtida bajarildi.` : "Bu oy muddati kelgan zadacha yo'q."}
-                    </p>
-                    {!r.frozen && (r.amo.today_due > 0 || r.amo.overdue_open > 0 || r.amo.no_task_leads > 0) && (
-                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold">
-                        {r.amo.today_due > 0 && <span className="rounded-md bg-ink-100 px-1.5 py-0.5 text-ink-700">bugun: {r.amo.today_due - r.amo.today_open}/{r.amo.today_due}</span>}
-                        {r.amo.overdue_open > 0 && <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">muddati o'tgan: {r.amo.overdue_open}</span>}
-                        {r.amo.no_task_leads > 0 && <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">zadachasiz lid: {r.amo.no_task_leads}</span>}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="mt-2 text-xs text-ink-500">amoCRM ma'lumoti yo'q — admin xodim profilida amoCRM foydalanuvchisini tanlashi kerak.</p>
-                )}
-              </div>
-            </div>
-          </div>
-          <LinesOfMonth row={r} />
-        </>
+        <Body row={r} month={month} threshold={settings.threshold} all={all} setAll={setAll} />
       )}
     </section>
   );
 }
 
-function Part({ title, value, note, strike }: { title: string; value: string; note: string; strike?: boolean }) {
+function Body({ row: r, month, threshold, all, setAll }: { row: KpiRow; month: string; threshold: number; all: boolean; setAll: (v: boolean) => void }) {
+  const today = dateCodeOf(new Date());
+  const live = month === today.slice(0, 7);
+  const progress = monthProgress(month, today);
+  const forecast = forecastPayout(r, progress);
+  const status = r.kpiMonth?.status || "open";
+  const res = r.result;
+  const planPct = res.planPct;
+  const need = live ? progress * 100 : undefined;
+  const debt = r.sales?.debt || 0;
+  const tips = live && !r.frozen ? boostTips({ ...r, debt, attendanceOk: res.attendanceOk, amoOk: res.amoOk }) : [];
+  const orders = [...(r.sales?.orders || [])].sort((a, b) => (b.date || "").localeCompare(a.date || "") || b.n.localeCompare(a.n));
+  const left = daysLeft(month, today);
+
   return (
-    <div className="card p-4">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-500">{title}</div>
-      <div className={`mt-1 font-display text-2xl font-extrabold tabular-nums ${strike ? "text-rose-600 line-through" : "text-ink-900"}`}>{value}</div>
-      <p className="mt-2 text-xs text-ink-500">{note}</p>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* Hero: the money */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 p-5 text-white shadow-lg shadow-brand-900/20 lg:col-span-2">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10" />
+        <div className="relative">
+          <div className="text-sm font-semibold text-white/85">{live ? "Shu oy topgan pulingiz" : `${monthLabel(month)} — topganingiz`}</div>
+          <div className="mt-1 flex items-baseline gap-2 font-display font-extrabold tabular-nums">
+            <span className="text-[40px] leading-none sm:text-5xl">{num(r.result.payout)}</span>
+            <span className="text-lg font-bold text-white/80">so'm</span>
+          </div>
+          <div className="mt-1.5 text-[13px] text-white/85">
+            {live ? `${dayLabel(today)} holati · oy oxirigacha ${left} kun` : r.frozen ? "Oy yopilgan — raqamlar qotirilgan" : "O'tgan oy — admin tasdiqlashini kutmoqda"}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2.5">
+            {live && !r.frozen && canForecast(progress) ? (
+              <HeroTile value={`≈ ${short(forecast)}`} note="shu sur'atda oy oxiri" />
+            ) : (
+              <HeroTile value={short(res.salesBonus)} note="sotuvdan" />
+            )}
+            {res.eligible ? (
+              <HeroTile value={`+${short(res.collectBonus)}`} note="kirim bonusi qo'shildi" />
+            ) : res.collectPotential > 0 ? (
+              <HeroTile value={`+${short(res.collectPotential)}`} note={r.frozen || !live ? "kirim bonusi — berilmadi" : "kirim bonusi kutyapti"} />
+            ) : (
+              <HeroTile value="0" note="kirim bonusi" />
+            )}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {STEPS.map((s, i) => {
+              const at = STEPS.findIndex((x) => x.key === status);
+              const on = i === at;
+              const done = i < at;
+              return (
+                <span
+                  key={s.key}
+                  className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${on ? "bg-white text-brand-700" : done ? "bg-white/25 text-white" : "bg-white/10 text-white/70"}`}
+                >
+                  {on && <span className="h-1.5 w-1.5 rounded-full bg-brand-600" />}
+                  {done && <Check className="h-3 w-3" />}
+                  {s.label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Sotuv bonusi */}
+      <div className="card p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-display text-base font-bold text-ink-900">Sotuv bonusi</h3>
+            <p className="text-xs text-ink-500">har doim to'lanadi</p>
+          </div>
+          <div className="text-right">
+            <div className="font-display text-2xl font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400">{short(res.salesBonus)}</div>
+            <div className="text-[11px] font-semibold text-ink-500">topildi</div>
+          </div>
+        </div>
+        <Formula>
+          Sotuv <b>{short(r.salesSum)}</b> × {rateLabel(r.rates.sales_rate)} = <b>{short(res.salesBonus)}</b> · {r.sales?.order_count || 0} ta buyurtma
+        </Formula>
+        {planPct !== null ? (
+          <div className="mt-4">
+            <PlanBar value={planPct} today={need} color={planPct >= 100 ? "bg-emerald-500" : need !== undefined && planPct < need - 15 ? "bg-rose-500" : "bg-brand-600"} />
+            <div className="mt-1.5 flex justify-between gap-2 text-xs text-ink-500">
+              <span>
+                Reja {short(r.rates.plan)} · <b className="text-ink-700">{Math.round(planPct)}%</b>
+              </span>
+              {need !== undefined && !r.frozen && (
+                <span className={planPct >= need ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600"}>
+                  bugungi kunga kerak {Math.round(need)}% {planPct >= need ? "✓" : "✗"}
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-ink-500">Bu oyga reja qo'yilmagan.</p>
+        )}
+      </div>
+
+      {/* Kirim bonusi */}
+      <div className="card p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-display text-base font-bold text-ink-900">Kirim bonusi</h3>
+            <p className="text-xs text-ink-500">shartlar bajarilsa to'lanadi</p>
+          </div>
+          <div className="text-right">
+            <div className={`font-display text-2xl font-extrabold tabular-nums ${res.eligible ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+              {short(res.eligible ? res.collectBonus : res.collectPotential)}
+            </div>
+            <div className="text-[11px] font-semibold text-ink-500">{res.eligible ? "topildi" : live && !r.frozen ? "hozir qulf" : "berilmadi"}</div>
+          </div>
+        </div>
+        <Formula>
+          Kirim <b>{short(r.collectedSum)}</b> × {rateLabel(r.rates.collect_rate)} = <b>{short(res.collectPotential)}</b>
+        </Formula>
+        <div className="mt-3 grid grid-cols-2 gap-2.5">
+          <Condition ok={res.attendanceOk} value={r.staff ? pct(r.attendancePct) : "—"} label="Davomat" threshold={threshold} />
+          <Condition ok={res.amoOk} value={pct(r.amoPct)} label="amoCRM vazifalar" threshold={threshold} muted={r.amoPct === null} />
+        </div>
+        {(r.attendance || (r.amo && r.amo.due > 0)) && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+            {r.attendance && (r.attendance.lateCount > 0 || r.attendance.absent > 0) && (
+              <span className="rounded-md bg-ink-100 px-1.5 py-0.5 dark:bg-ink-200/70 text-ink-700">
+                {r.attendance.lateCount} marta kech · {r.attendance.absent} kun kelmagan
+              </span>
+            )}
+            {r.amo && r.amo.due > 0 && (
+              <span className="rounded-md bg-ink-100 px-1.5 py-0.5 dark:bg-ink-200/70 text-ink-700">
+                {r.amo.on_time}/{r.amo.due} vazifa vaqtida
+              </span>
+            )}
+            {!r.frozen && live && r.amo && r.amo.overdue_open > 0 && (
+              <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">muddati o'tgan: {r.amo.overdue_open}</span>
+            )}
+            {!r.frozen && live && r.amo && r.amo.no_task_leads > 0 && (
+              <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">vazifasiz bitim: {r.amo.no_task_leads}</span>
+            )}
+          </div>
+        )}
+        <LockNote row={r} threshold={threshold} live={live} />
+      </div>
+
+      {/* Qanday ko'paytiraman */}
+      {tips.length > 0 && (
+        <div className="card p-5">
+          <h3 className="font-display text-base font-bold text-ink-900">Qanday ko'paytiraman</h3>
+          <div className="mt-2 divide-y divide-ink-100">
+            {tips.map((t) => (
+              <Tip key={t.kind} tip={t} eligible={res.eligible} threshold={threshold} toPlan={r.rates.plan > r.salesSum} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Oxirgi buyurtmalar */}
+      <div className={`card p-5 ${tips.length ? "" : "lg:col-span-2"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-display text-base font-bold text-ink-900">Oxirgi buyurtmalar</h3>
+          {(orders.length > 3 || (r.sales?.payments.length || 0) > 0) && (
+            <button type="button" className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-brand-700 hover:underline" onClick={() => setAll(!all)}>
+              {all ? "Yig'ish" : "Hammasi"}
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${all ? "rotate-180" : ""}`} />
+            </button>
+          )}
+        </div>
+        {!orders.length ? (
+          <p className="mt-2 text-sm text-ink-500">Bu oyda buyurtma yo'q</p>
+        ) : (
+          <div className="mt-1 divide-y divide-ink-100">
+            {orders.slice(0, 3).map((o) => (
+              <div key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
+                <span className="min-w-0 truncate text-ink-600">
+                  <b className="font-semibold text-ink-800">{o.n || "—"}</b> · {o.customer || o.title} · {short(o.total)}
+                </span>
+                <span className="shrink-0 font-bold tabular-nums text-emerald-700 dark:text-emerald-400">+{short((o.total * r.rates.sales_rate) / 100)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {all && (
+        <div className="lg:col-span-2">
+          <LinesOfMonth row={r} />
+        </div>
+      )}
     </div>
   );
 }
 
-// Close to losing (or already lost) the collect part: say so.
-function Warning({ row, threshold }: { row: KpiRow; threshold: number }) {
-  if (row.frozen) return null;
-  if (!row.result.amoOk)
+function HeroTile({ value, note }: { value: string; note: string }) {
+  return (
+    <div className="rounded-2xl bg-white/15 px-3.5 py-3 backdrop-blur-sm">
+      <div className="font-display text-lg font-extrabold tabular-nums">{value}</div>
+      <div className="text-[11px] text-white/85">{note}</div>
+    </div>
+  );
+}
+
+function Formula({ children }: { children: React.ReactNode }) {
+  return <div className="mt-3 rounded-xl bg-ink-50 px-3 py-2.5 text-[13px] tabular-nums text-ink-700 dark:bg-ink-200/50">{children}</div>;
+}
+
+function Condition({ ok, value, label, threshold, muted }: { ok: boolean; value: string; label: string; threshold: number; muted?: boolean }) {
+  const cls = muted
+    ? "bg-ink-50 text-ink-500 dark:bg-ink-200/50"
+    : ok
+      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+      : "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300";
+  return (
+    <div className={`rounded-xl px-3 py-2.5 ${cls}`}>
+      <div className="font-display text-xl font-extrabold tabular-nums">{value}</div>
+      <div className="flex items-center gap-1 text-[11px] font-semibold">
+        {label} {muted ? null : ok ? <Check className="h-3 w-3 shrink-0" /> : <X className="h-3 w-3 shrink-0" />}
+      </div>
+      <div className="text-[11px] opacity-80">{muted ? "ma'lumot yo'q" : `kerak ${threshold}%`}</div>
+    </div>
+  );
+}
+
+// Why the collect part is locked, or a nudge when attendance is close.
+function LockNote({ row, threshold, live }: { row: KpiRow; threshold: number; live: boolean }) {
+  const res = row.result;
+  const box = "mt-3 flex gap-2 rounded-xl px-3 py-2.5 text-[13px]";
+  if (!row.staff)
+    return <div className={`${box} bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200`}>Xodim profili bog'lanmagan — admin Sozlamalar → Xodimlar'da bog'lashi kerak.</div>;
+  if (!res.eligible && res.collectPotential > 0) {
+    const what = !res.amoOk ? "Vazifalarni o'z vaqtida bajarib" : "Ishga o'z vaqtida kelib";
     return (
-      <div className="mt-4 rounded-xl bg-rose-50 px-3 py-2.5 text-[13px] text-rose-700 dark:bg-rose-900/30 dark:text-rose-200">
-        ⚠️ amoCRM zadachalari {threshold}% dan past — kirim bonusi ({so(row.result.collectPotential)}) hozircha berilmaydi. Zadachalarni muddatida yoping.
+      <div className={`${box} bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200`}>
+        <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          {live && !row.frozen ? (
+            <>
+              {what}, <b>{threshold}%</b> ga chiqaring — <b>{short(res.collectPotential)}</b> bonusingizga qo'shiladi.
+            </>
+          ) : (
+            <>
+              {!res.amoOk ? "amoCRM vazifalar" : "Davomat"} {threshold}% dan past bo'lgani uchun <b>{short(res.collectPotential)}</b> berilmadi.
+            </>
+          )}
+        </span>
       </div>
     );
-  if (row.attendancePct === null) return null;
-  if (!row.result.attendanceOk)
+  }
+  if (live && !row.frozen && row.attendancePct !== null && row.attendancePct < threshold + 5)
     return (
-      <div className="mt-4 rounded-xl bg-rose-50 px-3 py-2.5 text-[13px] text-rose-700 dark:bg-rose-900/30 dark:text-rose-200">
-        ⚠️ Davomat {threshold}% dan past — kirim bonusi ({so(row.result.collectPotential)}) hozircha berilmaydi.
-      </div>
-    );
-  if (row.attendancePct < threshold + 5)
-    return (
-      <div className="mt-4 rounded-xl bg-amber-50 px-3 py-2.5 text-[13px] text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
-        ⚠️ Davomat {threshold}% chegarasiga yaqin — kech qolmang, aks holda kirim bonusini ({so(row.result.collectPotential)}) yo'qotasiz.
+      <div className={`${box} bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200`}>
+        Davomat {threshold}% chegarasiga yaqin — kech qolmang, aks holda {short(res.collectPotential)} kirim bonusini yo'qotasiz.
       </div>
     );
   return null;
+}
+
+function Tip({ tip, eligible, threshold, toPlan }: { tip: BoostTip; eligible: boolean; threshold: number; toPlan: boolean }) {
+  const icon = {
+    sales: <TrendingUp className="h-4 w-4" />,
+    debt: <Banknote className="h-4 w-4" />,
+    tasks: <ListChecks className="h-4 w-4" />,
+    attendance: <CalendarCheck className="h-4 w-4" />,
+  }[tip.kind];
+  const tint = {
+    sales: "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300",
+    debt: "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+    tasks: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+    attendance: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+  }[tip.kind];
+  const g = <b className="text-emerald-700 dark:text-emerald-400">+{short(tip.gain)}</b>;
+  const a = <b className="text-emerald-700 dark:text-emerald-400">{short(tip.amount)}</b>;
+  return (
+    <div className="flex items-center gap-3 py-3 text-sm text-ink-800">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tint}`}>{icon}</span>
+      <span>
+        {tip.kind === "sales" && (
+          <>
+            {toPlan ? "Rejagacha yana" : "Yana"} {a} sotuv → {g}
+          </>
+        )}
+        {tip.kind === "debt" && (
+          <>
+            Qarzni undiring: {a} → {g}
+            {!eligible && <span className="text-xs text-ink-500"> (shartlar bajarilsa)</span>}
+          </>
+        )}
+        {tip.kind === "tasks" && (
+          <>
+            Vazifalar {threshold}% → kirim bonusi {g}
+          </>
+        )}
+        {tip.kind === "attendance" && (
+          <>
+            Davomat {threshold}% dan yuqori → kirim bonusi {g}
+          </>
+        )}
+      </span>
+    </div>
+  );
 }
 
 // The orders and payments behind the month's sums, each with what it adds.

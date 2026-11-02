@@ -1,14 +1,15 @@
-import { Fragment, useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronRight, Download, Loader2, Lock, Settings2, Unlock, Wallet } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CheckCircle2, ChevronLeft, Download, Loader2, Lock, Settings2, Unlock, Wallet } from "lucide-react";
 import { updateOne, upsertOne } from "../../lib/firestoreDb";
 import { useAuth } from "../../lib/AuthContext";
 import { exportCsv } from "../../lib/exportCsv";
 import { currentMonth } from "../../lib/salesPeriod";
 import { canSeeOwnKpi } from "../../lib/permissions";
-import { DEFAULT_SALES_KPI, num, rateLabel, short, so, type KpiMonth, type KpiSnapshot, type SalesKpiSettings } from "../../lib/salesKpi";
+import { canForecast, DEFAULT_SALES_KPI, forecastPayout, forecastSales, monthBefore, monthLabel, monthProgress, planState, rateLabel, short, so, type KpiMonth, type KpiSnapshot, type PlanState, type SalesKpiSettings } from "../../lib/salesKpi";
+import { dateCodeOf } from "../../utils/attendanceCalculations";
 import Modal from "../../components/ui/Modal";
 import { useKpiMonth, type KpiRow } from "./useKpiMonth";
-import MyKpi, { Gauge, LinesOfMonth } from "./MyKpi";
+import MyKpi, { dayLabel, LinesOfMonth, pct, PlanBar } from "./MyKpi";
 import RatesPanel, { type RatesSave } from "./RatesPanel";
 
 // KPI (admin): every sales manager's month — sales % of the orders they
@@ -20,7 +21,6 @@ const STATUS: Record<KpiMonth["status"], { label: string; cls: string }> = {
   approved: { label: "tasdiqlangan", cls: "bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200" },
   paid: { label: "to'landi", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" },
 };
-const pct = (n: number | null) => (n === null ? "—" : `${String(Math.round(n * 10) / 10).replace(".", ",")}%`);
 
 // A manager account sees only its own KPI here.
 export default function KpiRoute() {
@@ -124,22 +124,38 @@ function KpiPage() {
     );
   };
 
+  const today = dateCodeOf(new Date());
+  const live = month === today.slice(0, 7);
+  const progress = monthProgress(month, today);
+  const forecast = (rows || []).reduce((t, r) => t + forecastPayout(r, progress), 0);
+  const planTotal = (rows || []).reduce((t, r) => t + (r.rates.plan > 0 ? r.rates.plan : 0), 0);
+  const locked = (rows || []).reduce((t, r) => t + (r.result.eligible ? 0 : r.result.collectPotential), 0);
+  const people = (rows || []).filter((r) => r.result.payout > 0).length;
+  const openRow = rows?.find((r) => r.manager.id === open) || null;
+  const prev = monthBefore(month);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">KPI</h1>
+          <h1 className="font-display text-2xl font-bold text-ink-900">KPI · {monthLabel(month)}</h1>
           <p className="text-sm text-ink-500">
-            Sotuvdan {rateLabel(settings.sales_rate)} — aniq; kirimdan {rateLabel(settings.collect_rate)} — davomat va amoCRM {settings.threshold}% dan yuqori bo'lsa
+            Har menejer qancha oladi va nima uchun · {live ? `${dayLabel(today)} holati` : "yopilgan oy"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn-secondary" onClick={() => setMonth(prev)} title={monthLabel(prev)}>
+            <ChevronLeft className="h-4 w-4" /> {monthLabel(prev).split(" ")[0]}
+          </button>
           <input type="month" className="input w-auto" value={month} max={currentMonth()} onChange={(e) => e.target.value && setMonth(e.target.value)} aria-label="Oy" />
           <button type="button" className="btn-secondary" onClick={() => setSettingsOpen(true)}>
             <Settings2 className="h-4 w-4" /> Sozlamalar
           </button>
           <button type="button" className="btn-secondary" onClick={exportReport} disabled={!rows}>
             <Download className="h-4 w-4" /> Excel
+          </button>
+          <button type="button" className="btn-primary" onClick={() => void approveAll()} disabled={!rows?.some((r) => !r.frozen && r.result.payout > 0)}>
+            <CheckCircle2 className="h-4 w-4" /> Hammasini tasdiqlash
           </button>
         </div>
       </div>
@@ -154,162 +170,65 @@ function KpiPage() {
         )
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Tile label="Sotuv" value={so(totals.sales)} hint="kiritilgan buyurtmalar" />
-            <Tile label="Kirim" value={so(totals.collected)} hint="shu oy kelgan pul" />
-            <Tile label="To'lanadi" value={so(totals.payout)} hint="sotuv bonusi + kirim bonusi" strong />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 p-5 text-white shadow-lg shadow-brand-900/20">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-white/80">
+                <Wallet className="h-3.5 w-3.5" /> Jami to'lanadi
+              </div>
+              <div className="mt-1.5 font-display text-[28px] font-extrabold tabular-nums">{short(totals.payout)}</div>
+              <div className="text-xs text-white/85">
+                {people} menejer{live && forecast > totals.payout ? ` · oy oxirigacha prognoz ≈ ${short(forecast)}` : ""}
+              </div>
+            </div>
+            <Tile
+              label="Sotuv"
+              value={short(totals.sales)}
+              hint={planTotal > 0 ? `rejaning ${Math.round((totals.sales / planTotal) * 100)}%${live ? ` · oyning ${Math.round(progress * 100)}%` : ""}` : "kiritilgan buyurtmalar"}
+            />
+            <Tile label="Kirim" value={short(totals.collected)} hint="shu oy tushgan pul" />
+            <Tile label="Qulfda" value={short(locked)} hint={live ? "shart bajarilmagan kirim bonusi" : "shart bajarilmagani uchun berilmagan"} warn={locked > 0} />
           </div>
 
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-sm tabular-nums">
-                <thead className="bg-ink-50/60">
-                  <tr>
-                    {["", "Menejer", "Sotuv, so'm", "Reja", "Sotuv bonusi", "Kirim, so'm", "Davomat", "amoCRM", "Kirim bonusi", "Jami, so'm", "Holat"].map((h, i) => (
-                      <th key={i} className={`table-th ${[2, 4, 5, 8, 9].includes(i) ? "text-right" : ""}`}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-ink-100">
-                  {rows.map((r) => {
-                    const st = r.kpiMonth?.status || "open";
-                    const expanded = open === r.manager.id;
-                    const set = r.rates.plan > 0 || r.manager.sales_rate != null || r.kpiMonth?.sales_rate != null;
-                    return (
-                      <Fragment key={r.manager.id}>
-                        <tr className={expanded ? "bg-ink-50/50" : ""}>
-                          <td className="table-td w-8 pr-0">
-                            <button type="button" onClick={() => setOpen(expanded ? null : r.manager.id)} className="rounded p-1 text-ink-400 hover:bg-ink-100" aria-label="Batafsil">
-                              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            </button>
-                          </td>
-                          <td className="table-td">
-                            <div className="font-semibold text-ink-900">{r.manager.name}</div>
-                            {!r.staff && <div className="text-[11px] text-amber-600">xodim profili bog'lanmagan</div>}
-                            <button
-                              type="button"
-                              onClick={() => setOpen(r.manager.id)}
-                              className={`mt-1 inline-flex whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${set ? "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}`}
-                            >
-                              {set ? `${r.rates.plan > 0 ? `Reja ${short(r.rates.plan)}` : "Reja —"} · ${rateLabel(r.rates.sales_rate)} / ${rateLabel(r.rates.collect_rate)}` : "+ reja qo'yish"}
-                            </button>
-                          </td>
-                          <td className="table-td whitespace-nowrap text-right">
-                            {num(r.salesSum)}
-                            <div className="text-[11px] text-ink-400">{r.sales?.order_count || 0} ta buyurtma</div>
-                          </td>
-                          <td className="table-td">
-                            {r.result.planPct === null ? (
-                              <span className="text-[11px] text-amber-600">reja yo'q</span>
-                            ) : (
-                              <>
-                                <div className="w-24">
-                                  <Gauge value={r.result.planPct} color={r.result.planPct >= 100 ? "bg-emerald-500" : "bg-brand-600"} />
-                                </div>
-                                <div className="mt-1 whitespace-nowrap text-xs">
-                                  <b>{Math.round(r.result.planPct)}%</b> <span className="text-ink-400">/ {short(r.rates.plan)}</span>
-                                </div>
-                              </>
-                            )}
-                          </td>
-                          <td className="table-td whitespace-nowrap text-right font-semibold text-ink-900">
-                            {num(r.result.salesBonus)}
-                            <div className="text-[11px] font-normal text-ink-400">{rateLabel(r.rates.sales_rate)}</div>
-                          </td>
-                          <td className="table-td whitespace-nowrap text-right">
-                            {num(r.collectedSum)}
-                            {!r.frozen && r.sales && r.sales.debt > 0 && <div className="text-[11px] text-ink-400">qarz {short(r.sales.debt)}</div>}
-                          </td>
-                          <td className="table-td whitespace-nowrap">
-                            {r.staff ? (
-                              <Cond ok={r.result.attendanceOk} value={pct(r.attendancePct)} threshold={settings.threshold} />
-                            ) : (
-                              <span className="text-xs font-semibold text-amber-600" title="Sozlamalar → Xodimlar → «Manager profili»">
-                                profil bog'lanmagan
-                              </span>
-                            )}
-                          </td>
-                          <td className="table-td whitespace-nowrap">
-                            {r.amoPct === null ? (
-                              <span className="text-xs text-ink-400" title="Xodim profilida amoCRM foydalanuvchisi tanlanmagan yoki bu oy zadacha yo'q">
-                                {r.amo ? "zadacha yo'q" : "—"}
-                              </span>
-                            ) : (
-                              <Cond ok={r.result.amoOk} value={pct(r.amoPct)} threshold={settings.threshold} />
-                            )}
-                            {r.amo && r.amo.due > 0 && (
-                              <div className="text-[11px] text-ink-400">
-                                {r.amo.on_time}/{r.amo.due} vaqtida{!r.frozen && r.amo.overdue_open ? ` · ${r.amo.overdue_open} ochiq` : ""}
-                              </div>
-                            )}
-                          </td>
-                          <td className={`table-td whitespace-nowrap text-right font-semibold ${r.result.eligible ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600"}`}>
-                            {r.result.eligible ? `+${num(r.result.collectBonus)}` : "0"}
-                            <div className="text-[11px] font-normal text-ink-400">
-                              {r.result.eligible ? rateLabel(r.rates.collect_rate) : r.result.collectPotential > 0 ? `${num(r.result.collectPotential)} berilmaydi` : ""}
-                            </div>
-                          </td>
-                          <td className="table-td whitespace-nowrap text-right font-display text-[15px] font-extrabold text-ink-900">{num(r.result.payout)}</td>
-                          <td className="table-td">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className={`chip ${STATUS[st].cls}`}>
-                                {st !== "open" && <Lock className="h-3 w-3" />}
-                                {STATUS[st].label}
-                              </span>
-                              {busy === r.manager.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin text-ink-400" />
-                              ) : st === "open" ? (
-                                <button type="button" className="text-xs font-semibold text-brand-700 hover:underline disabled:opacity-40" disabled={!r.result.payout} onClick={() => void approve(r)}>
-                                  Tasdiqlash
-                                </button>
-                              ) : st === "approved" ? (
-                                <>
-                                  <button type="button" className="text-xs font-semibold text-emerald-700 hover:underline" onClick={() => void write(r, { status: "paid", paid_at: new Date().toISOString(), paid_by: me })}>
-                                    To'landi
-                                  </button>
-                                  <button type="button" className="text-xs text-ink-500 hover:underline" title="Qayta ochish" onClick={() => void write(r, { status: "open", snapshot: null })}>
-                                    <Unlock className="inline h-3 w-3" />
-                                  </button>
-                                </>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                        {expanded && (
-                          <tr>
-                            <td colSpan={11} className="bg-ink-50/50 px-6 pb-4 pt-1">
-                              <div className="space-y-4 pt-2">
-                                <RatesPanel row={r} month={month} threshold={settings.threshold} onSave={(v) => saveRates(r, v)} />
-                                <LinesOfMonth row={r} admin />
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                  {!rows.length && (
-                    <tr>
-                      <td colSpan={11} className="table-td py-10 text-center text-ink-500">
-                        Managerlar yo'q — Sozlamalar → Managerlar
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          {!rows.length ? (
+            <div className="card p-10 text-center text-sm text-ink-500">Managerlar yo'q — Sozlamalar → Managerlar</div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {rows.map((r, i) => (
+                <ManagerCard
+                  key={r.manager.id}
+                  row={r}
+                  index={i}
+                  live={live}
+                  progress={progress}
+                  threshold={settings.threshold}
+                  busy={busy === r.manager.id}
+                  expanded={open === r.manager.id}
+                  onToggle={() => setOpen(open === r.manager.id ? null : r.manager.id)}
+                  onApprove={() => void approve(r)}
+                  onPaid={() => void write(r, { status: "paid", paid_at: new Date().toISOString(), paid_by: me })}
+                  onReopen={() => void write(r, { status: "open", snapshot: null })}
+                />
+              ))}
             </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="max-w-3xl text-xs text-ink-500">
-              Sotuv — shu oy kiritilgan buyurtmalar (bekor qilingan va qoralama hisobga kirmaydi). Kirim — shu oy kelgan pul, eski buyurtmalar qarzi ham. Davomat — ish jadvalidagi vaqtdan
-              ishlagani: kelmagan kun, kech kelish va erta ketish ayiriladi. Tasdiqlangan oy qotiriladi va menejerga Telegram'da hisobot boradi.
-            </p>
-            <button type="button" className="btn-primary" onClick={() => void approveAll()} disabled={!rows.some((r) => !r.frozen && r.result.payout > 0)}>
-              <CheckCircle2 className="h-4 w-4" /> Oyni yopish va tasdiqlash
-            </button>
-          </div>
+          )}
+
+          {openRow && (
+            <div className="card space-y-4 p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-base font-bold text-ink-900">{openRow.manager.name} — batafsil</h2>
+                <button type="button" className="btn-ghost" onClick={() => setOpen(null)}>
+                  Yopish
+                </button>
+              </div>
+              <RatesPanel key={`${month}_${openRow.manager.id}`} row={openRow} month={month} threshold={settings.threshold} onSave={(v) => saveRates(openRow, v)} />
+              <LinesOfMonth row={openRow} admin />
+            </div>
+          )}
+
+          <p className="max-w-4xl text-xs text-ink-500">
+            «Batafsil» — reja va foizlar, buyurtmalar va to'lovlar ro'yxati, har biridan qancha bonus. Sotuv — shu oy kiritilgan buyurtmalar (bekor qilingan va qoralama kirmaydi). Kirim — shu oy
+            kelgan pul, eski qarzlar ham. Tasdiqlangan oy qotiriladi va menejerga Telegram'da hisobot boradi.
+          </p>
         </>
       )}
 
@@ -318,25 +237,172 @@ function KpiPage() {
   );
 }
 
-function Cond({ ok, value, threshold }: { ok: boolean; value: string; threshold: number }) {
+const AVATAR = ["from-violet-500 to-indigo-600", "from-sky-500 to-teal-600", "from-rose-500 to-orange-500", "from-emerald-500 to-teal-600", "from-amber-500 to-orange-600"];
+const PLAN_PILL: Record<PlanState, { label: string; cls: string } | null> = {
+  done: { label: "reja bajarildi", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" },
+  on: { label: "rejada", cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" },
+  behind: { label: "ortda", cls: "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
+  risk: { label: "xavf", cls: "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" },
+  none: null,
+};
+
+function ManagerCard({
+  row: r,
+  index,
+  live,
+  progress,
+  threshold,
+  busy,
+  expanded,
+  onToggle,
+  onApprove,
+  onPaid,
+  onReopen,
+}: {
+  row: KpiRow;
+  index: number;
+  live: boolean;
+  progress: number;
+  threshold: number;
+  busy: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  onApprove: () => void;
+  onPaid: () => void;
+  onReopen: () => void;
+}) {
+  const st = r.kpiMonth?.status || "open";
+  const res = r.result;
+  const state = planState(res.planPct, progress);
+  // A closed month either made the plan or did not.
+  const pill = !live && state !== "done" && state !== "none" ? { label: "reja bajarilmadi", cls: PLAN_PILL.behind!.cls } : PLAN_PILL[state];
+  const forecast = forecastPayout(r, progress);
+  const need = live && !r.frozen ? progress * 100 : undefined;
+  const bar = state === "done" || state === "on" ? "bg-emerald-500" : state === "risk" ? "bg-gradient-to-r from-rose-400 to-rose-600" : "bg-brand-600";
+  const lockedCollect = !res.eligible && res.collectPotential > 0;
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <b className={ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600"}>{value}</b>
-      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${ok ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"}`}>
-        {ok ? "✓" : `${threshold}% dan past`}
-      </span>
+    <div className={`card flex flex-col p-5 ${expanded ? "ring-2 ring-brand-500" : ""}`}>
+      <div className="flex items-start gap-3">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-base font-bold text-white ${AVATAR[index % AVATAR.length]}`}>
+          {(r.manager.name || "?").trim().charAt(0).toUpperCase()}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-display text-base font-bold text-ink-900">{r.manager.name}</div>
+          {r.rates.plan > 0 ? (
+            <div className="text-xs text-ink-500">Reja {short(r.rates.plan)}</div>
+          ) : (
+            <button type="button" onClick={onToggle} className="text-xs font-semibold text-amber-600 hover:underline">
+              + reja qo'yish
+            </button>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          {pill && <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${pill.cls}`}>{pill.label}</span>}
+          {st !== "open" && (
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${STATUS[st].cls}`}>
+              <Lock className="h-3 w-3" /> {STATUS[st].label}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 font-display text-[28px] font-extrabold leading-tight tabular-nums text-ink-900">{so(res.payout)}</div>
+      <div className="text-xs text-ink-500">
+        to'lanadi{live && !r.frozen && forecast > res.payout ? ` · prognoz ≈ ${short(forecast)}` : ""}
+      </div>
+
+      {res.planPct !== null && (
+        <div className="mt-3">
+          <PlanBar value={res.planPct} today={need} color={bar} />
+          <div className="mt-1.5 flex justify-between text-xs text-ink-500">
+            <span>
+              Sotuv {short(r.salesSum)} · {Math.round(res.planPct)}%
+            </span>
+            {live && !r.frozen && canForecast(progress) && <span>→ {short(forecastSales(r.salesSum, progress))}</span>}
+          </div>
+        </div>
+      )}
+      {res.planPct === null && <div className="mt-3 text-xs text-ink-500">Sotuv {short(r.salesSum)} · {r.sales?.order_count || 0} ta buyurtma</div>}
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-ink-50 px-3 py-2 dark:bg-ink-200/50">
+          <div className="font-display text-base font-extrabold tabular-nums text-ink-900">{short(res.salesBonus)}</div>
+          <div className="text-[11px] text-ink-500">sotuv bonusi {rateLabel(r.rates.sales_rate)}</div>
+        </div>
+        <div className={`rounded-xl px-3 py-2 ${lockedCollect ? "bg-rose-50 dark:bg-rose-900/25" : "bg-ink-50 dark:bg-ink-200/50"}`}>
+          <div className={`font-display text-base font-extrabold tabular-nums ${lockedCollect ? "text-rose-600 line-through" : "text-ink-900"}`}>
+            {short(lockedCollect ? res.collectPotential : res.collectBonus)}
+          </div>
+          <div className="text-[11px] text-ink-500">{lockedCollect ? "kirim bonusi — qulf" : `kirim bonusi ${rateLabel(r.rates.collect_rate)}`}</div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {r.staff ? (
+          <CondChip ok={res.attendanceOk} label={`Davomat ${pct(r.attendancePct)}`} />
+        ) : (
+          <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title="Sozlamalar → Xodimlar → «Manager profili»">
+            profil bog'lanmagan
+          </span>
+        )}
+        {r.amoPct === null ? (
+          <span className="rounded-md bg-ink-100 px-2 py-0.5 dark:bg-ink-200/70 text-[11px] font-semibold text-ink-500" title={`amoCRM foydalanuvchisi tanlanmagan yoki bu oy vazifa yo'q (chegara ${threshold}%)`}>
+            Vazifalar —
+          </span>
+        ) : (
+          <CondChip ok={res.amoOk} label={`Vazifalar ${pct(r.amoPct)}`} />
+        )}
+        {live && !r.frozen && r.sales && r.sales.debt > 0 && (
+          <span className="rounded-md bg-ink-100 px-2 py-0.5 dark:bg-ink-200/70 text-[11px] font-semibold text-ink-600">qarz {short(r.sales.debt)}</span>
+        )}
+      </div>
+
+      <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
+        <button type="button" className="btn-secondary justify-center" onClick={onToggle}>
+          {expanded ? "Yopish" : "Batafsil"}
+        </button>
+        {busy ? (
+          <span className="flex items-center justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-ink-400" />
+          </span>
+        ) : st === "open" ? (
+          <button type="button" className="btn-primary justify-center" disabled={!res.payout} onClick={onApprove}>
+            Tasdiqlash
+          </button>
+        ) : st === "approved" ? (
+          <div className="flex gap-1.5">
+            <button type="button" className="btn-primary flex-1 justify-center bg-emerald-600 hover:bg-emerald-700" onClick={onPaid}>
+              To'landi
+            </button>
+            <button type="button" className="btn-secondary px-2.5" title="Qayta ochish" aria-label="Qayta ochish" onClick={onReopen}>
+              <Unlock className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <span className="flex items-center justify-center gap-1 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-4 w-4" /> To'langan
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CondChip({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${ok ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"}`}
+    >
+      {label} {ok ? "✓" : "✗"}
     </span>
   );
 }
 
-function Tile({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
+function Tile({ label, value, hint, warn }: { label: string; value: string; hint?: string; warn?: boolean }) {
   return (
-    <div className="card p-4">
-      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-500">
-        {strong && <Wallet className="h-3.5 w-3.5" />}
-        {label}
-      </div>
-      <div className={`mt-1 font-display font-extrabold tabular-nums ${strong ? "text-2xl text-brand-700 dark:text-brand-300" : "text-xl text-ink-900"}`}>{value}</div>
+    <div className="card p-5">
+      <div className="text-[11px] font-bold uppercase tracking-wider text-ink-500">{label}</div>
+      <div className={`mt-1.5 font-display text-[28px] font-extrabold tabular-nums ${warn ? "text-amber-600 dark:text-amber-400" : "text-ink-900"}`}>{value}</div>
       {hint && <div className="text-xs text-ink-500">{hint}</div>}
     </div>
   );

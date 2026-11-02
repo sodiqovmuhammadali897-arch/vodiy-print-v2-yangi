@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { computeKpi, DEFAULT_SALES_KPI, ratesFor, short } from "../src/lib/salesKpi";
+import { boostTips, computeKpi, daysLeft, DEFAULT_SALES_KPI, forecastPayout, monthProgress, planState, ratesFor, short } from "../src/lib/salesKpi";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { summarize, monthBefore } = require("../meta-webhook/salesKpi");
+const { summarize, monthBefore, monthsWithData } = require("../meta-webhook/salesKpi");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { reportText } = require("../meta-webhook/bonus");
 
@@ -86,5 +86,63 @@ describe("KPI server sums", () => {
     expect(text).toContain("➕ 7,5%: 7 500 000 so'm");
     expect(text).toContain("➕ 2%: 0 — davomat 76% (80% dan past)");
     expect(text).toContain("💰 To'lanadi: 7 500 000 so'm");
+  });
+});
+
+describe("KPI forecast and tips", () => {
+  const rates = { plan: 200_000_000, sales_rate: 7.5, collect_rate: 2 };
+  const result = { salesBonus: 11_100_000, collectPotential: 1_740_000, collectBonus: 0, attendanceOk: true, amoOk: false, eligible: false, payout: 11_100_000, planPct: 74 };
+  const row = { salesSum: 148_000_000, collectedSum: 87_000_000, rates, result, frozen: false };
+
+  it("knows how far the month is", () => {
+    expect(monthProgress("2026-11", "2026-11-15")).toBe(0.5);
+    expect(monthProgress("2026-10", "2026-11-15")).toBe(1);
+    expect(monthProgress("2026-12", "2026-11-15")).toBe(0);
+    expect(daysLeft("2026-11", "2026-11-22")).toBe(8);
+    expect(daysLeft("2026-10", "2026-11-22")).toBe(0);
+  });
+
+  it("forecasts the open month and keeps past ones", () => {
+    expect(forecastPayout(row, 0.5)).toBe(22_200_000); // collect part locked
+    expect(forecastPayout({ ...row, result: { ...result, eligible: true } }, 0.5)).toBe(22_200_000 + 3_480_000);
+    expect(forecastPayout(row, 1)).toBe(11_100_000);
+    expect(forecastPayout(row, 0.07)).toBe(11_100_000); // day 2: too early
+    expect(forecastPayout({ ...row, frozen: true }, 0.5)).toBe(11_100_000);
+  });
+
+  it("rates the plan against the calendar", () => {
+    expect(planState(74, 0.73)).toBe("on");
+    expect(planState(62, 0.73)).toBe("behind");
+    expect(planState(41, 0.73)).toBe("risk");
+    expect(planState(101, 0.5)).toBe("done");
+    expect(planState(null, 0.5)).toBe("none");
+  });
+
+  it("lists what raises the pay", () => {
+    expect(boostTips({ ...row, debt: 22_500_000, attendanceOk: true, amoOk: false })).toEqual([
+      { kind: "sales", amount: 52_000_000, gain: 3_900_000 },
+      { kind: "debt", amount: 22_500_000, gain: 450_000 },
+      { kind: "tasks", amount: 0, gain: 1_740_000 },
+    ]);
+    expect(boostTips({ ...row, salesSum: 250_000_000, debt: 0, attendanceOk: true, amoOk: true, result: { ...result, eligible: true } })).toEqual([{ kind: "sales", amount: 10_000_000, gain: 750_000 }]);
+  });
+});
+
+describe("KPI server months", () => {
+  it("covers every month with a manager's sale or payment", () => {
+    const now = Date.parse("2026-11-02T10:00:00+05:00");
+    const months = monthsWithData(
+      {
+        managers: [{ id: "m", name: "Maryam" }],
+        orders: [
+          { id: "a", manager_name: "maryam", order_date: "2026-07-03", status: "closed" },
+          { id: "b", manager_name: "", order_date: "2025-12-01", status: "closed" },
+          { id: "c", manager_name: "Maryam", order_date: "2026-09-09", status: "cancelled" },
+        ],
+        payments: [{ order_id: "a", payment_date: "2026-08-15" }],
+      },
+      now,
+    );
+    expect(months).toEqual(["2026-07", "2026-08", "2026-10", "2026-11"]);
   });
 });

@@ -1,5 +1,5 @@
-// KPI (sotuv) — keeps kpi_sales/{YYYY-MM}_{managerId} current for this
-// month and last: the manager's sales (orders entered that month), the
+// KPI (sotuv) — keeps kpi_sales/{YYYY-MM}_{managerId} current for every
+// month a manager has orders or payments in (up to two years back): the manager's sales (orders entered that month), the
 // money that came in that month on their orders, and what is still owed.
 // The site's KPI pages read these documents live (a manager may read only
 // its own — firestore.rules), so a new order or payment shows up at once.
@@ -29,6 +29,23 @@ const money = (n) => `${Math.round(Number(n) || 0).toLocaleString("ru-RU").repla
 const pct = (n) => `${String(Math.round(Number(n) * 100) / 100).replace(".", ",")}%`;
 const monthName = (m) => `${MONTHS[Number(String(m).slice(5, 7)) - 1] || m}`;
 const first = (...v) => v.find((x) => x !== null && x !== undefined && Number.isFinite(Number(x)));
+
+// The months with a manager's order or payment in them, plus this month
+// and last — oldest first, at most two years back.
+function monthsWithData({ orders, payments, managers }, now = Date.now()) {
+  const names = new Set(managers.map((m) => key(m.name)));
+  const orderById = new Map(orders.map((o) => [o.id, o]));
+  const cur = monthNow(now);
+  const months = new Set([monthBefore(cur), cur]);
+  for (const o of orders) if (isSale(o) && names.has(key(o.manager_name)) && saleDay(o)) months.add(saleDay(o).slice(0, 7));
+  for (const p of payments) {
+    const o = orderById.get(p.order_id);
+    if (o && names.has(key(o.manager_name)) && payDay(p)) months.add(payDay(p).slice(0, 7));
+  }
+  let oldest = cur;
+  for (let i = 0; i < 24; i++) oldest = monthBefore(oldest);
+  return [...months].filter((m) => /^\d{4}-\d{2}$/.test(m) && m >= oldest && m <= cur).sort();
+}
 
 // One kpi_sales document per manager for `month`.
 function summarize({ orders, payments, managers, month }) {
@@ -167,7 +184,7 @@ const create = (db, { notify = false } = {}) => {
     try {
       const month = monthNow();
       let current = [];
-      for (const m of [monthBefore(month), month]) {
+      for (const m of monthsWithData(data)) {
         const docs = summarize({ ...data, month: m });
         if (m === month) current = docs;
         for (const doc of docs) {
@@ -216,4 +233,4 @@ const create = (db, { notify = false } = {}) => {
   return { start, stop };
 };
 
-module.exports = { create, summarize, orderText, paymentText, monthBefore };
+module.exports = { create, summarize, monthsWithData, orderText, paymentText, monthBefore };

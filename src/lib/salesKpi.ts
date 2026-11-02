@@ -160,3 +160,72 @@ export const short = (n: number) => {
 
 // 7.5 → "7,5%".
 export const rateLabel = (n: number) => `${String(Math.round(n * 100) / 100).replace(".", ",")}%`;
+
+// How far through `month` the day `today` (YYYY-MM-DD) is: past months 1,
+// future months 0.
+export function monthProgress(month: string, today: string): number {
+  const cur = today.slice(0, 7);
+  if (month < cur) return 1;
+  if (month > cur) return 0;
+  const [y, m] = month.split("-").map(Number);
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return Math.min(1, Number(today.slice(8, 10)) / days);
+}
+
+// The days left in the month after today (0 for a past month).
+export function daysLeft(month: string, today: string): number {
+  if (month !== today.slice(0, 7)) return 0;
+  const [y, m] = month.split("-").map(Number);
+  return Math.max(0, new Date(Date.UTC(y, m, 0)).getUTCDate() - Number(today.slice(8, 10)));
+}
+
+type Row = { salesSum: number; collectedSum: number; rates: Rates; result: KpiResult; frozen: boolean };
+
+// What the month comes to at the end at this pace. A closed (past, or
+// approved) month is what it is.
+// Too early in the month (under ~5 days) a pace means little.
+export const canForecast = (progress: number) => progress >= 0.15 && progress < 1;
+
+export function forecastPayout(r: Row, progress: number): number {
+  if (r.frozen || !canForecast(progress)) return r.result.payout;
+  const sales = r.salesSum / progress;
+  const collected = r.collectedSum / progress;
+  return Math.round((sales * r.rates.sales_rate) / 100 + (r.result.eligible ? (collected * r.rates.collect_rate) / 100 : 0));
+}
+
+// The month-end sales at this pace.
+export const forecastSales = (salesSum: number, progress: number) => (canForecast(progress) ? salesSum / progress : salesSum);
+
+// Ahead of the calendar or not: on plan when the plan share is at least the
+// month's share, behind within 15 points, at risk below that.
+export type PlanState = "done" | "on" | "behind" | "risk" | "none";
+export function planState(planPct: number | null, progress: number): PlanState {
+  if (planPct === null) return "none";
+  if (planPct >= 100) return "done";
+  const need = progress * 100;
+  if (planPct >= need) return "on";
+  if (planPct >= need - 15) return "behind";
+  return "risk";
+}
+
+// «Qanday ko'paytiraman»: the money behind each next step.
+export type BoostTip = { kind: "sales" | "debt" | "tasks" | "attendance"; amount: number; gain: number };
+export function boostTips(r: Row & { debt: number; attendanceOk: boolean; amoOk: boolean }): BoostTip[] {
+  const tips: BoostTip[] = [];
+  const left = r.rates.plan - r.salesSum;
+  // Up to the plan, else a round 10 mln more.
+  const more = left > 0 ? left : 10_000_000;
+  tips.push({ kind: "sales", amount: more, gain: Math.round((more * r.rates.sales_rate) / 100) });
+  if (r.debt > 0) tips.push({ kind: "debt", amount: r.debt, gain: Math.round((r.debt * r.rates.collect_rate) / 100) });
+  if (!r.result.eligible && r.result.collectPotential > 0) {
+    if (!r.amoOk) tips.push({ kind: "tasks", amount: 0, gain: r.result.collectPotential });
+    else if (!r.attendanceOk) tips.push({ kind: "attendance", amount: 0, gain: r.result.collectPotential });
+  }
+  return tips;
+}
+
+// "2026-01" → "2025-12".
+export const monthBefore = (month: string) => {
+  const [y, m] = month.split("-").map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+};
