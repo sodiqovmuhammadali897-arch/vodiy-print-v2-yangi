@@ -1,0 +1,57 @@
+name: KPI check (read only)
+
+# Run by hand when a KPI number looks wrong. For every manager and month
+# it prints, side by side: the sales and money-in worked out from orders
+# right now, what kpi_sales holds, and the approved/paid snapshot in
+# kpi_months. Also lists the manager_name spellings on orders that match
+# no manager. Aggregates only — no customer data. Reads only.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compare KPI sums
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-kpi.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const { summarize, monthsWithData } = require("/opt/meta-webhook/salesKpi");
+            const all = async (c) => (await db.collection(c).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+            const mln = (n) => (Math.round((Number(n) || 0) / 1e5) / 10).toFixed(1);
+            const key = (s) => String(s || "").trim().toLowerCase();
+            (async () => {
+              const [orders, payments, managers, sales, months] = await Promise.all(["orders", "order_payments", "managers", "kpi_sales", "kpi_months"].map(all));
+              const salesBy = new Map(sales.map((s) => [s.id, s]));
+              const monthBy = new Map(months.map((m) => [m.id, m]));
+              console.log(`managers: ${managers.map((m) => `${m.id}=${m.name}`).join(", ")}`);
+              const names = new Set(managers.map((m) => key(m.name)));
+              const other = new Map();
+              for (const o of orders) if (o.status !== "cancelled" && !o.is_draft && !names.has(key(o.manager_name))) {
+                const k = String(o.manager_name || "(bo'sh)").trim() || "(bo'sh)";
+                const r = other.get(k) || { n: 0, sum: 0 }; r.n++; r.sum += Number(o.total_amount || 0); other.set(k, r);
+              }
+              console.log("== orders whose manager_name matches no manager (name: count, mln)");
+              for (const [k, r] of [...other.entries()].sort((a, b) => b[1].sum - a[1].sum)) console.log(`${k}: ${r.n}, ${mln(r.sum)}`);
+              console.log("== month manager | now: sales collected orders | kpi_sales: sales collected | kpi_months: status snap_sales snap_collected payout");
+              for (const month of monthsWithData({ orders, payments, managers })) {
+                for (const d of summarize({ orders, payments, managers, month })) {
+                  const s = salesBy.get(d.id); const k = monthBy.get(d.id);
+                  if (!d.sales && !d.collected && !s && !k) continue;
+                  const snap = k && k.snapshot;
+                  console.log(`${month} ${d.manager_name} | now ${mln(d.sales)} ${mln(d.collected)} ${d.order_count} | doc ${s ? `${mln(s.sales)} ${mln(s.collected)}` : "—"} | ${k ? `${k.status} ${snap ? `${mln(snap.sales)} ${mln(snap.collected)} payout=${Math.round(snap.payout)}` : "-"}` : "—"}`);
+                }
+              }
+              process.exit(0);
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+            JS
+            node /tmp/vp-kpi.js; rm -f /tmp/vp-kpi.js
