@@ -85,6 +85,11 @@ export type KpiMonth = {
   approved_by?: string;
   paid_at?: string;
   paid_by?: string;
+  // Already paid out for this month before it was reopened and counted
+  // again (a later payment covers only the difference).
+  paid_before?: number | null;
+  notified_at?: string | null;
+  paid_notified_at?: string | null;
 };
 
 export type Rates = { plan: number; sales_rate: number; collect_rate: number };

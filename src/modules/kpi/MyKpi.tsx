@@ -101,7 +101,13 @@ function Body({ row: r, month, threshold, all, setAll }: { row: KpiRow; month: s
           </div>
           <div className="mt-1.5 text-[13px] text-white/85">
             {live ? `${dayLabel(today)} holati · oy oxirigacha ${left} kun` : r.frozen ? "Oy yopilgan — raqamlar qotirilgan" : "O'tgan oy — admin tasdiqlashini kutmoqda"}
+            {r.paidBefore > 0 && ` · avval to'langan ${short(r.paidBefore)}, qo'shimcha ${short(Math.max(0, r.result.payout - r.paidBefore))}`}
           </div>
+          {r.stale && (
+            <div className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-[13px]">
+              Tasdiqlangandan keyin buyurtmalar o'zgargan — hozirgi hisob ≈ <b>{short(r.stale.payout)}</b>. Rahbar qayta hisoblaydi.
+            </div>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-2.5">
             {live && !r.frozen && canForecast(progress) ? (
               <HeroTile value={`≈ ${short(forecast)}`} note="shu sur'atda oy oxiri" />

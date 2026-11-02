@@ -35,7 +35,16 @@ const reportText = (k) => {
     `Davomat: ${pct(s.attendance_pct)} · amoCRM: ${pct(s.amo_pct)}`,
     "",
     `💰 To'lanadi: ${money(s.payout)}`,
+    ...(Number(k.paid_before) > 0 ? [`Avval to'langan: ${money(k.paid_before)} · qo'shimcha: ${money(Math.max(0, s.payout - k.paid_before))}`] : []),
   ].join("\n");
+};
+
+const paidText = (k) => {
+  const total = k.snapshot.payout;
+  const before = Number(k.paid_before) || 0;
+  return before > 0
+    ? `✅ ${monthName(k.month)} bonusingiz qayta hisoblandi va qo'shimcha ${money(Math.max(0, total - before))} to'landi (jami ${money(total)})`
+    : `✅ ${monthName(k.month)} bonusingiz to'landi: ${money(total)}`;
 };
 
 const create = (db) => {
@@ -65,7 +74,7 @@ const create = (db) => {
     if (k.status === "paid" && k.snapshot && fresh(k.paid_at) && !k.paid_notified_at) {
       if (!(await claim(ref, "paid_notified_at"))) return;
       for (const chat_id of await chatsOf(k.manager_id)) {
-        await telegram("sendMessage", { chat_id, text: `✅ ${monthName(k.month)} bonusingiz to'landi: ${money(k.snapshot.payout)}` });
+        await telegram("sendMessage", { chat_id, text: paidText(k) });
       }
     }
   };
@@ -90,4 +99,4 @@ const create = (db) => {
   return { start, stop, _test: { reportText, onChange } };
 };
 
-module.exports = { create, reportText };
+module.exports = { create, reportText, paidText };

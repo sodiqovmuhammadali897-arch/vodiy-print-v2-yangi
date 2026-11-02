@@ -26,6 +26,10 @@ export type KpiRow = {
   amoPct: number | null;
   result: KpiResult;
   frozen: boolean; // approved/paid: numbers come from the snapshot
+  // Frozen, but the orders and payments of the month have changed since:
+  // what the month comes to now.
+  stale: { sales: number; collected: number; payout: number } | null;
+  paidBefore: number; // paid out before the month was reopened
 };
 
 const monthEnd = (month: string) => {
@@ -177,6 +181,11 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
           amoPct: snap ? snap.amo_pct : amoPct,
           result,
           frozen: !!snap,
+          stale:
+            snap && s && (Math.abs(s.sales - snap.sales) >= 1000 || Math.abs(s.collected - snap.collected) >= 1000)
+              ? { sales: s.sales, collected: s.collected, payout: live.payout }
+              : null,
+          paidBefore: Number(kpiMonth?.paid_before) || 0,
         };
       })
       .sort((a, b) => b.result.payout - a.result.payout || a.manager.name.localeCompare(b.manager.name));

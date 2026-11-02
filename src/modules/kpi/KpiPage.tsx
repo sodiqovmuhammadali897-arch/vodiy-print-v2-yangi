@@ -92,6 +92,20 @@ function KpiPage() {
     payout: r.result.payout,
   });
 
+  // Back to counting: the snapshot goes, the Telegram notes may go again,
+  // and what was already paid is kept so only the difference is paid.
+  const reopen = (r: KpiRow) => {
+    const paid = r.kpiMonth?.status === "paid" ? Math.max(r.paidBefore, r.result.payout) : r.paidBefore;
+    return write(r, { status: "open", snapshot: null, notified_at: null, paid_notified_at: null, paid_before: paid || null });
+  };
+
+  const recount = (r: KpiRow) => {
+    if (!r.stale) return;
+    const was = r.kpiMonth?.status === "paid" ? ` To'langan ${so(r.result.payout)} eslab qolinadi — keyingi to'lovda faqat farq to'lanadi.` : "";
+    if (!window.confirm(`${r.manager.name} — ${monthLabel(month)}: sotuv ${short(r.salesSum)} → ${short(r.stale.sales)}, kirim ${short(r.collectedSum)} → ${short(r.stale.collected)}. Oy qayta ochiladi, keyin yana «Tasdiqlash» bosasiz.${was}`)) return;
+    void reopen(r);
+  };
+
   const approve = (r: KpiRow) => write(r, { status: "approved", snapshot: snapshotOf(r), approved_at: new Date().toISOString(), approved_by: me });
 
   const approveAll = async () => {
@@ -106,7 +120,7 @@ function KpiPage() {
     if (!rows) return;
     exportCsv(
       `kpi-${month}`,
-      ["Menejer", "Reja", "Sotuv", "Sotuv %", "Sotuv bonusi", "Kirim", "Kirim %", "Davomat %", "amoCRM %", "Kirim bonusi", "Jami", "Holat"],
+      ["Menejer", "Reja", "Sotuv", "Sotuv %", "Sotuv bonusi", "Kirim", "Kirim %", "Davomat %", "amoCRM %", "Kirim bonusi", "Jami", "Avval to'langan", "Qo'shimcha", "Holat"],
       rows.map((r) => [
         r.manager.name,
         Math.round(r.rates.plan),
@@ -119,6 +133,8 @@ function KpiPage() {
         r.amoPct ?? "",
         r.result.collectBonus,
         r.result.payout,
+        r.paidBefore || "",
+        r.paidBefore ? Math.max(0, r.result.payout - r.paidBefore) : "",
         STATUS[r.kpiMonth?.status || "open"].label,
       ]),
     );
@@ -206,7 +222,8 @@ function KpiPage() {
                   onToggle={() => setOpen(open === r.manager.id ? null : r.manager.id)}
                   onApprove={() => void approve(r)}
                   onPaid={() => void write(r, { status: "paid", paid_at: new Date().toISOString(), paid_by: me })}
-                  onReopen={() => void write(r, { status: "open", snapshot: null })}
+                  onReopen={() => void reopen(r)}
+                  onRecount={() => recount(r)}
                 />
               ))}
             </div>
@@ -258,6 +275,7 @@ function ManagerCard({
   onApprove,
   onPaid,
   onReopen,
+  onRecount,
 }: {
   row: KpiRow;
   index: number;
@@ -270,6 +288,7 @@ function ManagerCard({
   onApprove: () => void;
   onPaid: () => void;
   onReopen: () => void;
+  onRecount: () => void;
 }) {
   const st = r.kpiMonth?.status || "open";
   const res = r.result;
@@ -309,7 +328,21 @@ function ManagerCard({
       <div className="mt-4 font-display text-[28px] font-extrabold leading-tight tabular-nums text-ink-900">{so(res.payout)}</div>
       <div className="text-xs text-ink-500">
         to'lanadi{live && !r.frozen && forecast > res.payout ? ` · prognoz ≈ ${short(forecast)}` : ""}
+        {r.paidBefore > 0 && (
+          <>
+            {" · "}avval to'langan {short(r.paidBefore)} · <b className="text-ink-800">qo'shimcha {short(Math.max(0, res.payout - r.paidBefore))}</b>
+          </>
+        )}
       </div>
+
+      {r.stale && (
+        <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2.5 text-[12px] text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">
+          <b>Tasdiqlangandan keyin raqamlar o'zgargan.</b> Hozir: sotuv {short(r.stale.sales)} (edi {short(r.salesSum)}), kirim {short(r.stale.collected)} (edi {short(r.collectedSum)}) → {short(r.stale.payout)}.
+          <button type="button" className="mt-1.5 block font-bold text-amber-800 underline hover:no-underline dark:text-amber-200" onClick={onRecount}>
+            Qayta hisoblash
+          </button>
+        </div>
+      )}
 
       {res.planPct !== null && (
         <div className="mt-3">

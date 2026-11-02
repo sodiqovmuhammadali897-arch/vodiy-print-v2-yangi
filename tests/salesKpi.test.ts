@@ -146,3 +146,14 @@ describe("KPI server months", () => {
     expect(months).toEqual(["2026-07", "2026-08", "2026-10", "2026-11"]);
   });
 });
+
+describe("KPI recount after payment", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { paidText } = require("../meta-webhook/bonus");
+  const snapshot = { plan: 100e6, sales: 130.4e6, collected: 105.1e6, sales_rate: 7.5, collect_rate: 2, threshold: 80, attendance_pct: 86.7, amo_pct: 38.2, sales_bonus: 9_780_000, collect_bonus: 0, eligible: false, payout: 9_780_000 };
+  it("pays only the difference once paid before", () => {
+    expect(paidText({ month: "2026-10", snapshot })).toBe("✅ Oktyabr 2026 bonusingiz to'landi: 9 780 000 so'm");
+    expect(paidText({ month: "2026-10", snapshot, paid_before: 1_148_183 })).toBe("✅ Oktyabr 2026 bonusingiz qayta hisoblandi va qo'shimcha 8 631 817 so'm to'landi (jami 9 780 000 so'm)");
+    expect(reportText({ month: "2026-10", snapshot, paid_before: 1_148_183 })).toContain("Avval to'langan: 1 148 183 so'm · qo'shimcha: 8 631 817 so'm");
+  });
+});
