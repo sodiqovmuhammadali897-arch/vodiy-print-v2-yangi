@@ -1,0 +1,48 @@
+name: amoCRM stages (read only)
+
+# Run by hand: the amoCRM pipelines and stages the server sees, with how
+# many leads sit in each right now (this month's amo_stats), and the won /
+# lost counts per month. Counts only — no lead or customer data. Reads only.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  stages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List stages and counts
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-amo.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            (async () => {
+              const st = (await db.collection("amo_meta").doc("status").get()).data() || {};
+              const statuses = st.statuses || {};
+              const stats = (await db.collection("amo_stats").get()).docs.map((d) => d.data());
+              const now = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 7);
+              const open = {};
+              for (const s of stats) if (s.month === now) for (const [k, n] of Object.entries(s.funnel || {})) open[k] = (open[k] || 0) + n;
+              console.log(`users: ${(st.users || []).map((u) => `${u.id}=${u.name}`).join(", ")}`);
+              console.log("== pipeline | sort | stage | key | open now");
+              for (const [k, v] of Object.entries(statuses).sort((a, b) => (a[1].pipeline_sort - b[1].pipeline_sort) || a[1].pipeline.localeCompare(b[1].pipeline) || (a[1].sort - b[1].sort)))
+                console.log(`${v.pipeline} | ${v.sort} | ${v.name} | ${k} | ${open[k] || 0}`);
+              console.log("== month | created won lost won_amount (all users)");
+              const by = {};
+              for (const s of stats) { const r = (by[s.month] = by[s.month] || { c: 0, w: 0, l: 0, a: 0 }); const L = s.leads || {}; r.c += L.created || 0; r.w += L.won || 0; r.l += L.lost || 0; r.a += L.won_amount || 0; }
+              for (const m of Object.keys(by).sort()) console.log(`${m} | ${by[m].c} ${by[m].w} ${by[m].l} ${Math.round(by[m].a)}`);
+              console.log("== loss reasons this year (all users)");
+              const loss = {};
+              for (const s of stats) if (String(s.month).startsWith(now.slice(0, 4))) for (const [r, n] of Object.entries(s.loss || {})) loss[r] = (loss[r] || 0) + n;
+              for (const [r, n] of Object.entries(loss).sort((a, b) => b[1] - a[1])) console.log(`${r}: ${n}`);
+              process.exit(0);
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+            JS
+            node /tmp/vp-amo.js; rm -f /tmp/vp-amo.js
