@@ -1,0 +1,55 @@
+name: Product cards check (read only)
+
+# Run by hand: how complete the catalog's sales cards are — per category
+# and field, how many active products have it filled — and which products
+# sold most (orders, revenue since July 2026). Catalog data only. Reads only.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Product card completeness
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-prod.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const all = async (c) => (await db.collection(c).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+            (async () => {
+              const [products, orders, lines] = await Promise.all(["products", "orders", "order_products"].map(all));
+              const act = products.filter((p) => p.is_active !== false && !p.archived_at);
+              const filled = (v) => (Array.isArray(v) ? v.length > 0 : v && typeof v === "object" ? Object.values(v).some((x) => Array.isArray(x) ? x.length : x) : String(v ?? "").trim() !== "" && Number(v) !== 0);
+              const F = ["image_url", "description", "advantages", "recommended_for", "sales_notes", "manager_tip", "upsell_product_ids", "spin", "price_tiers", "min_order_qty", "lead_time_days", "size_spec", "material", "print_type"];
+              console.log(`products=${products.length} active=${act.length}`);
+              console.log("== field: filled/active");
+              for (const f of F) console.log(`${f}: ${act.filter((p) => filled(p[f])).length}/${act.length}`);
+              const cats = {};
+              for (const p of act) (cats[p.category || "—"] = cats[p.category || "—"] || []).push(p);
+              console.log("== category: products | with description | with sales_notes | with spin");
+              for (const [c, ps] of Object.entries(cats)) console.log(`${c}: ${ps.length} | ${ps.filter((p) => filled(p.description)).length} | ${ps.filter((p) => filled(p.sales_notes)).length} | ${ps.filter((p) => filled(p.spin)).length}`);
+              const live = new Map(orders.filter((o) => o.status !== "cancelled" && !o.is_draft && String(o.order_date || o.created_at || "") >= "2026-07-01").map((o) => [o.id, o]));
+              const by = {};
+              for (const l of lines) {
+                if (!live.has(l.order_id)) continue;
+                const k = String(l.product_name || "—").split("(")[0].trim();
+                const r = (by[k] = by[k] || { o: new Set(), s: 0 }); r.o.add(l.order_id); r.s += Number(l.total || 0);
+              }
+              console.log("== top products since 2026-07 (orders, mln)");
+              const rows = Object.entries(by).sort((a, b) => b[1].s - a[1].s);
+              const tot = rows.reduce((s, [, r]) => s + r.s, 0);
+              let acc = 0;
+              for (const [k, r] of rows.slice(0, 25)) { acc += r.s; console.log(`${k}: ${r.o.size}, ${(r.s / 1e6).toFixed(1)} (cum ${Math.round((acc / tot) * 100)}%)`); }
+              console.log(`distinct sold names=${rows.length}`);
+              process.exit(0);
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+            JS
+            node /tmp/vp-prod.js; rm -f /tmp/vp-prod.js
