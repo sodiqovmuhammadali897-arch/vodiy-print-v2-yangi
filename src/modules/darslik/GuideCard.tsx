@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, BookOpen, FileText, Loader2, Pencil, PhoneCall, ShoppingCart } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
-import { mainModel, oneLiner, tierView, timesLabel } from "../../lib/guide";
+import { imageOf, mainModel, oneLiner, tierView, timesLabel } from "../../lib/guide";
 import { num, short } from "../../lib/salesKpi";
 import { useLessons } from "./useLessons";
 import { useGuide } from "./useGuide";
@@ -16,7 +16,7 @@ const MONTHS = ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avg", "sen", "
 export default function GuideCard() {
   const { key = "" } = useParams();
   const { isAdmin } = useAuth();
-  const { loading, families, markSeen } = useGuide();
+  const { loading, families, images, markSeen } = useGuide();
   const { lessons } = useLessons();
   const f = families.find((x) => x.key === key);
   const lesson = f ? lessons.find((l) => l.key === f.lesson) : undefined;
@@ -45,7 +45,7 @@ export default function GuideCard() {
   const priced = f.models.filter((m) => m.tiers.length);
   const shown = priced.find((m) => m.id === model) || mainModel(f.models);
   const tv = shown ? tierView(shown.tiers) : null;
-  const img = f.models.find((m) => m.image_url)?.image_url;
+  const img = imageOf(f.models, images);
   const repeatShare = f.buyers ? f.repeat_buyers / f.buyers : 0;
   const whoMax = Math.max(1, ...f.who.map((w) => w.n), f.who_unknown);
   const months = Object.entries(f.months);

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { arrayUnion } from "firebase/firestore";
 import { useAuth } from "../../lib/AuthContext";
-import { subscribeAll, subscribeOne, upsertOne } from "../../lib/firestoreDb";
+import { listAll, subscribeAll, subscribeOne, upsertOne } from "../../lib/firestoreDb";
 import { TOP, type GuideFacts, type GuideMeta, type GuideProgress } from "../../lib/guide";
 
 type ProgressDoc = { guide?: GuideProgress };
@@ -13,6 +13,14 @@ export function useGuide() {
   const email = user?.email?.toLowerCase() || "";
   const [docs, setDocs] = useState<(GuideFacts | GuideMeta)[] | null>(null);
   const [mine, setMine] = useState<GuideProgress>({});
+  const [images, setImages] = useState<Map<string, string>>(new Map());
+
+  // Pictures come from the catalog (they are too big for the facts docs).
+  useEffect(() => {
+    void listAll<{ id: string; image_url?: string }>("products")
+      .then((ps) => setImages(new Map(ps.filter((p) => p.image_url).map((p) => [p.id, p.image_url as string]))))
+      .catch(() => setImages(new Map()));
+  }, []);
 
   useEffect(() => subscribeAll<GuideFacts | GuideMeta>("guide_facts", setDocs), []);
   useEffect(() => {
@@ -37,5 +45,5 @@ export function useGuide() {
   const markSituations = () => save({ situations_at: new Date().toISOString() });
   const markShadow = () => save({ shadow_at: new Date().toISOString() });
 
-  return { loading: docs === null, families, top: families.slice(0, TOP), meta, mine, markSeen, markSituations, markShadow };
+  return { loading: docs === null, families, top: families.slice(0, TOP), meta, mine, images, markSeen, markSituations, markShadow };
 }

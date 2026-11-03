@@ -43,7 +43,7 @@ describe("guide helpers", () => {
   });
 
   it("picks the model with the most tiers", () => {
-    expect(mainModel([{ id: "a", name: "A", image_url: "", min_qty: null, lead_days: null, tiers: [{ min_qty: 1, price: 1 }] }, { id: "b", name: "B", image_url: "", min_qty: null, lead_days: null, tiers: [{ min_qty: 1, price: 1 }, { min_qty: 2, price: 1 }] }])?.id).toBe("b");
+    expect(mainModel([{ id: "a", name: "A", has_image: false, min_qty: null, lead_days: null, tiers: [{ min_qty: 1, price: 1 }] }, { id: "b", name: "B", has_image: false, min_qty: null, lead_days: null, tiers: [{ min_qty: 1, price: 1 }, { min_qty: 2, price: 1 }] }])?.id).toBe("b");
   });
 
   it("cuts a lesson's about to one or two sentences", () => {

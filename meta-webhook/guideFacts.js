@@ -105,7 +105,9 @@ function computeFacts({ orders, lines, customers, products }) {
       .map((p) => ({
         id: p.id,
         name: String(p.name || ""),
-        image_url: p.image_url || "",
+        // Catalog images are often stored inline (data: URLs, hundreds of
+        // KB): the page takes the picture from the product itself.
+        has_image: Boolean(p.image_url),
         min_qty: Number(p.min_order_qty || 0) || null,
         lead_days: Number(p.lead_time_days || 0) || null,
         tiers: (p.price_tiers || []).map((t) => ({ min_qty: Number(t.min_qty || 0), price: Number(t.price || 0) })).filter((t) => t.min_qty > 0 && t.price > 0).sort((a, b) => a.min_qty - b.min_qty),
@@ -180,12 +182,22 @@ const create = (db, { log = console } = {}) => {
 
   const all = async (name) => (await db.collection(name).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
 
+  // One doc failing (e.g. too big) must not stop the others.
   const put = async (id, doc) => {
     const json = JSON.stringify(doc);
     if (written.get(id) === json) return false;
-    await db.collection("guide_facts").doc(id).set({ ...doc, updated_at: new Date().toISOString() });
-    written.set(id, json);
-    return true;
+    if (json.length > 900 * 1024) {
+      log.error(`Guide facts: ${id} too big (${json.length} bytes), skipped`);
+      return false;
+    }
+    try {
+      await db.collection("guide_facts").doc(id).set({ ...doc, updated_at: new Date().toISOString() });
+      written.set(id, json);
+      return true;
+    } catch (err) {
+      log.error(`Guide facts: ${id} not written`, err.message);
+      return false;
+    }
   };
 
   const run = async () => {

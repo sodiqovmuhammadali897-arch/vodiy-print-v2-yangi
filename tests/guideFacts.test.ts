@@ -56,6 +56,13 @@ describe("guide facts", () => {
     expect(meta).toMatchObject({ no_image: 2, no_category: 1, duplicate_names: ["Paket 8"], unmatched_revenue: 500_000, total_revenue: 9_700_000 });
   });
 
+  it("keeps docs small: no inline images", () => {
+    const big = computeFacts({ orders, lines, customers, products: products.map((p) => ({ ...p, image_url: p.image_url ? `data:image/png;base64,${"A".repeat(500_000)}` : "" })) });
+    const doc = big.families.find((f: { key: string }) => f.key === "paket");
+    expect(JSON.stringify(doc).length).toBeLessThan(10_000);
+    expect(doc.models[0].has_image).toBe(true);
+  });
+
   it("never stores customer names or phones", () => {
     const text = JSON.stringify({ meta, families });
     expect(text).not.toContain("Ali");

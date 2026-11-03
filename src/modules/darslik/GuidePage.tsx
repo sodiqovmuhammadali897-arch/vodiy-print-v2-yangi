@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Check, Loader2, Search } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
-import { guidePath, SITUATIONS, type GuideFacts } from "../../lib/guide";
+import { guidePath, imageOf, SITUATIONS, type GuideFacts } from "../../lib/guide";
 import { num, short } from "../../lib/salesKpi";
 import { useLessons } from "./useLessons";
 import { useGuide } from "./useGuide";
@@ -15,7 +15,7 @@ const TINT = ["bg-brand-50 text-brand-700", "bg-emerald-50 text-emerald-700", "b
 
 export default function GuidePage() {
   const { isAdmin } = useAuth();
-  const { loading, families, top, meta, mine, markSituations, markShadow } = useGuide();
+  const { loading, families, top, meta, mine, images, markSituations, markShadow } = useGuide();
   const { progress } = useLessons();
   const [q, setQ] = useState("");
   const { days, ready } = guidePath(top, mine, progress);
@@ -114,7 +114,7 @@ export default function GuidePage() {
             </p>
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
               {top.map((f) => (
-                <ProductTile key={f.key} f={f} seen={(mine.seen || []).includes(f.key)} />
+                <ProductTile key={f.key} f={f} img={imageOf(f.models, images)} seen={(mine.seen || []).includes(f.key)} />
               ))}
             </div>
             {rest.length > 0 && (
@@ -199,8 +199,7 @@ export default function GuidePage() {
 const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentyabr", "oktyabr", "noyabr", "dekabr"];
 const monthName = (m: string) => MONTHS[Number(m.slice(5, 7)) - 1] || m;
 
-function ProductTile({ f, seen }: { f: GuideFacts; seen: boolean }) {
-  const img = f.models.find((m) => m.image_url)?.image_url;
+function ProductTile({ f, img, seen }: { f: GuideFacts; img?: string; seen: boolean }) {
   return (
     <Link to={`/darslik/qollanma/${f.key}`} className="group relative rounded-2xl bg-ink-50 p-3 transition hover:bg-surface hover:shadow-md hover:ring-2 hover:ring-brand-500 dark:bg-ink-200/40">
       <span className="absolute left-2 top-2 z-10 rounded-md bg-surface px-1.5 text-[11px] font-extrabold text-brand-700">{f.rank}</span>
