@@ -4,7 +4,7 @@
 // so there is one place to edit them. The situations and the 5-day path
 // are here. Kept free of React so it can be tested.
 
-export type GuideModel = { id: string; name: string; has_image: boolean; min_qty: number | null; lead_days: number | null; tiers: { min_qty: number; price: number }[] };
+export type GuideModel = { id: string; name: string; has_image: boolean; sold?: number; min_qty: number | null; lead_days: number | null; tiers: { min_qty: number; price: number }[] };
 export type GuideFacts = {
   id: string;
   key: string;
@@ -146,16 +146,16 @@ export function tierView(tiers: { min_qty: number; price: number }[]) {
   return { rows: uniq, times, first, last };
 }
 
-// The model whose prices to show first: the one named most like the
-// family's top typed spec is not knowable, so the one with the most tiers.
 // The picture for a family: the first of its models that has one.
 export const imageOf = (models: GuideModel[], images: Map<string, string>): string | undefined => {
   for (const m of models) if (m.has_image && images.get(m.id)) return images.get(m.id);
   return undefined;
 };
 
+// The model whose prices to show first: the one sold most, then the one
+// with the most tiers.
 export const mainModel = (models: GuideModel[]): GuideModel | null =>
-  [...models].filter((m) => m.tiers.length).sort((a, b) => b.tiers.length - a.tiers.length || a.name.localeCompare(b.name))[0] || null;
+  [...models].filter((m) => m.tiers.length).sort((a, b) => (b.sold || 0) - (a.sold || 0) || b.tiers.length - a.tiers.length || a.name.localeCompare(b.name))[0] || null;
 
 // The first paragraph of a lesson's "about", one or two sentences.
 export const oneLiner = (about: string): string => {

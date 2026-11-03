@@ -46,6 +46,15 @@ describe("guide helpers", () => {
     expect(mainModel([{ id: "a", name: "A", has_image: false, min_qty: null, lead_days: null, tiers: [{ min_qty: 1, price: 1 }] }, { id: "b", name: "B", has_image: false, min_qty: null, lead_days: null, tiers: [{ min_qty: 1, price: 1 }, { min_qty: 2, price: 1 }] }])?.id).toBe("b");
   });
 
+  it("prefers the model sold most", () => {
+    const t = [{ min_qty: 1, price: 1 }];
+    const ms = [
+      { id: "shopper", name: "Shopper", has_image: false, sold: 0, min_qty: null, lead_days: null, tiers: [...t, ...t, ...t] },
+      { id: "p2", name: "Paket 2", has_image: false, sold: 3, min_qty: null, lead_days: null, tiers: t },
+    ];
+    expect(mainModel(ms)?.id).toBe("p2");
+  });
+
   it("cuts a lesson's about to one or two sentences", () => {
     expect(oneLiner("Birinchi gap. Ikkinchi gap! Uchinchi.\n\nBoshqa paragraf.")).toBe("Birinchi gap. Ikkinchi gap!");
   });

@@ -99,6 +99,10 @@ function computeFacts({ orders, lines, customers, products }) {
   }
 
   const active = products.filter((p) => p.is_active !== false && !p.archived_at);
+  // How many ERP-era lines were this model: picked from the catalog, or
+  // typed with its name (the part before any bracket).
+  const base = (s) => String(s || "").split("(")[0].trim().toLowerCase();
+  const soldOf = (p) => own.filter((l) => l.catalog_product_id === p.id || (base(l.product_name) && base(l.product_name) === base(p.name))).length;
   const modelsOf = (key) =>
     active
       .filter((p) => familyOf(p.name) === key)
@@ -108,6 +112,7 @@ function computeFacts({ orders, lines, customers, products }) {
         // Catalog images are often stored inline (data: URLs, hundreds of
         // KB): the page takes the picture from the product itself.
         has_image: Boolean(p.image_url),
+        sold: soldOf(p),
         min_qty: Number(p.min_order_qty || 0) || null,
         lead_days: Number(p.lead_time_days || 0) || null,
         tiers: (p.price_tiers || []).map((t) => ({ min_qty: Number(t.min_qty || 0), price: Number(t.price || 0) })).filter((t) => t.min_qty > 0 && t.price > 0).sort((a, b) => a.min_qty - b.min_qty),

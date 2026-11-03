@@ -47,6 +47,7 @@ describe("guide facts", () => {
     expect(paket.who_unknown).toBe(1);
     expect(paket.with).toEqual([{ key: "bloknot", n: 1, title: "Bloknot" }]);
     expect(paket.specs[0]).toEqual({ text: "31-24-8,5", n: 2 });
+    expect(paket.models.find((m: { id: string }) => m.id === "p1").sold).toBe(1); // "Paket 2" typed once
     expect(paket.models[0].tiers).toEqual([{ min_qty: 100, price: 15900 }, { min_qty: 1000, price: 7900 }]);
     expect(paket.price_from).toBe(7900);
     expect(paket.lead_days).toEqual({ min: 5, max: 6 });
