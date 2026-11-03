@@ -17,6 +17,8 @@ brand style. The tooling is in this folder:
   slide, and reports overflow.
 - `fonts/` — Bricolage, Inter and Instrument Serif, used offline.
 - `examples/voronka.py` — a complete 10-slide deck to copy from.
+- `examples/qollanma_a4.py` (+ `qollanma_render.mjs`) — the printed A4 seller guide
+  (15 pages) from the guide facts and the Darslik lessons. Its header explains how to rebuild it.
 
 ## Steps
 
