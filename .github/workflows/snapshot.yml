@@ -1,0 +1,32 @@
+name: Business snapshot (read only)
+
+# Run by hand: one pass over the business in aggregates — sales by month
+# and manager, Managerlar and staff links, KPI (live vs stored vs
+# approved), debt, cost coverage, amoCRM stages and leads, product cards.
+# The script is meta-webhook/checks/snapshot.js (deployed with the
+# server); it prints counts and sums only, no customer data. Reads only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sections:
+        description: "all, or any of: sales managers kpi debt cost amo products"
+        default: "all"
+        required: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Snapshot
+        uses: appleboy/ssh-action@v1
+        env:
+          SECTIONS: ${{ github.event.inputs.sections || 'all' }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          envs: SECTIONS
+          script: |
+            cd /opt/meta-webhook && node checks/snapshot.js $(echo "$SECTIONS" | tr -cd 'a-z ,')
