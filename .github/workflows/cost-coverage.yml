@@ -1,0 +1,58 @@
+name: Cost coverage (read only)
+
+# Run by hand: per month (order date), how many order lines and how much
+# revenue have a typed cost (order_costs), the first and last day a cost
+# was typed, and the margin on the costed part. Aggregates only. Reads only.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cost coverage by month
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-cost.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const all = async (c) => (await db.collection(c).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+            const mln = (n) => (Math.round(n / 1e5) / 10).toFixed(1);
+            (async () => {
+              const [orders, costs] = await Promise.all(["orders", "order_costs"].map(all));
+              const live = new Map(orders.filter((o) => o.status !== "cancelled" && !o.is_draft).map((o) => [o.id, o]));
+              const stampOf = (c) => String(c.updated_at || c.updatedAt || c.created_at || c.createdAt || "").slice(0, 10);
+              const stamps = costs.map(stampOf).filter(Boolean).sort();
+              console.log(`order_costs=${costs.length} first_typed=${stamps[0] || "-"} last_typed=${stamps[stamps.length - 1] || "-"}`);
+              const typedBy = {};
+              for (const s of stamps) typedBy[s.slice(0, 7)] = (typedBy[s.slice(0, 7)] || 0) + 1;
+              console.log("typed per month: " + Object.entries(typedBy).map(([m, n]) => `${m}=${n}`).join(" "));
+              const costByOrder = new Map();
+              for (const c of costs) {
+                const id = c.order_id || String(c.id).replace(/^order_/, "").replace(/_L\d+$/, "");
+                if (!live.has(id)) continue;
+                costByOrder.set(id, (costByOrder.get(id) || 0) + Number(c.total_cost || 0));
+              }
+              const by = {};
+              for (const o of live.values()) {
+                const m = String(o.order_date || o.created_at || "").slice(0, 7);
+                const r = (by[m] = by[m] || { n: 0, rev: 0, cn: 0, crev: 0, cost: 0 });
+                r.n++; r.rev += Number(o.total_amount || 0);
+                if (costByOrder.has(o.id)) { r.cn++; r.crev += Number(o.total_amount || 0); r.cost += costByOrder.get(o.id); }
+              }
+              console.log("== month | orders costed_orders | revenue_mln costed_revenue_mln coverage% | margin_on_costed%");
+              for (const m of Object.keys(by).sort()) {
+                const r = by[m];
+                console.log(`${m} | ${r.n} ${r.cn} | ${mln(r.rev)} ${mln(r.crev)} ${r.rev ? Math.round((r.crev / r.rev) * 100) : 0}% | ${r.crev ? Math.round((1 - r.cost / r.crev) * 1000) / 10 : "-"}`);
+              }
+              process.exit(0);
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+            JS
+            node /tmp/vp-cost.js; rm -f /tmp/vp-cost.js
