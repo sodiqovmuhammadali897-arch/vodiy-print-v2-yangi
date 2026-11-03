@@ -96,10 +96,17 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     Managerlar.
   - 453 orders have an empty `manager_name` (old imports).
   - Dilmurodjon is the production manager, not a seller.
+  - Staff links: Muhammaddiyor's and Nuriddin's accounts are linked to
+    their Managerlar records. Maryam's account is linked to none. No staff
+    account is linked to Muhammadali.
+  - Monthly plans: Nuriddin 60 mln, Muhammadiyor 120 mln, Muhammadali
+    8 mln (possibly a typo for 80).
   - The recall and debt bots go to `RECALL_MANAGERS`
     (deploy.yml, default "Muhammadiyor,Maryam,Nuriddin").
 - **amoCRM** (read only, `AMO_SUBDOMAIN` / `AMO_TOKEN`):
-  - Users: Diyorbek, Nuriddin, «Menejer 2».
+  - Users: «Diyorbek» (13825110) is Muhammadiyor's account,
+    Nuriddin (13825130), and «Menejer 2» (14021786) is Maryam's.
+    Staff are linked to amoCRM users by `staff.amo_user_id`.
   - One pipeline «Воронка», with these stages in order:
     Неразобранное → Қабул Қилинди → маълумот берилди → Таклиф Юборилди →
     Дизайн/аванс → ишлаб чикариш → етказилди (won, 142) / Муваффақиятсиз (lost, 143).
@@ -116,7 +123,9 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     change later, the card shows «Qayta hisoblash»; `paid_before` keeps
     what was already paid.
   - In October the snapshots were stale (approved before the data was
-    complete); recounting is waiting for the owner.
+    complete). Muhammadiyor's October has been recounted: approved, payout
+    9 781 583, of which 1 148 183 was already paid. Nuriddin's and
+    Muhammadali's October are still open.
 - **Launch gates:** these went live on **2026-11-02**:
   - the recall lists (5 old customers per manager a day, oldest first);
   - the debt lists;
@@ -171,7 +180,7 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     types, and whether a PDF is wanted.
 - **The owner still has to:**
   - set the November plans on the KPI page;
-  - recount October in KPI;
+  - approve October for Nuriddin and Muhammadali;
   - decide on Muhammadali's debts;
   - add Maryam and Moxlaroy to Managerlar if needed.
 - **Still to build for sales control:** proposal tracking, weekly ranking, AI ROP.
