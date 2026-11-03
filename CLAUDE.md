@@ -157,7 +157,7 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
 ## Read-only workflows (Actions → Run workflow; see skill `vp-data`)
 
 - `snapshot.yml` — **start here**. One run gives everything as aggregates:
-  sales, managers, kpi, debt, cost, amo, products.
+  sales, managers, kpi, debt, cost, amo, products, productfacts, guide.
 - Narrower checks:
   - `kpi-check.yml`, `cost-coverage.yml`, `amo-stages.yml`, `product-check.yml`;
   - `business-stats.yml` — the long SWOT-style stats;
@@ -173,11 +173,17 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   - a lead → order window of 60 days?
   - a bot reminder about lost leads with no reason?
   - The owner should also make the loss reason required in amoCRM.
-- **New-seller onboarding:**
-  - Plan: product cards for the top 15 products, then 6–8 customer
-    situations, then a 5-day path with a test.
-  - Waiting for answers: who approves the cards, real photos, customer
-    types, and whether a PDF is wanted.
+- **New-seller onboarding — built 2026-11-03** (Darslik → «Mahsulot
+  qo'llanmasi», `/darslik/qollanma`):
+  - `meta-webhook/guideFacts.js` writes `guide_facts/{family}` and `_meta`
+    every 6 hours. There are 17 families; the top 10 are 89% of sales.
+    Catalog images are inline data URLs, so they are never copied into docs.
+  - Card texts come from the Darslik lessons, so edit them there.
+  - The 5-day path lives in `lesson_progress/{email}.guide`; team results
+    show it.
+  - Next: a printable PDF guide; fill the catalog (24 products without a
+    photo, 14 without a category, «Paket 8» twice); make choosing a catalog
+    product required on order lines (258/324 lines since July are typed by hand).
 - **The owner still has to:**
   - set the November plans on the KPI page;
   - approve October for Nuriddin and Muhammadali;
