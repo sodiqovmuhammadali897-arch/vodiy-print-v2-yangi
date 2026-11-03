@@ -7,7 +7,7 @@
 // Sections: sales, managers, kpi, debt, cost, amo, products (default: all).
 const path = require("path");
 
-const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide"];
+const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide", "guidejson"];
 const SYSTEM_FROM = "2026-07"; // the ERP is used for every order from July 2026
 const COST_FROM = "2026-09"; // costs are typed per line from September 2026
 
@@ -300,7 +300,16 @@ function guide(d, out) {
   if (meta) out.push(`gaps: no image ${meta.no_image}, no category ${meta.no_category}, duplicates ${meta.duplicate_names.join(", ") || "-"}, lines typed by hand ${meta.lines_without_catalog}/${meta.lines}`);
 }
 
-const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide };
+// The guide's docs in full (counts, sums, catalog models — no customer
+// data) and the Darslik lesson edits, one JSON line each, for the printed
+// guide.
+function guidejson(d, out) {
+  out.push("== guidejson");
+  for (const g of d.guide_facts) out.push(`GF ${JSON.stringify(g)}`);
+  for (const l of d.lessons) out.push(`LS ${JSON.stringify(l)}`);
+}
+
+const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide, guidejson };
 
 // The report for already loaded data; `lib` is meta-webhook/salesKpi.js.
 function report(d, wanted = SECTIONS, lib = null) {
@@ -325,6 +334,7 @@ const NEEDS = {
   products: ["products", "orders", "order_products"],
   productfacts: ["products", "orders", "order_products", "customers"],
   guide: ["guide_facts"],
+  guidejson: ["guide_facts", "lessons"],
 };
 
 async function main() {
@@ -335,7 +345,7 @@ async function main() {
   const args = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
   const wanted = !args.length || args.includes("all") ? SECTIONS : args;
   const cols = [...new Set(wanted.flatMap((s) => NEEDS[s] || []))];
-  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [] };
+  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [], lessons: [] };
   await Promise.all(cols.map(async (c) => (d[c] = (await db.collection(c).get()).docs.map((x) => ({ id: x.id, ...x.data() })))));
   if (wanted.includes("amo")) d.amo_status = (await db.collection("amo_meta").doc("status").get()).data() || {};
   let lib = null;

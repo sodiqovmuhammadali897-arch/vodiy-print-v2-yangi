@@ -21,6 +21,7 @@ const data = {
   kpi_months: [],
   products: [{ id: "p1", name: "Paket", category: "Poligrafiya", price_tiers: [{ min_qty: 1, price: 1 }] }],
   guide_facts: [],
+  lessons: [],
   amo_stats: [{ month: "2026-11", funnel: { "1:2": 3 }, leads: { created: 5, won: 1, lost: 2, won_amount: 1e6 }, loss: {} }],
   amo_status: { users: [{ id: 7, name: "Maryam" }], statuses: { "1:2": { pipeline: "Voronka", name: "Qabul", sort: 20 } } },
 };
