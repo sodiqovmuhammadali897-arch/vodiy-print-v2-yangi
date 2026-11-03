@@ -2,6 +2,7 @@ import type { CostTier, Expense, Order, OrderCost, OrderProduct } from "./types"
 import { tierCostFor } from "./priceTiers";
 import { VENDOR_EXPENSE_CATEGORY } from "./orderConstants";
 import { discountShare } from "./orderCalculations";
+import { saleDay } from "./salesPeriod";
 
 // Margin = what an order line sold for minus what it cost us. The cost is
 // typed by an admin on the Marja page (order_costs/{line id}, admin-only
@@ -12,6 +13,18 @@ import { discountShare } from "./orderCalculations";
 // Expenses that ARE the cost of goods: once costs are typed per line they
 // must not be subtracted a second time from the profit.
 export const COST_EXPENSE_CATEGORIES = [VENDOR_EXPENSE_CATEGORY, "Xomashyo"];
+
+// Costs are typed per line since September 2026 (the first ones on 30
+// September, for September's orders). Older orders were never costed, so
+// they are not "missing" a cost: they are left out of the margin, and in
+// a profit over a longer period that part is counted the old way
+// (revenue − every expense of that time).
+export const COST_TRACKING_FROM = "2026-09-01";
+export const costTracked = (order: Pick<Order, "order_date" | "created_at">) => {
+  const day = saleDay(order);
+  return !day || day >= COST_TRACKING_FROM;
+};
+const expenseTracked = (e: { date?: string }) => !e.date || String(e.date).slice(0, 10) >= COST_TRACKING_FROM;
 
 // An order with no product lines still gets one row (its own key).
 export const orderOnlyKey = (orderId: string) => `order_${orderId}`;
@@ -38,6 +51,7 @@ export type MarginRow = {
   suggestion: number | null; // catalog unit cost for this quantity
   profit: number | null;
   margin: number | null; // %
+  tracked: boolean; // the order is from the time costs are typed
 };
 
 export { isSale as isSaleOrder } from "./salesPeriod";
@@ -72,6 +86,7 @@ export function buildMarginRows(
           revenue: Number(l.total || 0) * scale,
         }))
       : [{ key: orderOnlyKey(order.id), legacyKey: null, line: null, name: order.title || "Buyurtma", quantity: 1, unitPrice: total, revenue: total }];
+    const tracked = costTracked(order);
     for (const it of items) {
       const byPlace = costs.get(it.key);
       const saved =
@@ -87,6 +102,7 @@ export function buildMarginRows(
         suggestion: tiers && tiers.length ? tierCostFor(tiers, it.quantity) : null,
         profit: cost === null ? null : it.revenue - cost,
         margin: cost === null || it.revenue <= 0 ? null : ((it.revenue - cost) / it.revenue) * 100,
+        tracked,
       });
     }
   }
@@ -101,14 +117,18 @@ export type MarginSummary = {
   cost: number;
   profit: number; // on costed lines
   margin: number | null; // % on costed lines
-  missingLines: number;
+  missingLines: number; // from the cost-tracking time only
   missingRevenue: number;
+  untrackedLines: number; // older orders, never costed
+  untrackedRevenue: number;
   lowMargin: number; // costed lines under 15 %
   loss: number; // costed lines whose cost is above what they sold for
 };
 
 export function summarize(rows: MarginRow[]): MarginSummary {
   const costed = rows.filter((r) => r.cost !== null);
+  const untracked = rows.filter((r) => r.cost === null && !r.tracked);
+  const untrackedRevenue = untracked.reduce((s, r) => s + r.revenue, 0);
   const revenue = rows.reduce((s, r) => s + r.revenue, 0);
   const costedRevenue = costed.reduce((s, r) => s + r.revenue, 0);
   const cost = costed.reduce((s, r) => s + (r.cost || 0), 0);
@@ -120,8 +140,10 @@ export function summarize(rows: MarginRow[]): MarginSummary {
     cost,
     profit: costedRevenue - cost,
     margin: costedRevenue > 0 ? ((costedRevenue - cost) / costedRevenue) * 100 : null,
-    missingLines: rows.length - costed.length,
-    missingRevenue: revenue - costedRevenue,
+    missingLines: rows.length - costed.length - untracked.length,
+    missingRevenue: revenue - costedRevenue - untrackedRevenue,
+    untrackedLines: untracked.length,
+    untrackedRevenue,
     lowMargin: costed.filter((r) => r.margin !== null && r.margin < 15).length,
     loss: costed.filter((r) => (r.profit ?? 0) < 0).length,
   };
@@ -141,17 +163,24 @@ export type ProfitBreakdown = {
   net: number;
   missingLines: number;
   missingRevenue: number;
+  untrackedRevenue: number; // before costs were typed: counted the cash way
+  untrackedLines: number;
   costedLines: number;
   lines: number;
 };
 
-export function profitBreakdown(summary: MarginSummary, expenses: Pick<Expense, "amount" | "category">[]): ProfitBreakdown {
-  const costExpenses = expenses.filter((e) => COST_EXPENSE_CATEGORIES.includes(e.category)).reduce((s, e) => s + Number(e.amount || 0), 0);
+// A period reaching back before costs were typed: the older part keeps its
+// supplier and raw-material payments as expenses (there is no typed cost
+// for it), and the gross profit is shown for the costed part only.
+export function profitBreakdown(summary: MarginSummary, expenses: (Pick<Expense, "amount" | "category"> & { date?: string })[]): ProfitBreakdown {
+  const costExpenses = expenses.filter((e) => COST_EXPENSE_CATEGORIES.includes(e.category) && expenseTracked(e)).reduce((s, e) => s + Number(e.amount || 0), 0);
   const all = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   const base = {
     revenue: summary.revenue,
     cost: summary.cost,
-    gross: summary.revenue - summary.cost,
+    gross: summary.revenue - summary.untrackedRevenue - summary.cost,
+    untrackedRevenue: summary.untrackedRevenue,
+    untrackedLines: summary.untrackedLines,
     missingLines: summary.missingLines,
     missingRevenue: summary.missingRevenue,
     costedLines: summary.costedLines,

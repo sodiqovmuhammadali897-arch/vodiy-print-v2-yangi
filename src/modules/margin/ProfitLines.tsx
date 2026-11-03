@@ -23,14 +23,31 @@ export default function ProfitLines({ b }: { b: ReturnType<typeof profitBreakdow
       </div>
     );
   }
-  const pct = b.revenue > 0 ? (b.gross / b.revenue) * 100 : 0;
+  const tracked = b.revenue - b.untrackedRevenue;
+  const pct = tracked > 0 ? (b.gross / tracked) * 100 : 0;
+  const old = b.untrackedRevenue > 0;
   return (
     <div className="text-sm text-ink-700">
-      {line("Kirim (buyurtmalar)", b.revenue)}
-      {line(`− Tannarx (${b.costedLines} / ${b.lines} qator)`, b.cost)}
-      {line(`= Yalpi foyda (${pct.toFixed(1)}%)`, b.gross, "font-semibold text-emerald-700")}
-      {line("− Boshqa xarajatlar (ijara, maosh, reklama…)", b.otherExpenses)}
-      <div className="py-1 text-xs text-ink-500">"Ta'minotchiga to'lov" va "Xomashyo" ({formatMoney(b.costExpenses)}) qo'shilmaydi — ular tannarxda bor.</div>
+      {old ? (
+        <>
+          {line("Kirim (buyurtmalar)", b.revenue)}
+          {line("  shundan sentyabr 2026 dan (tannarx bilan)", tracked, "text-ink-500")}
+          {line("− Tannarx", b.cost)}
+          {line(`= Yalpi foyda, sentyabrdan (${pct.toFixed(1)}%)`, b.gross, "font-semibold text-emerald-700")}
+          {line("+ Sentyabrgacha kirim (tannarx yozilmagan)", b.untrackedRevenue)}
+        </>
+      ) : (
+        <>
+          {line("Kirim (buyurtmalar)", b.revenue)}
+          {line(`− Tannarx (${b.costedLines} / ${b.lines} qator)`, b.cost)}
+          {line(`= Yalpi foyda (${pct.toFixed(1)}%)`, b.gross, "font-semibold text-emerald-700")}
+        </>
+      )}
+      {line(old ? "− Xarajatlar (sentyabrgacha — barchasi)" : "− Boshqa xarajatlar (ijara, maosh, reklama…)", b.otherExpenses)}
+      <div className="py-1 text-xs text-ink-500">
+        "Ta'minotchiga to'lov" va "Xomashyo" ({formatMoney(b.costExpenses)}{old ? ", sentyabrdan" : ""}) qo'shilmaydi — ular tannarxda bor.
+        {old && " Tannarx sentyabr 2026 dan yoziladi: undan oldingi oylar kirim minus barcha xarajatlar bo'yicha hisoblandi."}
+      </div>
       <div className="flex justify-between gap-4 py-2 text-base font-extrabold">
         <span>= Sof foyda</span>
         <span className={`tabular-nums ${b.net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{formatMoney(b.net)}</span>

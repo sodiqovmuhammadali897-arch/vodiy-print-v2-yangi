@@ -18,6 +18,7 @@ import {
   summarize,
   totalMismatch,
   type MarginRow,
+  COST_TRACKING_FROM,
 } from "../../lib/margin";
 import type { Customer, Order, OrderCost, OrderPayment, OrderProduct, Product, ProductCost } from "../../lib/types";
 import StatCard from "../../components/ui/StatCard";
@@ -106,14 +107,14 @@ export default function MarginPage() {
   const customerOf = (o: Order) => (o.customer_id && customers.get(o.customer_id)) || "";
   const q = search.trim().toLowerCase();
   const shown = rows.filter((r) => {
-    if (filter === "missing" && r.cost !== null) return false;
+    if (filter === "missing" && (r.cost !== null || !r.tracked)) return false;
     if (filter === "costed" && r.cost === null) return false;
     if (filter === "low" && !(r.margin !== null && r.margin < 15)) return false;
     if (filter === "loss" && !((r.profit ?? 0) < 0)) return false;
     if (!q) return true;
     return [r.name, r.order.order_number, customerOf(r.order), r.order.manager_name].some((v) => String(v || "").toLowerCase().includes(q));
   });
-  const fillable = shown.filter((r) => r.cost === null && r.suggestion !== null && r.line);
+  const fillable = shown.filter((r) => r.cost === null && r.tracked && r.suggestion !== null && r.line);
 
   const save = async (r: MarginRow, total: number | null, source: OrderCost["source"] = "manual") => {
     setSaving((s) => new Set(s).add(r.key));
@@ -280,8 +281,9 @@ export default function MarginPage() {
       const a = map.get(name.toLowerCase()) || { name, qty: 0, revenue: 0, costedRevenue: 0, costedQty: 0, cost: 0, missing: 0 };
       a.qty += r.quantity;
       a.revenue += r.revenue;
-      if (r.cost === null) a.missing++;
-      else {
+      if (r.cost === null) {
+        if (r.tracked) a.missing++;
+      } else {
         a.cost += r.cost;
         a.costedRevenue += r.revenue;
         a.costedQty += r.quantity;
@@ -325,7 +327,8 @@ export default function MarginPage() {
     );
   }
 
-  const coverage = summary.lines ? Math.round((summary.costedLines / summary.lines) * 100) : 0;
+  const trackedLines = summary.lines - summary.untrackedLines;
+  const coverage = trackedLines ? Math.round((summary.costedLines / trackedLines) * 100) : 0;
   let lastOrder = "";
 
   return (
@@ -353,9 +356,15 @@ export default function MarginPage() {
 
       {error && <div className="rounded-xl bg-rose-50 px-4 py-2 text-sm text-rose-700">{error}</div>}
 
+      {summary.untrackedLines > 0 && (
+        <div className="rounded-xl bg-sky-50 px-4 py-2.5 text-sm text-sky-800 dark:bg-sky-900/30 dark:text-sky-200">
+          Tannarx {monthLabel(COST_TRACKING_FROM.slice(0, 7))} dan yoziladi. Undan oldingi buyurtmalar ({summary.untrackedLines} qator) marjaga kirmaydi va «tannarxsiz» deb sanalmaydi.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard title="Aylanma" value={formatMoneyShort(summary.revenue)} hint={`${new Set(rows.map((r) => r.order.id)).size} buyurtma · ${summary.lines} qator`} tone="sky" icon={<Wallet className="h-5 w-5" />} />
-        <StatCard title="Tannarx" value={formatMoneyShort(summary.cost)} hint={`kiritilgan: ${summary.costedLines} / ${summary.lines} qator`} tone="violet" icon={<Coins className="h-5 w-5" />} progress={coverage} progressLabel={`${coverage}% to'ldirilgan`} />
+        <StatCard title="Tannarx" value={formatMoneyShort(summary.cost)} hint={trackedLines ? `kiritilgan: ${summary.costedLines} / ${trackedLines} qator` : "bu oyda yuritilmagan"} tone="violet" icon={<Coins className="h-5 w-5" />} progress={coverage} progressLabel={`${coverage}% to'ldirilgan`} />
         <StatCard title="Yalpi foyda (marja)" value={formatMoneyShort(summary.profit)} hint="tannarxi kiritilgan qatorlardan" tone={summary.profit < 0 ? "rose" : "emerald"} icon={<TrendingUp className="h-5 w-5" />} />
         <StatCard
           title="O'rtacha marja"
@@ -587,6 +596,7 @@ export default function MarginPage() {
                             label={`${r.name} tannarxi (dona)`}
                           />
                           {r.cost === null &&
+                            r.tracked &&
                             (r.suggestion !== null ? (
                               <button className="mt-1 block w-full text-right text-[11px] font-semibold text-brand-600 hover:underline" onClick={() => save(r, (r.suggestion || 0) * r.quantity, "catalog")}>
                                 katalog: {num(r.suggestion, 2)} → qo'yish

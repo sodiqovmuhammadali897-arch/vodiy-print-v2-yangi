@@ -247,7 +247,7 @@ export default function Finance() {
             value={breakdown.costedLines ? formatMoneyShort(breakdown.cost) : "—"}
             hint={
               <>
-                {breakdown.costedLines ? `kiritilgan: ${breakdown.costedLines} / ${breakdown.lines} qator · ` : "hali kiritilmagan · "}
+                {breakdown.costedLines ? `kiritilgan: ${breakdown.costedLines} / ${breakdown.lines - breakdown.untrackedLines} qator${breakdown.untrackedLines ? " (sentyabrdan)" : ""} · ` : breakdown.untrackedLines === breakdown.lines && breakdown.lines ? "sentyabr 2026 gacha yuritilmagan · " : "hali kiritilmagan · "}
                 <Link to="/margin" className="font-semibold text-brand-700 hover:underline">
                   Marja →
                 </Link>
@@ -255,7 +255,7 @@ export default function Finance() {
             }
             tone="violet"
             icon={<Lock className="h-5 w-5" />}
-            progress={breakdown.lines ? (breakdown.costedLines / breakdown.lines) * 100 : undefined}
+            progress={breakdown.lines - breakdown.untrackedLines > 0 ? (breakdown.costedLines / (breakdown.lines - breakdown.untrackedLines)) * 100 : undefined}
           />
           <StatCard
             title={breakdown.mode === "margin" ? "Xarajatlar" : "Chiqim"}

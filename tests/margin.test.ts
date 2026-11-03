@@ -72,6 +72,24 @@ describe("summarize and profitBreakdown", () => {
     expect(b).toMatchObject({ mode: "margin", gross: 900_000, otherExpenses: 200_000, costExpenses: 600_000, net: 700_000 });
   });
 
+  it("leaves orders from before costs were typed out of the margin, counting them the cash way", () => {
+    const mixed = summarize(
+      buildMarginRows(
+        [order("old", 2_000_000, { order_date: "2026-07-10" }), order("new", 1_000_000, { order_date: "2026-10-05" })],
+        [line("x", "old", 2000, 1000), line("y", "new", 1000, 1000)],
+        new Map([cost("y", 650_000)]),
+      ),
+    );
+    expect(mixed).toMatchObject({ revenue: 3_000_000, cost: 650_000, missingLines: 0, untrackedLines: 1, untrackedRevenue: 2_000_000 });
+    expect(mixed.margin).toBeCloseTo(35, 5);
+    const b = profitBreakdown(mixed, [
+      { amount: 900_000, category: "Ta'minotchiga to'lov", date: "2026-07-20" }, // July's goods: no typed cost, stays an expense
+      { amount: 600_000, category: "Ta'minotchiga to'lov", date: "2026-10-08" }, // October's: already in the typed cost
+      { amount: 200_000, category: "Ijara", date: "2026-10-01" },
+    ]);
+    expect(b).toMatchObject({ mode: "margin", gross: 350_000, untrackedRevenue: 2_000_000, costExpenses: 600_000, otherExpenses: 1_100_000, net: 1_250_000 });
+  });
+
   it("keeps the cash view while no cost is typed for the period", () => {
     const none = summarize(buildMarginRows([order("o1", 1_000_000)], [line("a", "o1", 1000, 1000)], new Map()));
     const b = profitBreakdown(none, [{ amount: 300_000, category: "Ta'minotchiga to'lov" }]);
