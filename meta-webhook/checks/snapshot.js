@@ -7,7 +7,7 @@
 // Sections: sales, managers, kpi, debt, cost, amo, products (default: all).
 const path = require("path");
 
-const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products"];
+const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts"];
 const SYSTEM_FROM = "2026-07"; // the ERP is used for every order from July 2026
 const COST_FROM = "2026-09"; // costs are typed per line from September 2026
 
@@ -193,7 +193,105 @@ function products(d, out) {
   );
 }
 
-const RUN = { sales, managers, kpi, debt, cost, amo, products };
+// Product families by the typed line name (lines are free text).
+const FAMILIES = [
+  ["gift box", /gift|sovg|quti|box|set/],
+  ["paket", /paket|пакет/],
+  ["bloknot", /bloknot|blaknot|ежедн|kundalik|daftar/],
+  ["futbolka", /futbol|polo/],
+  ["kepka", /kepka|кепк|panama/],
+  ["ustki kiyim", /nimcha|bomber|finka|xudi|hudi|kurtka|svitshot|jilet/],
+  ["bakal", /bakal|kruj|stakan|termos|кружк/],
+  ["ruchka", /ruchka|ручк|qalam/],
+  ["papka", /papka|папк/],
+  ["flayer / buklet", /flayer|flyer|listovka|buklet|лист/],
+  ["vizitka", /vizit|визит/],
+  ["katalog / jurnal", /katalog|jurnal|broshyura|kitob/],
+  ["kalendar", /kalendar|календ/],
+  ["stiker / yorliq", /stiker|sticker|yorliq|etiketka|наклей/],
+  ["banner / roll-up", /banner|roll|баннер|tent|vinil/],
+  ["blank / konvert", /blank|konvert|бланк|конверт|sertifikat|diplom|gramota/],
+  ["kovrik / suvenir", /kovrik|brelok|znachok|flesh|usb|soat|suvenir|медал|medal/],
+];
+const familyOf = (name) => {
+  const n = String(name || "").toLowerCase();
+  for (const [f, re] of FAMILIES) if (re.test(n)) return f;
+  return null;
+};
+const median = (xs) => {
+  const a = xs.filter((x) => Number.isFinite(x)).sort((p, q) => p - q);
+  return a.length ? a[Math.floor((a.length - 1) / 2)] : 0;
+};
+const q = (xs, p) => {
+  const a = xs.filter((x) => Number.isFinite(x)).sort((m, n) => m - n);
+  return a.length ? a[Math.min(a.length - 1, Math.floor(p * a.length))] : 0;
+};
+const top = (counts, n = 4) => Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, c]) => `${k} ${c}`).join(", ");
+const clip = (s) => String(s || "").replace(/\s+/g, " ").trim().slice(0, 28);
+
+// Facts for the sales guide, per product family since July 2026: how it
+// sells (orders, buyers, repeat buyers, quantity, unit price, line total),
+// who buys it (customer industry), what it is bought with, and the
+// variants/sizes/materials typed most. Then the catalog products, one line
+// each (name, category, image, lead time, min qty, price tiers).
+function productfacts(d, out) {
+  const live = new Map(d.orders.filter((o) => isSale(o) && monthOfOrder(o) >= SYSTEM_FROM).map((o) => [o.id, o]));
+  const cust = new Map(d.customers.map((c) => [c.id, c]));
+  const famsOfOrder = new Map();
+  const lines = d.order_products.filter((l) => live.has(l.order_id));
+  for (const l of lines) {
+    const f = familyOf(l.product_name);
+    if (!f) continue;
+    if (!famsOfOrder.has(l.order_id)) famsOfOrder.set(l.order_id, new Set());
+    famsOfOrder.get(l.order_id).add(f);
+  }
+  const by = {};
+  let unmatched = 0;
+  for (const l of lines) {
+    const f = familyOf(l.product_name);
+    if (!f) {
+      unmatched += Number(l.total || 0);
+      continue;
+    }
+    const o = live.get(l.order_id);
+    const r = (by[f] = by[f] || { orders: new Set(), buyers: {}, qty: [], unit: [], total: [], sum: 0, ind: {}, with: {}, spec: {}, months: {} });
+    r.orders.add(l.order_id);
+    if (o.customer_id) r.buyers[o.customer_id] = (r.buyers[o.customer_id] || new Set()).add(l.order_id);
+    r.qty.push(Number(l.quantity || 0));
+    r.unit.push(Number(l.unit_price || 0));
+    r.total.push(Number(l.total || 0));
+    r.sum += Number(l.total || 0);
+    const c = o.customer_id && cust.get(o.customer_id);
+    const ind = clip(c && c.industry) || "(soha yo'q)";
+    r.ind[ind] = (r.ind[ind] || 0) + 1;
+    for (const g of famsOfOrder.get(l.order_id) || []) if (g !== f) r.with[g] = (r.with[g] || 0) + 1;
+    const spec = [l.variant, l.size, l.material].map(clip).filter(Boolean).join(" / ");
+    if (spec) r.spec[spec] = (r.spec[spec] || 0) + 1;
+    const m = monthOfOrder(o);
+    r.months[m] = (r.months[m] || 0) + Number(l.total || 0);
+  }
+  const rows = Object.entries(by).sort((a, b) => b[1].sum - a[1].sum);
+  out.push(`== product families since ${SYSTEM_FROM} (by typed line name); not matched: ${mln(unmatched)} mln`);
+  for (const [f, r] of rows) {
+    const buyers = Object.values(r.buyers);
+    out.push(`-- ${f}: ${r.orders.size} orders, ${mln(r.sum)} mln, ${buyers.length} buyers (${buyers.filter((s) => s.size > 1).length} bought again)`);
+    out.push(`   qty median ${median(r.qty)} (25–75%: ${q(r.qty, 0.25)}–${q(r.qty, 0.75)}) | unit price median ${Math.round(median(r.unit))} | line median ${mln(median(r.total))} mln`);
+    out.push(`   who: ${top(r.ind)}`);
+    out.push(`   with: ${top(r.with, 5) || "—"}`);
+    out.push(`   typed: ${top(r.spec, 4) || "—"}`);
+    out.push(`   months: ${Object.keys(r.months).sort().map((m) => `${m.slice(5)} ${mln(r.months[m])}`).join(", ")}`);
+  }
+  const act = d.products.filter((p) => p.is_active !== false && !p.archived_at);
+  table(
+    out,
+    "catalog: name | category | family | image | lead days | min qty | tiers (qty:price)",
+    act
+      .sort((a, b) => String(a.category || "").localeCompare(String(b.category || "")) || String(a.name).localeCompare(String(b.name)))
+      .map((p) => `${p.name} | ${p.category || "-"} | ${familyOf(p.name) || "-"} | ${p.image_url ? "rasm" : "—"} | ${p.lead_time_days || "-"} | ${p.min_order_qty || "-"} | ${(p.price_tiers || []).map((t) => `${t.min_qty}:${Math.round(t.price)}`).join(" ")}`),
+  );
+}
+
+const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts };
 
 // The report for already loaded data; `lib` is meta-webhook/salesKpi.js.
 function report(d, wanted = SECTIONS, lib = null) {
@@ -216,6 +314,7 @@ const NEEDS = {
   cost: ["orders", "order_costs"],
   amo: ["amo_stats"],
   products: ["products", "orders", "order_products"],
+  productfacts: ["products", "orders", "order_products", "customers"],
 };
 
 async function main() {
@@ -226,7 +325,7 @@ async function main() {
   const args = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
   const wanted = !args.length || args.includes("all") ? SECTIONS : args;
   const cols = [...new Set(wanted.flatMap((s) => NEEDS[s] || []))];
-  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [] };
+  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [] };
   await Promise.all(cols.map(async (c) => (d[c] = (await db.collection(c).get()).docs.map((x) => ({ id: x.id, ...x.data() })))));
   if (wanted.includes("amo")) d.amo_status = (await db.collection("amo_meta").doc("status").get()).data() || {};
   let lib = null;

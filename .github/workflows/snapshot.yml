@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       sections:
-        description: "all, or any of: sales managers kpi debt cost amo products"
+        description: "all, or any of: sales managers kpi debt cost amo products productfacts"
         default: "all"
         required: false
 

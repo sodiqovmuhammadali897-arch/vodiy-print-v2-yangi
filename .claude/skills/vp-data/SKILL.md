@@ -26,7 +26,7 @@ Then read the log with `mcp__github__get_job_logs`:
 
 (`gh api` cannot follow the log redirect to blob storage.)
 
-**Sections:** `sales managers kpi debt cost amo products`. Pass a few, for
+**Sections:** `sales managers kpi debt cost amo products productfacts`. Pass a few, for
 example `-f "inputs[sections]=kpi cost"`, for a shorter log.
 
 - **sales** — by month (revenue, paid, debt) and by month × `manager_name`.
@@ -41,6 +41,11 @@ example `-f "inputs[sections]=kpi cost"`, for a shorter log.
   created / won / lost by month, and loss reasons.
 - **products** — card fields filled out of 72, categories, top 25 products
   since July 2026.
+- **productfacts** — per product family since July 2026: orders, buyers
+  and repeat buyers, quantity and price medians, who buys it (customer
+  industry), what it is bought with, the specs typed most, revenue by
+  month; then every catalog product with its tiers. Use it for the sales
+  guide and the product cards.
 
 The script is `meta-webhook/checks/snapshot.js` (test: `tests/snapshot.test.ts`).
 It reaches the server only with a deploy.

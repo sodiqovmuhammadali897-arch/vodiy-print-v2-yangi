@@ -7,7 +7,7 @@ const lib = require("../meta-webhook/salesKpi");
 const data = {
   now: Date.parse("2026-11-03T10:00:00+05:00"),
   orders: [
-    { id: "a", manager_name: "Maryam", order_date: "2026-10-03", status: "delivered", total_amount: 5e6, paid_amount: 2e6, remaining_amount: 3e6, customer_name: "Secret LLC" },
+    { id: "a", manager_name: "Maryam", order_date: "2026-10-03", status: "delivered", total_amount: 5e6, paid_amount: 2e6, remaining_amount: 3e6, customer_name: "Secret LLC", customer_id: "c1" },
     { id: "b", manager_name: "Moxlaroy", order_date: "2026-09-10", status: "closed", total_amount: 1e6, paid_amount: 1e6 },
     { id: "c", manager_name: "Maryam", order_date: "2026-05-01", status: "closed", total_amount: 2e6, paid_amount: 2e6 },
   ],
@@ -15,6 +15,7 @@ const data = {
   order_products: [{ id: "l", order_id: "a", product_name: "Paket (A4)", total: 5e6 }],
   order_costs: [{ id: "a_L0", order_id: "a", total_cost: 3e6 }],
   managers: [{ id: "m", name: "Maryam", monthly_plan: 100e6 }],
+  customers: [{ id: "c1", first_name: "Secret", phone: "+998901234567", industry: "Ta'lim" }],
   staff: [{ id: "x@vp.uz", full_name: "Maryam", report_manager_id: "m", amo_user_id: 7 }],
   kpi_sales: [],
   kpi_months: [],
@@ -36,7 +37,13 @@ describe("business snapshot", () => {
     expect(text).toContain("2026-10 | orders 1/1 | revenue 5.0/5.0 | margin 40%");
   });
 
+  it("describes product families for the sales guide", () => {
+    expect(text).toContain("-- paket: 1 orders, 5.0 mln, 1 buyers");
+    expect(text).toContain("who: Ta'lim 1");
+  });
+
   it("never prints customer data", () => {
-    expect(text).not.toContain("Secret LLC");
+    expect(text).not.toContain("Secret");
+    expect(text).not.toContain("998901234567");
   });
 });
