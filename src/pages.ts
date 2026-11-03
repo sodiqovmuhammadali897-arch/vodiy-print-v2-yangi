@@ -29,6 +29,8 @@ const loaders = {
   Tasks: () => import("./modules/tasks/Tasks"),
   DarslikPage: () => import("./modules/darslik/DarslikPage"),
   LessonPage: () => import("./modules/darslik/LessonPage"),
+  GuidePage: () => import("./modules/darslik/GuidePage"),
+  GuideCard: () => import("./modules/darslik/GuideCard"),
   CallMode: () => import("./modules/darslik/CallMode"),
   Settings: () => import("./modules/settings/Settings"),
 };

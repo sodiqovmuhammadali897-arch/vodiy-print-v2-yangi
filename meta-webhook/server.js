@@ -79,6 +79,8 @@ const tasks = process.env.TELEGRAM_BOT_TOKEN ? require("./tasks").create(db) : n
 const bonus = process.env.TELEGRAM_BOT_TOKEN ? require("./bonus").create(db) : null;
 // KPI sums (sales, money in) per manager, live — see salesKpi.js.
 const salesKpi = require("./salesKpi").create(db, { notify: Boolean(process.env.TELEGRAM_BOT_TOKEN) });
+// Darslik → Mahsulot qo'llanmasi: live facts per product family (guideFacts.js).
+const guideFacts = require("./guideFacts").create(db);
 // amoCRM, read only — see amocrm.js; feeds the "amoCRM tahlil" tab.
 const amocrm = require("./amocrm").create(db, { notify: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null });
 // Targetolog — Meta ads with marketolog → admin approval; see targetolog.js.
@@ -372,6 +374,7 @@ app.listen(PORT, () => {
   if (recall) recall.start();
   if (debts) debts.start();
   salesKpi.start();
+  guideFacts.start();
   void amocrm.start().catch((err) => console.error("amoCRM start failed", err));
   if (targetolog && ai.on("targetolog")) void targetolog.start().catch((err) => console.error("Targetolog start failed", err));
 });

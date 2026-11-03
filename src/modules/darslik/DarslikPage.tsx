@@ -7,6 +7,8 @@ import { PRODUCT_CATEGORIES } from "../../lib/orderConstants";
 import { useLessons } from "./useLessons";
 import { isRead, lessonState, type LessonProgress } from "./lessonFacts";
 import { LESSONS } from "./lessonsData";
+import { useGuide } from "./useGuide";
+import { guidePath, type GuideProgress } from "../../lib/guide";
 
 const STATE = {
   done: { label: "O'qildi", cls: "bg-emerald-100 text-emerald-800" },
@@ -52,6 +54,17 @@ export default function DarslikPage() {
           )}
         </div>
       </div>
+
+      <Link
+        to="/darslik/qollanma"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-800 px-5 py-4 text-white shadow-lg shadow-brand-900/20 transition hover:brightness-110"
+      >
+        <div>
+          <div className="font-display text-lg font-extrabold">Mahsulot qo'llanmasi — yangi sotuvchi shu yerdan boshlaydi</div>
+          <div className="text-sm text-white/85">Top-10 mahsulot haqiqiy raqamlar bilan, 6 ta mijoz vaziyati va 5 kunlik yo'l</div>
+        </div>
+        <span className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-brand-700">Ochish →</span>
+      </Link>
 
       {view === "team" && isAdmin ? (
         <TeamResults />
@@ -127,12 +140,13 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 type StaffRow = { id: string; full_name?: string; role?: string; report_manager_id?: string | null; permissions?: Record<string, { view?: boolean }> };
-type ProgressRow = { id: string; lessons?: Record<string, LessonProgress>; updated_at?: string };
+type ProgressRow = { id: string; lessons?: Record<string, LessonProgress>; guide?: GuideProgress; updated_at?: string };
 
 // Admin: who read what and how they did in the tests.
 function TeamResults() {
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [rows, setRows] = useState<ProgressRow[]>([]);
+  const { top } = useGuide();
   useEffect(() => {
     void Promise.all([listAll<StaffRow>("staff"), listAll<ProgressRow>("lesson_progress")]).then(([s, p]) => {
       setStaff(s);
@@ -149,10 +163,11 @@ function TeamResults() {
         const read = LESSONS.filter((l) => isRead(p[l.key])).length;
         const scores = LESSONS.map((l) => p[l.key]?.quiz).filter((q): q is number => typeof q === "number");
         const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-        return { email: s.id, name: s.full_name || s.id, read, avg, last: byEmail.get(s.id)?.updated_at || null };
+        const path = guidePath(top, byEmail.get(s.id)?.guide, p);
+        return { email: s.id, name: s.full_name || s.id, read, avg, last: byEmail.get(s.id)?.updated_at || null, days: path.days.filter((d) => d.state === "done").length, ready: path.ready };
       })
       .sort((a, b) => b.read - a.read);
-  }, [staff, rows]);
+  }, [staff, rows, top]);
 
   const status = (read: number) =>
     read >= LESSONS.length * 0.8
@@ -169,6 +184,7 @@ function TeamResults() {
             <th className="px-4 py-3">Menejer</th>
             <th className="px-4 py-3">O'qildi</th>
             <th className="px-4 py-3">O'rtacha test</th>
+            <th className="px-4 py-3">Qo'llanma yo'li</th>
             <th className="px-4 py-3">Oxirgi o'qish</th>
             <th className="px-4 py-3">Holat</th>
           </tr>
@@ -183,6 +199,9 @@ function TeamResults() {
                   {p.read} / {LESSONS.length}
                 </td>
                 <td className="px-4 py-2.5 tabular-nums">{p.avg === null ? "—" : `${p.avg}%`}</td>
+                <td className="px-4 py-2.5 tabular-nums">
+                  {p.ready ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">sotishga tayyor</span> : `${p.days} / 5 kun`}
+                </td>
                 <td className="px-4 py-2.5 text-ink-500">{p.last ? p.last.slice(0, 10) : "—"}</td>
                 <td className="px-4 py-2.5">
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${s.c}`}>{s.t}</span>
@@ -192,7 +211,7 @@ function TeamResults() {
           })}
           {!people.length && (
             <tr>
-              <td colSpan={5} className="px-4 py-6 text-center text-ink-500">
+              <td colSpan={6} className="px-4 py-6 text-center text-ink-500">
                 <BookOpen className="mx-auto mb-1 h-5 w-5" /> Hali hech kim o'qimagan
               </td>
             </tr>

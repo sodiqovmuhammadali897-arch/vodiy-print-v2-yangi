@@ -7,7 +7,7 @@
 // Sections: sales, managers, kpi, debt, cost, amo, products (default: all).
 const path = require("path");
 
-const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts"];
+const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide"];
 const SYSTEM_FROM = "2026-07"; // the ERP is used for every order from July 2026
 const COST_FROM = "2026-09"; // costs are typed per line from September 2026
 
@@ -291,7 +291,16 @@ function productfacts(d, out) {
   );
 }
 
-const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts };
+// What the server wrote for the Mahsulot qo'llanmasi (guideFacts.js).
+function guide(d, out) {
+  const meta = d.guide_facts.find((g) => g.id === "_meta");
+  const fams = d.guide_facts.filter((g) => g.id !== "_meta").sort((a, b) => a.rank - b.rank);
+  out.push(`== guide_facts: ${fams.length} families, updated ${meta ? meta.updated_at : "—"}, top10 share ${meta ? meta.top10_share : "-"}%`);
+  for (const f of fams) out.push(`${f.rank}. ${f.key} | ${f.orders} orders, ${mln(f.revenue)} mln | models ${f.models.length} | lesson ${f.lesson}`);
+  if (meta) out.push(`gaps: no image ${meta.no_image}, no category ${meta.no_category}, duplicates ${meta.duplicate_names.join(", ") || "-"}, lines typed by hand ${meta.lines_without_catalog}/${meta.lines}`);
+}
+
+const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide };
 
 // The report for already loaded data; `lib` is meta-webhook/salesKpi.js.
 function report(d, wanted = SECTIONS, lib = null) {
@@ -315,6 +324,7 @@ const NEEDS = {
   amo: ["amo_stats"],
   products: ["products", "orders", "order_products"],
   productfacts: ["products", "orders", "order_products", "customers"],
+  guide: ["guide_facts"],
 };
 
 async function main() {
@@ -325,7 +335,7 @@ async function main() {
   const args = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
   const wanted = !args.length || args.includes("all") ? SECTIONS : args;
   const cols = [...new Set(wanted.flatMap((s) => NEEDS[s] || []))];
-  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [] };
+  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [] };
   await Promise.all(cols.map(async (c) => (d[c] = (await db.collection(c).get()).docs.map((x) => ({ id: x.id, ...x.data() })))));
   if (wanted.includes("amo")) d.amo_status = (await db.collection("amo_meta").doc("status").get()).data() || {};
   let lib = null;

@@ -241,6 +241,12 @@ service cloud.firestore {
       allow read: if isStaff();
       allow write: if isAdmin();
     }
+    // Mahsulot qo'llanmasi: per product family sales facts (counts and
+    // sums only), written by the server (meta-webhook/guideFacts.js).
+    match /guide_facts/{key} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
     match /lesson_progress/{em} {
       allow read: if isAdmin() || (isSignedIn() && em == email());
       allow write: if isSignedIn() && em == email();
