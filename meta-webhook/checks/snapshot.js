@@ -7,7 +7,7 @@
 // Sections: sales, managers, kpi, debt, cost, amo, products (default: all).
 const path = require("path");
 
-const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide", "guidejson"];
+const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide", "guidejson", "funnel"];
 const SYSTEM_FROM = "2026-07"; // the ERP is used for every order from July 2026
 const COST_FROM = "2026-09"; // costs are typed per line from September 2026
 
@@ -309,7 +309,19 @@ function guidejson(d, out) {
   for (const l of d.lessons) out.push(`LS ${JSON.stringify(l)}`);
 }
 
-const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide, guidejson };
+// What the server wrote for the Voronka (amoFunnel.js), per month.
+function funnel(d, out) {
+  out.push("== amo_funnel: month | leads talked info offer won lost(no reason) ordered paid | first call min, lead→order days | stuck, unused, erp/won");
+  for (const f of [...d.amo_funnel].sort((a, b) => a.id.localeCompare(b.id))) {
+    const a = f.all || {};
+    const r = a.reached || {};
+    out.push(
+      `${f.id} | ${a.leads} ${a.talked ?? "-"} ${f.info_key ? r[f.info_key] || 0 : "-"} ${f.offer_key ? r[f.offer_key] || 0 : "-"} ${a.won} ${a.lost}(${a.lost_no_reason}) ${a.ordered} ${a.paid} | ${a.first_call_min ?? "-"}, ${a.lead_to_order_days ?? "-"} | ${f.hygiene.stuck_first_stage}, ${f.hygiene.unused_stages.join("/") || "-"}, ${f.hygiene.erp_orders}/${f.hygiene.amo_won} | users ${f.users.map((u) => `${u.name}:${u.leads}/${u.ordered}`).join(" ")} | ${f.updated_at}`,
+    );
+  }
+}
+
+const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide, guidejson, funnel };
 
 // The report for already loaded data; `lib` is meta-webhook/salesKpi.js.
 function report(d, wanted = SECTIONS, lib = null) {
@@ -335,6 +347,7 @@ const NEEDS = {
   productfacts: ["products", "orders", "order_products", "customers"],
   guide: ["guide_facts"],
   guidejson: ["guide_facts", "lessons"],
+  funnel: ["amo_funnel"],
 };
 
 async function main() {
@@ -345,7 +358,7 @@ async function main() {
   const args = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
   const wanted = !args.length || args.includes("all") ? SECTIONS : args;
   const cols = [...new Set(wanted.flatMap((s) => NEEDS[s] || []))];
-  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [], lessons: [] };
+  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [], lessons: [], amo_funnel: [] };
   await Promise.all(cols.map(async (c) => (d[c] = (await db.collection(c).get()).docs.map((x) => ({ id: x.id, ...x.data() })))));
   if (wanted.includes("amo")) d.amo_status = (await db.collection("amo_meta").doc("status").get()).data() || {};
   let lib = null;

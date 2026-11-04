@@ -44,4 +44,17 @@ describe("bitim nazorati", () => {
     expect(D.lostNoReason(lost, "2026-11-02").map((l: { id: number }) => l.id)).toEqual([9]);
     expect(D.lostText(lost[0], "Maryam")).toContain("Bitim 9 — 9 mln · Maryam");
   });
+
+  it("reminds the manager of deals lost without a reason in the last 3 days", () => {
+    const lost = [
+      { id: 50, name: "Kafe", price: 0, status: 143, loss: null, user: 7, created: now - 9 * 86400000, updated: now - 86400000, closed: now - 86400000, pipeline: 1 },
+      { id: 51, name: "Eski", price: 0, status: 143, loss: null, user: 7, created: now - 20 * 86400000, updated: now - 9 * 86400000, closed: now - 9 * 86400000, pipeline: 1 },
+      { id: 52, name: "Sababli", price: 0, status: 143, loss: "Qimmat", user: 7, created: now - 5 * 86400000, updated: now - 86400000, closed: now - 86400000, pipeline: 1 },
+    ];
+    const s = D.dealLists(lost, [], now).get(7);
+    expect(s.noReason.map((d: { name: string }) => d.name)).toEqual(["Kafe"]);
+    const t = D.managerText("Maryam", s);
+    expect(t).toContain("Yo'qotildi, sababi yozilmagan — 1 ta");
+    expect(t).toContain("• Kafe");
+  });
 });

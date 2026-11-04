@@ -243,6 +243,12 @@ service cloud.firestore {
     }
     // Mahsulot qo'llanmasi: per product family sales facts (counts and
     // sums only), written by the server (meta-webhook/guideFacts.js).
+    // Sotuv voronkasi: per month counts written by the server
+    // (meta-webhook/amoFunnel.js) — admins only, like the sales control.
+    match /amo_funnel/{month} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     match /guide_facts/{key} {
       allow read: if isStaff();
       allow write: if false;

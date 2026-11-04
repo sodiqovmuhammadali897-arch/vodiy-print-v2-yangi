@@ -26,6 +26,7 @@ const push = require("./push");
 const T = require("./amoTasks");
 const C = require("./amoCalls");
 const D = require("./amoDeals");
+const F = require("./amoFunnel");
 
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Tashkent
 const WON = 142;
@@ -268,6 +269,14 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   let timer = null;
   let running = false;
   const written = new Map(); // doc id → JSON last written
+  // Sotuv voronkasi (amoFunnel.js): every stage a lead was ever in, from
+  // the stage-change events; the phones of the leads' contacts (memory
+  // only, to find the customer's ERP order); recomputed every 30 minutes.
+  const history = new Map(); // lead id → Set of "pipeline:status"
+  let eventsSince = 0;
+  const contactPhones = new Map(); // contact id → [last 9 digits]
+  let callsFrom = Infinity; // calls are loaded from here on
+  let funnelAt = 0;
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const stageOf = (l) => (statuses[`${l.pipeline}:${l.status}`] || {}).name || "";
@@ -915,6 +924,58 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     if (slot === "morning") await toAdmins(D.adminText(rows));
   };
 
+  // ── Sotuv voronkasi ──────────────────────────────────────────────
+  const FUNNEL_FROM = "2026-07"; // the ERP holds every order from July 2026
+  const FUNNEL_EVERY_MS = 30 * 60 * 1000;
+
+  const pullEvents = async (since) => {
+    let n = 0;
+    for (let page = 1; page < 2000; page++) {
+      const data = await api("events", { "filter[type]": "lead_status_changed", "filter[created_at][from]": Math.floor(since / 1000), limit: 100, page });
+      const rows = (data && data._embedded && data._embedded.events) || [];
+      F.historyFromEvents(rows, history);
+      n += rows.length;
+      if (!rows.length || !(data._links && data._links.next)) break;
+      await sleep(150);
+    }
+    return n;
+  };
+
+  const pullPhones = async (list) => {
+    const want = [...new Set(list.map((l) => l.contact).filter((id) => id && !contactPhones.has(id)))];
+    for (let i = 0; i < want.length; i += 50) {
+      const ids = want.slice(i, i + 50);
+      const rows = await pageAll("contacts", { "filter[id][]": ids }, "contacts");
+      for (const id of ids) contactPhones.set(id, []);
+      for (const c of rows) contactPhones.set(Number(c.id), F.contactPhoneKeys(c));
+      await sleep(150);
+    }
+  };
+
+  const funnel = async (now) => {
+    if (now - funnelAt < FUNNEL_EVERY_MS) return;
+    funnelAt = now;
+    const startedAt = now - 60 * 1000;
+    await pullEvents(eventsSince || monthStartMs(FUNNEL_FROM));
+    eventsSince = startedAt;
+    const all = [...leads.values(), ...[...unsorted.values()].filter((u) => !leads.has(u.id))];
+    const cohort = all.filter((l) => l.created && monthOf(l.created) >= FUNNEL_FROM);
+    await pullPhones(cohort);
+    const read = async (name) => (await db.collection(name).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+    const [orders, customers, payments] = await Promise.all([read("orders"), read("customers"), read("order_payments")]);
+    const callList = [...calls.values()];
+    let n = 0;
+    for (let m = FUNNEL_FROM; m <= monthOf(now); m = nextMonth(m)) {
+      const doc = F.computeFunnel({ month: m, leads: all, calls: callList, history, statuses, contactPhones, users, orders, customers, payments, callsFrom, now });
+      const json = JSON.stringify(doc);
+      if (written.get(`funnel:${m}`) === json) continue;
+      await db.collection("amo_funnel").doc(m).set({ ...doc, updated_at: new Date(now).toISOString() });
+      written.set(`funnel:${m}`, json);
+      n++;
+    }
+    if (n) log.log(`amoCRM funnel: ${n} month docs written (${history.size} leads with stage history)`);
+  };
+
   const writeStatus = (fields) =>
     db.collection("amo_meta").doc("status").set(
       {
@@ -936,7 +997,8 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       const startedAt = now - 60 * 1000; // overlap: a change during the pull is caught next time
       if (!leadsSince) {
         await pullLeads(0);
-        await pullCalls(monthStartMs(prevMonth(monthOf(now))));
+        callsFrom = monthStartMs(prevMonth(monthOf(now)));
+        await pullCalls(callsFrom);
       } else {
         await pullLeads(leadsSince);
         await pullCalls(notesSince);
@@ -968,6 +1030,11 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       } catch (err) {
         tasksError = String(err.message || err).slice(0, 300);
         log.error("amoCRM tasks sync failed", tasksError);
+      }
+      try {
+        await funnel(now);
+      } catch (err) {
+        log.error("amoCRM funnel failed", err.message || err);
       }
       const month = monthOf(now);
       const all = [...leads.values(), ...[...unsorted.values()].filter((u) => !leads.has(u.id))];

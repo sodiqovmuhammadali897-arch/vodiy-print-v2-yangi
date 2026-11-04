@@ -4,7 +4,8 @@
 // with no open task and the ones untouched for 3+ days; the admins get one
 // line per manager. At 15:00 a manager who still has deals without a task
 // gets those again. A deal closed as lost with no reason goes to the
-// admins at once. Pure helpers here; amocrm.js sends (amo_meta/deal_alerts
+// admins at once, and the manager sees their own in the next 10:00
+// message (lost in the last 3 days, still no reason). Pure helpers here; amocrm.js sends (amo_meta/deal_alerts
 // keeps what was sent).
 const T = require("./amoTasks");
 
@@ -21,15 +22,17 @@ const mln = (n) => {
 };
 const isOpen = (l) => l.status !== WON && l.status !== LOST && l.status !== -1 && l.user;
 
-// Per amoCRM user: { noTask: [...], stale: [...] }, biggest deals first.
+// Per amoCRM user: { noTask, stale, noReason }, biggest deals first.
+// noReason: lost in the last 3 days with no loss reason yet.
 function dealLists(leads, tasks, now, stageOf = () => "") {
   const withTask = new Set(tasks.filter((t) => !t.done && t.entity === "leads").map((t) => t.entityId));
   const by = new Map();
   const of = (u) => {
-    if (!by.has(u)) by.set(u, { noTask: [], stale: [] });
+    if (!by.has(u)) by.set(u, { noTask: [], stale: [], noReason: [] });
     return by.get(u);
   };
   for (const l of leads) {
+    if (l.status === LOST && !l.loss && l.user && l.closed && now - l.closed < 3 * 86400000) of(l.user).noReason.push({ ...T.leadBrief(l, stageOf), idle: null });
     if (!isOpen(l)) continue;
     const brief = { ...T.leadBrief(l, stageOf), idle: l.updated ? Math.floor((now - l.updated) / 86400000) : null };
     if (!withTask.has(l.id)) of(l.user).noTask.push(brief);
@@ -56,10 +59,13 @@ function managerText(name, s, later = false) {
     if (!s.noTask.length) return null;
     return [`⏰ ${name}, hali ${s.noTask.length} ta bitimda keyingi vazifa yo'q:`, ...list(s.noTask), "", "amoCRM'da har biriga vazifa qo'ying — sana va nima qilinadi."].join("\n");
   }
-  if (!s.noTask.length && !s.stale.length) return null;
+  const noReason = s.noReason || [];
+  if (!s.noTask.length && !s.stale.length && !noReason.length) return null;
   const out = [];
   if (s.noTask.length) out.push(`⚠️ ${name}, ${s.noTask.length} ta bitimda keyingi vazifa yo'q:`, ...list(s.noTask));
   if (s.stale.length) out.push(...(out.length ? [""] : []), `🕒 3 kundan beri harakatsiz — ${s.stale.length} ta:`, ...list(s.stale, true));
+  if (noReason.length)
+    out.push(...(out.length ? [""] : []), `❌ Yo'qotildi, sababi yozilmagan — ${noReason.length} ta:`, ...list(noReason), "Har biriga amoCRM'da yo'qotish sababini tanlang — voronkada nega ketayotganini shundan bilamiz.");
   out.push("", "amoCRM'da vazifa qo'ying yoki bitimni yangilang — ro'yxat o'zi yangilanadi.");
   return out.join("\n");
 }

@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       sections:
-        description: "all, or any of: sales managers kpi debt cost amo products productfacts guide guidejson"
+        description: "all, or any of: sales managers kpi debt cost amo products productfacts guide guidejson funnel"
         default: "all"
         required: false
 
