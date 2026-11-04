@@ -7,7 +7,7 @@
 // Sections: sales, managers, kpi, debt, cost, amo, products (default: all).
 const path = require("path");
 
-const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide", "guidejson", "funnel", "proposals"];
+const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide", "guidejson", "funnel", "proposals", "calls"];
 const SYSTEM_FROM = "2026-07"; // the ERP is used for every order from July 2026
 const COST_FROM = "2026-09"; // costs are typed per line from September 2026
 
@@ -354,7 +354,28 @@ function proposals(d, out) {
   out.push(`fields: ${Object.entries(fields).map(([k, n]) => `${k}=${n}`).join(" ")}`);
 }
 
-const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide, guidejson, funnel, proposals };
+// Mois Zvonki calls (calls collection): per month, how many were
+// answered, how many have a recording, and how many are 60+ s with one;
+// and which AI keys the server has (names only, never values).
+function calls(d, out) {
+  const by = {};
+  let last = "";
+  for (const c of d.calls) {
+    const t = String(c.start_time || c.created_at || "");
+    const m = t.slice(0, 7) || "(sanasiz)";
+    if (t > last) last = t;
+    const r = (by[m] = by[m] || { n: 0, ans: 0, rec: 0, rec60: 0, out: 0 });
+    r.n++;
+    if (c.answered) r.ans++;
+    if (c.direction === "out") r.out++;
+    if (c.recording_url) r.rec++;
+    if (c.recording_url && Number(c.duration_seconds || 0) >= 60) r.rec60++;
+  }
+  table(out, `calls (Mois Zvonki): ${d.calls.length} total, last ${last || "—"} — month | calls | answered | outgoing | with recording | recording 60+ s`, Object.keys(by).sort().map((m) => `${m} | ${by[m].n} | ${by[m].ans} | ${by[m].out} | ${by[m].rec} | ${by[m].rec60}`));
+  out.push(`server keys set: ${(d.env_keys || []).join(", ") || "—"}`);
+}
+
+const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide, guidejson, funnel, proposals, calls };
 
 // The report for already loaded data; `lib` is meta-webhook/salesKpi.js.
 function report(d, wanted = SECTIONS, lib = null) {
@@ -382,6 +403,7 @@ const NEEDS = {
   guidejson: ["guide_facts", "lessons"],
   funnel: ["amo_funnel"],
   proposals: ["proposals", "orders"],
+  calls: ["calls"],
 };
 
 async function main() {
@@ -392,7 +414,18 @@ async function main() {
   const args = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
   const wanted = !args.length || args.includes("all") ? SECTIONS : args;
   const cols = [...new Set(wanted.flatMap((s) => NEEDS[s] || []))];
-  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [], lessons: [], amo_funnel: [], proposals: [] };
+  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [], lessons: [], amo_funnel: [], proposals: [], calls: [] };
+  // Which keys the server's .env has (names of the non-empty ones only).
+  try {
+    const env = require("fs").readFileSync(path.join(base, ".env"), "utf8");
+    d.env_keys = env
+      .split("\n")
+      .map((l) => l.match(/^([A-Z_]*(?:API_KEY|TOKEN|MODEL|AGENTS)[A-Z_]*)=(.+)$/))
+      .filter(Boolean)
+      .map((m) => (/MODEL|AGENTS/.test(m[1]) ? `${m[1]}=${m[2].trim()}` : m[1]));
+  } catch {
+    d.env_keys = [];
+  }
   await Promise.all(cols.map(async (c) => (d[c] = (await db.collection(c).get()).docs.map((x) => ({ id: x.id, ...x.data() })))));
   if (wanted.includes("amo")) d.amo_status = (await db.collection("amo_meta").doc("status").get()).data() || {};
   let lib = null;

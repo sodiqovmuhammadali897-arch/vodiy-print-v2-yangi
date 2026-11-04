@@ -23,6 +23,7 @@ const data = {
   guide_facts: [],
   lessons: [],
   amo_funnel: [],
+  calls: [{ id: "k", start_time: "2026-10-02T10:00:00Z", answered: true, direction: "out", recording_url: "https://x/r.aac", duration_seconds: 95, phone: "+998901234567", client_name: "Secret" }],
   proposals: [{ id: "p", customer_id: "c1", total: 2e6, items: [{}], created_at: "2026-10-01T10:00:00Z", recipient_name: "Secret" }],
   amo_stats: [{ month: "2026-11", funnel: { "1:2": 3 }, leads: { created: 5, won: 1, lost: 2, won_amount: 1e6 }, loss: {} }],
   amo_status: { users: [{ id: 7, name: "Maryam" }], statuses: { "1:2": { pipeline: "Voronka", name: "Qabul", sort: 20 } } },
