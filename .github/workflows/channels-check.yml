@@ -1,0 +1,20 @@
+name: App channels check (read only)
+
+# Run by hand: which app version printvodiy.uz serves to everyone and to
+# the owner's admin channel (cookie vp_channel=next). Reads only.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compare the two channels
+        run: |
+          for c in "" "vp_channel=next"; do
+            s=$(curl -sS -m 20 -H "Cookie: $c" https://printvodiy.uz/ | grep -o '/assets/index-[^"]*\.js' | head -1)
+            echo "${c:-everyone}: $s"
+          done
+          echo "index.html direct: $(curl -sS -m 20 https://printvodiy.uz/index.html | grep -o '/assets/index-[^"]*\.js' | head -1)"
+          echo "deep link /orders: $(curl -sS -m 20 https://printvodiy.uz/orders | grep -o '/assets/index-[^"]*\.js' | head -1)"
