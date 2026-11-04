@@ -66,6 +66,8 @@ describe("sales funnel", () => {
   it("says talked is unknown before calls were loaded", () => {
     const g = computeFunnel({ month: "2026-10", leads, calls, history, statuses, contactPhones, users, orders, customers, payments, callsFrom: at("2026-10-15"), now: at("2026-11-04") });
     expect(g.all.talked).toBeNull();
+    expect(g.all.first_call_min).toBeNull();
+    expect(g.speed.first_call_min).toBeNull();
   });
 
   it("keeps no names or phones", () => {

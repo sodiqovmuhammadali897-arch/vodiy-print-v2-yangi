@@ -167,12 +167,22 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
 
 ## Open items (as of 2026-11-03)
 
-- **Sales funnel report («Voronka»):** the deck has been sent and waits for
-  the owner's answers:
-  - a call counts as «gaplashildi» from 30 s?
-  - a lead → order window of 60 days?
-  - a bot reminder about lost leads with no reason?
-  - The owner should also make the loss reason required in amoCRM.
+- **Sales funnel («Voronka») — built 2026-11-04** (Sotuv bo'limi → Voronka):
+  - `meta-webhook/amoFunnel.js` runs from the amoCRM sync every 30 minutes
+    and writes `amo_funnel/{month}` (admin read). It uses stage history
+    from amoCRM events since July 2026. «Talked» means a call of 30 s or
+    more. An ERP order counts when the phone matches and it comes within
+    60 days of the lead.
+  - Calls are loaded only from the previous month, so «talked» and
+    first-call speed are unknown for older months.
+  - The 10:00 manager message lists deals lost in the last 3 days with
+    no reason.
+  - October, real: 745 leads → 571 talked → 34 reached info → 27 offer
+    → 24 ERP orders matched → 24 paid. Of the 101 ERP orders in October,
+    only 24 came from an October amoCRM lead; the rest are repeat
+    customers, other channels or phone mismatches. 517 leads are stuck in
+    the first stage, and all 375 lost leads have no reason.
+  - The owner should make the loss reason required in amoCRM.
 - **New-seller onboarding — built 2026-11-03** (Darslik → «Mahsulot
   qo'llanmasi», `/darslik/qollanma`):
   - `meta-webhook/guideFacts.js` writes `guide_facts/{family}` and `_meta`

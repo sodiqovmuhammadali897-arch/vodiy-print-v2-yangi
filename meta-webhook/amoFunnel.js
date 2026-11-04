@@ -45,7 +45,7 @@ function newRow() {
 }
 const finish = (r, callsKnown) => {
   const { first_call, to_order, ...rest } = r;
-  return { ...rest, talked: callsKnown ? r.talked : null, first_call_min: median(first_call), lead_to_order_days: median(to_order) };
+  return { ...rest, talked: callsKnown ? r.talked : null, first_call_min: callsKnown ? median(first_call) : null, lead_to_order_days: median(to_order) };
 };
 
 function computeFunnel({ month, leads, calls, history, statuses, contactPhones, users, orders, customers, payments, callsFrom, now, windowDays = 60, talkSec = 30 }) {
@@ -177,7 +177,7 @@ function computeFunnel({ month, leads, calls, history, statuses, contactPhones, 
       .map(([id, r]) => ({ id: Number(id) || 0, name: (users.get(Number(id)) || {}).name || (id ? `#${id}` : "Mas'ul yo'q"), ...finish(r, callsKnown) }))
       .sort((a, b) => b.leads - a.leads),
     sources: [...bySource.values()].sort((a, b) => b.leads - a.leads).slice(0, 12),
-    speed: { first_call_min: median(all.first_call), lead_to_order_days: median(all.to_order), order_to_paid_days: median(toPaid) },
+    speed: { first_call_min: callsKnown ? median(all.first_call) : null, lead_to_order_days: median(all.to_order), order_to_paid_days: median(toPaid) },
     hygiene: {
       stuck_first_stage: stuck,
       // Stages no lead of the month was actually put in (a won lead is
