@@ -7,7 +7,7 @@
 // Sections: sales, managers, kpi, debt, cost, amo, products (default: all).
 const path = require("path");
 
-const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide", "guidejson", "funnel"];
+const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide", "guidejson", "funnel", "proposals"];
 const SYSTEM_FROM = "2026-07"; // the ERP is used for every order from July 2026
 const COST_FROM = "2026-09"; // costs are typed per line from September 2026
 
@@ -321,7 +321,40 @@ function funnel(d, out) {
   }
 }
 
-const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide, guidejson, funnel };
+// Tijorat takliflari: how many per month, with a customer, how big, which
+// fields are filled, and how many customers ordered within 30 days.
+function proposals(d, out) {
+  const ps = d.proposals;
+  const orderDays = new Map();
+  for (const o of d.orders.filter(isSale)) {
+    if (!o.customer_id) continue;
+    if (!orderDays.has(o.customer_id)) orderDays.set(o.customer_id, []);
+    orderDays.get(o.customer_id).push({ day: monthOfOrder(o).length ? String(o.order_date || o.created_at || "").slice(0, 10) : "", sum: Number(o.total_amount || 0) });
+  }
+  const by = {};
+  for (const p of ps) {
+    const m = String(p.created_at || "").slice(0, 7) || "(sanasiz)";
+    const r = (by[m] = by[m] || { n: 0, cust: 0, sum: 0, won: 0, wonSum: 0, items: 0 });
+    r.n++;
+    r.sum += Number(p.total || 0);
+    r.items += (p.items || []).length;
+    if (!p.customer_id) continue;
+    r.cust++;
+    const day = String(p.created_at || "").slice(0, 10);
+    const to = new Date(Date.parse(day) + 30 * 86400e3).toISOString().slice(0, 10);
+    const hit = (orderDays.get(p.customer_id) || []).filter((o) => o.day >= day && o.day <= to);
+    if (hit.length) {
+      r.won++;
+      r.wonSum += hit[0].sum;
+    }
+  }
+  table(out, `proposals: ${ps.length} total — month | count | with customer | sum mln | avg items | customer ordered within 30 days (sum mln)`, Object.keys(by).sort().map((m) => `${m} | ${by[m].n} | ${by[m].cust} | ${mln(by[m].sum)} | ${(by[m].items / by[m].n).toFixed(1)} | ${by[m].won} (${mln(by[m].wonSum)})`));
+  const fields = {};
+  for (const p of ps) for (const k of Object.keys(p)) fields[k] = (fields[k] || 0) + 1;
+  out.push(`fields: ${Object.entries(fields).map(([k, n]) => `${k}=${n}`).join(" ")}`);
+}
+
+const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide, guidejson, funnel, proposals };
 
 // The report for already loaded data; `lib` is meta-webhook/salesKpi.js.
 function report(d, wanted = SECTIONS, lib = null) {
@@ -348,6 +381,7 @@ const NEEDS = {
   guide: ["guide_facts"],
   guidejson: ["guide_facts", "lessons"],
   funnel: ["amo_funnel"],
+  proposals: ["proposals", "orders"],
 };
 
 async function main() {
@@ -358,7 +392,7 @@ async function main() {
   const args = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
   const wanted = !args.length || args.includes("all") ? SECTIONS : args;
   const cols = [...new Set(wanted.flatMap((s) => NEEDS[s] || []))];
-  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [], lessons: [], amo_funnel: [] };
+  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [], lessons: [], amo_funnel: [], proposals: [] };
   await Promise.all(cols.map(async (c) => (d[c] = (await db.collection(c).get()).docs.map((x) => ({ id: x.id, ...x.data() })))));
   if (wanted.includes("amo")) d.amo_status = (await db.collection("amo_meta").doc("status").get()).data() || {};
   let lib = null;
