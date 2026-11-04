@@ -24,3 +24,6 @@ functions/lib
 *.sln
 *.sw?
 .env
+
+# Python bytecode (deck generators)
+__pycache__/
