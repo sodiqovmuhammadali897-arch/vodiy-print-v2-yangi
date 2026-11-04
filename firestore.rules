@@ -245,6 +245,11 @@ service cloud.firestore {
     // sums only), written by the server (meta-webhook/guideFacts.js).
     // Sotuv voronkasi: per month counts written by the server
     // (meta-webhook/amoFunnel.js) — admins only, like the sales control.
+    // AI ROP: call reviews with the call's text — admins only.
+    match /call_reviews/{id} {
+      allow read: if isAdmin() && !isManagerAccount();
+      allow write: if false;
+    }
     match /amo_funnel/{month} {
       allow read: if isAdmin();
       allow write: if false;

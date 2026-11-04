@@ -1,0 +1,32 @@
+name: AI ROP — call review (test)
+
+# Run by hand (owner's approval, 2026-11-04): reviews recorded calls of the
+# last 7 days — speech to text (OpenAI), a score against the Darslik call
+# order (Claude) — saves them to call_reviews (admin-only) and sends the
+# report to the admins on Telegram. The log shows counts and scores only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "How many calls (1–30)"
+        default: "10"
+        required: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Review calls
+        uses: appleboy/ssh-action@v1
+        env:
+          COUNT: ${{ github.event.inputs.count || '10' }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 30m
+          envs: COUNT
+          script: |
+            cd /opt/meta-webhook
+            node checks/callReviewRun.js "$(echo "$COUNT" | tr -cd '0-9')"
