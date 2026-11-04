@@ -74,6 +74,7 @@ jobs:
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R "${{ secrets.SERVER_USER }}" /var/www/printvodiy.uz
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S mkdir -p /var/www/sayt
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R "${{ secrets.SERVER_USER }}" /var/www/sayt
+            rm -rf /tmp/vp-dist && mkdir -p /tmp/vp-dist
 
       - name: Upload nginx site config
         uses: appleboy/scp-action@v0.1.7
@@ -94,8 +95,12 @@ jobs:
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S cp /tmp/deploy/nginx-printvodiy.conf /etc/nginx/sites-available/printvodiy.uz
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S ln -sf /etc/nginx/sites-available/printvodiy.uz /etc/nginx/sites-enabled/printvodiy.uz
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S rm -f /etc/nginx/sites-enabled/default
-            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S nginx -t
-            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl reload nginx
+            if echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S nginx -t; then
+              echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl reload nginx
+            else
+              echo "::error::nginx config test failed — the running config is kept"
+              exit 1
+            fi
             echo "=== diagnostics ==="
             date -u
             getent hosts printvodiy.uz || true
@@ -112,8 +117,44 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           source: "dist/*"
-          target: "/var/www/printvodiy.uz"
+          target: "/tmp/vp-dist"
           strip_components: 1
+
+      # Two channels (deploy/nginx-printvodiy.conf): the new page goes to
+      # index-next.html — the owner's admin app opens it at once — and to
+      # index.html (everyone else) at 19:00 Tashkent, by the cron installed
+      # here, or at once when deployed between 19:00 and 07:00. The
+      # «Promote app to everyone» workflow does it by hand. Built files
+      # keep their hashed names, so both versions work side by side.
+      - name: Publish build (admins now, everyone at 19:00)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            set -e
+            D=/var/www/printvodiy.uz
+            mv /tmp/vp-dist/index.html /tmp/vp-dist/index-next.html
+            cp -r /tmp/vp-dist/. "$D/"
+            rm -rf /tmp/vp-dist
+            cat > /tmp/vodiyprint-promote <<'SH'
+            #!/bin/sh
+            # Puts the newest app (index-next.html) in front of everyone.
+            D=/var/www/printvodiy.uz
+            [ -f "$D/index-next.html" ] || exit 0
+            cmp -s "$D/index-next.html" "$D/index.html" || cp "$D/index-next.html" "$D/index.html"
+            SH
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S install -m 755 /tmp/vodiyprint-promote /usr/local/bin/vodiyprint-promote
+            echo '0 * * * * root [ "$(TZ=Asia/Tashkent date +\%H)" = "19" ] && /usr/local/bin/vodiyprint-promote' > /tmp/vodiyprint-cron
+            echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S install -m 644 /tmp/vodiyprint-cron /etc/cron.d/vodiyprint-promote
+            H=$(TZ=Asia/Tashkent date +%H)
+            if [ ! -f "$D/index.html" ] || [ "$H" -ge 19 ] || [ "$H" -lt 7 ]; then
+              /usr/local/bin/vodiyprint-promote
+              echo "Published to everyone (Tashkent hour $H)"
+            else
+              echo "Published to the admin channel; everyone else gets it at 19:00 (Tashkent hour $H)"
+            fi
 
       # Company website (website/, plain HTML) → printvodiy.uz/sayt/
       - name: Upload company website

@@ -39,6 +39,14 @@ for i in $(seq 1 50); do r=$(gh api "repos/$R/actions/runs?head_sha=$S&per_page=
 gh api "repos/$R/actions/runs/${r%% *}/jobs" --jq '.jobs[] | "\(.id) \(.name) \(.conclusion)"'
 ```
 
+## Who sees the new app when
+
+- The owner's admin account gets the new app at once (cookie `vp_channel=next` → `index-next.html`).
+- Everyone else gets it at 19:00 Tashkent. A deploy made between 19:00 and 07:00 reaches everyone at once.
+- After an urgent fix, run the `promote.yml` workflow so everyone gets it now:
+  `gh api -X POST repos/$R/actions/workflows/promote.yml/dispatches -f ref=main`.
+  Tell the owner which of these applied.
+
 ## If a job fails
 
 - Read its log with `mcp__github__get_job_logs` (`job_id`, `return_content: true`, `tail_lines: 60`).

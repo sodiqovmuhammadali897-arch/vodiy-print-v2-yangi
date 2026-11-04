@@ -78,6 +78,15 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   Always watch it until it finishes (skill `vp-deploy`).
 - Never use `pkill -f` with a pattern that matches its own command line:
   it kills the shell.
+- **Two app channels (since 2026-11-04, the owner's request):**
+  - A deploy reaches the owner's admin account at once: the app sets the
+    cookie `vp_channel=next`, and nginx then serves `index-next.html`.
+  - Everyone else gets the new version at 19:00 Tashkent, through a cron
+    calling `/usr/local/bin/vodiyprint-promote`. A deploy between 19:00 and
+    07:00 reaches everyone at once.
+  - For an urgent fix, run the `promote.yml` workflow.
+  - The server (bots) and the Firestore rules still go live at once for
+    everyone, so keep them compatible with yesterday's app.
 
 ## Business facts (as of 2026-11-03 — re-check numbers with `vp-data`)
 

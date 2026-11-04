@@ -1,10 +1,19 @@
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { keepStorage, startUpdateWatch } from "../../lib/appUpdate";
+import { useAuth } from "../../lib/AuthContext";
+import { checkForUpdate, keepStorage, setChannel, startUpdateWatch } from "../../lib/appUpdate";
 
 // "Yangi versiya tayyor" — see appUpdate.ts.
 export default function UpdateBar() {
   const [ready, setReady] = useState(false);
+  const { isAdmin, isManagerAccount, staff } = useAuth();
+  const early = Boolean(staff) && isAdmin && !isManagerAccount;
+
+  // The owner's admin account sees each deploy at once; the rest at 19:00.
+  useEffect(() => {
+    if (!staff) return;
+    if (setChannel(early)) void checkForUpdate().then((u) => u && setReady(true));
+  }, [early, staff]);
 
   useEffect(() => {
     keepStorage();

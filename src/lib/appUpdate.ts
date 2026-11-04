@@ -32,6 +32,17 @@ export const checkForUpdate = async (): Promise<boolean | null> => {
   }
 };
 
+// Two channels (deploy/nginx-printvodiy.conf): the owner's admin account
+// gets a deploy at once («next»); everyone else at 19:00 Tashkent. The
+// server picks the page by the vp_channel cookie. Returns true when it
+// changed, so the app can look for the other version right away.
+export const setChannel = (next: boolean): boolean => {
+  const has = /(?:^|;\s*)vp_channel=next\b/.test(document.cookie);
+  if (has === next) return false;
+  document.cookie = next ? "vp_channel=next; path=/; max-age=31536000; SameSite=Lax; Secure" : "vp_channel=; path=/; max-age=0; SameSite=Lax; Secure";
+  return true;
+};
+
 export const startUpdateWatch = (onUpdate: () => void): (() => void) => {
   const running = runningScript();
   if (!running) return () => undefined; // development
