@@ -142,6 +142,12 @@ async function main() {
 
   const ok = results.filter((r) => r.review && r.review.sales_call);
   console.log(`done: ${results.length}, sales calls ${ok.length}, average ${ok.length ? Math.round(ok.reduce((s, r) => s + r.review.score, 0) / ok.length) : "-"}`);
+  // Nothing reviewed (a key or service problem): the log says why, the
+  // admins get no empty report.
+  if (!results.some((r) => r.review)) {
+    console.log("nothing reviewed — no report sent");
+    return;
+  }
   const admins = staffSnap.docs.map((d) => d.data()).filter((s) => s.role === "admin" && !s.report_manager_id && s.telegram_chat_id && s.active !== false);
   const text = R.reportText(results);
   const parts = [];
