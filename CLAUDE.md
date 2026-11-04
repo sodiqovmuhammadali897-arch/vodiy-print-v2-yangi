@@ -208,4 +208,6 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   - approve October for Nuriddin and Muhammadali;
   - decide on Muhammadali's debts;
   - add Maryam and Moxlaroy to Managerlar if needed.
-- **Still to build for sales control:** proposal tracking, weekly ranking, AI ROP.
+- **Still to build for sales control:** weekly ranking, AI ROP.
+  Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
+  taklifi shart emas».
