@@ -1,0 +1,72 @@
+name: amoCRM call recordings check (read only)
+
+# Run by hand: do amoCRM call notes carry a recording link, and can the
+# server download it? Prints counts, link host names and HTTP statuses
+# only — never a link, phone or name.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check recordings in amoCRM call notes
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-amo-rec.js <<'JS'
+            const fs = require("fs");
+            const env = {};
+            for (const l of fs.readFileSync("/opt/meta-webhook/.env", "utf8").split("\n")) {
+              const m = l.match(/^([A-Z0-9_]+)=(.*)$/);
+              if (m) env[m[1]] = m[2].trim().replace(/^"(.*)"$/, "$1");
+            }
+            const sub = String(env.AMO_SUBDOMAIN || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+            const host = sub.includes(".") ? sub : `${sub}.amocrm.ru`;
+            const auth = { Authorization: `Bearer ${env.AMO_TOKEN}`, Accept: "application/json" };
+            const since = Math.floor(Date.now() / 1000) - 3 * 86400;
+            (async () => {
+              const notes = [];
+              for (const entity of ["leads", "contacts"]) {
+                for (let page = 1; page < 40; page++) {
+                  const r = await fetch(`https://${host}/api/v4/${entity}/notes?filter[note_type][]=call_in&filter[note_type][]=call_out&filter[updated_at][from]=${since}&limit=250&page=${page}`, { headers: auth });
+                  if (r.status === 204) break;
+                  if (!r.ok) { console.log(`${entity} notes: HTTP ${r.status}`); break; }
+                  const d = await r.json();
+                  const rows = (d._embedded && d._embedded.notes) || [];
+                  notes.push(...rows);
+                  if (!rows.length || !(d._links && d._links.next)) break;
+                  await new Promise((s) => setTimeout(s, 200));
+                }
+              }
+              const p = (n) => n.params || {};
+              const withLink = notes.filter((n) => p(n).link);
+              const long = withLink.filter((n) => Number(p(n).duration || 0) >= 90);
+              const hosts = {};
+              for (const n of withLink) { let h = "?"; try { h = new URL(p(n).link).hostname; } catch {} hosts[h] = (hosts[h] || 0) + 1; }
+              const sources = {};
+              for (const n of notes) sources[p(n).source || "-"] = (sources[p(n).source || "-"] || 0) + 1;
+              console.log(`call notes in 3 days: ${notes.length}, with recording link: ${withLink.length}, link + 90 s or more: ${long.length}`);
+              console.log(`link hosts: ${JSON.stringify(hosts)}`);
+              console.log(`sources: ${JSON.stringify(sources)}`);
+              console.log(`param keys seen: ${[...new Set(notes.flatMap((n) => Object.keys(p(n))))].join(", ")}`);
+              for (const n of long.slice(0, 3)) {
+                const url = p(n).link;
+                let r = await fetch(url, { headers: { Range: "bytes=0-2047" }, redirect: "follow" }).catch((e) => ({ status: "error " + e.message, headers: new Map() }));
+                let how = "no auth";
+                if ((r.status === 401 || r.status === 403) && new URL(url).hostname.endsWith(host.split(".").slice(-2).join("."))) {
+                  r = await fetch(url, { headers: { Range: "bytes=0-2047", Authorization: auth.Authorization } });
+                  how = "amo token";
+                }
+                const type = r.headers && r.headers.get ? r.headers.get("content-type") : "";
+                console.log(`download test (${how}): HTTP ${r.status}, type ${type || "-"}`);
+              }
+            })().catch((e) => console.log("check failed", e.message));
+            JS
+            node /tmp/vp-amo-rec.js
+            rm -f /tmp/vp-amo-rec.js
