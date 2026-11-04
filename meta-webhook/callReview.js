@@ -1,5 +1,6 @@
-// AI ROP — a sales head's review of recorded calls. A recording (Mois
-// Zvonki, calls collection) is turned into text (OpenAI), then Claude
+// AI ROP — a sales head's review of recorded calls. A call's recording
+// (the link Mois Zvonki puts on the amoCRM call, amo_calls.record) is
+// turned into text (OpenAI), then Claude
 // scores it against the Darslik call order: Kontakt → Ramka → Ehtiyoj
 // (SPIN) → Tavsiya → Narx va muddat → E'tiroz → Yopish → Keyingi qadam,
 // and says what was missing and one thing to do better. Results go to
@@ -19,44 +20,24 @@ const STEPS = [
 ];
 const MIN_SEC = 90;
 const DAY = 86400000;
-const phoneKey = (v) => {
-  const d = String(v || "").replace(/\D/g, "");
-  return d.length >= 9 ? d.slice(-9) : "";
-};
 
-// The amoCRM call (with the manager) of a Mois Zvonki call: same phone,
-// same direction, within 3 minutes.
-function matchManager(call, amoCalls) {
-  const key = phoneKey(call.phone);
-  const at = Date.parse(call.start_time || call.created_at || "");
-  if (!key || !at) return null;
-  let best = null;
-  for (const a of amoCalls) {
-    if (phoneKey(a.phone) !== key || (a.dir && call.direction && a.dir !== call.direction)) continue;
-    const gap = Math.abs(Date.parse(a.at) - at);
-    if (gap <= 3 * 60000 && (!best || gap < best.gap)) best = { gap, a };
-  }
-  return best ? { manager: best.a.manager || "", staff_email: best.a.staff_email || null, amo_user_id: best.a.amo_user_id || null } : null;
-}
-
-// Which calls to review: answered, with a recording, 90+ s, from the last
-// `days` days, not reviewed yet; taken in turn per manager so each gets
-// some, newest first.
-function pickCalls({ calls, amoCalls, reviewed, n = 10, now = Date.now(), days = 7 }) {
+// Which calls to review, from amoCRM (amo_calls, where each call already
+// has its manager and Mois Zvonki's recording link): answered, with a
+// recording, 90+ s, from the last `days` days, not reviewed yet; taken in
+// turn per manager so each gets some, newest first. Calls with no manager
+// only fill what is left.
+function pickCalls({ calls, reviewed, n = 10, now = Date.now(), days = 7 }) {
   const from = now - days * DAY;
   const fresh = calls
-    .filter((c) => c.answered && c.recording_url && Number(c.duration_seconds || 0) >= MIN_SEC && !reviewed.has(c.id))
-    .filter((c) => Date.parse(c.start_time || c.created_at || "") >= from)
-    .sort((a, b) => String(b.start_time || b.created_at).localeCompare(String(a.start_time || a.created_at)))
-    .map((c) => ({ ...c, who: matchManager(c, amoCalls) }));
+    .filter((c) => c.record && Number(c.duration || 0) >= MIN_SEC && !reviewed.has(c.id))
+    .filter((c) => Date.parse(c.at || "") >= from)
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const byManager = new Map();
   for (const c of fresh) {
-    const k = (c.who && c.who.manager) || "";
+    const k = c.manager || "";
     if (!byManager.has(k)) byManager.set(k, []);
     byManager.get(k).push(c);
   }
-  // In turn over the known managers; calls nobody could be matched to
-  // only fill what is left.
   const queues = [...byManager.entries()].filter(([k]) => k).sort((a, b) => a[0].localeCompare(b[0])).map(([, q]) => q);
   const out = [];
   while (out.length < n && queues.some((q) => q.length)) for (const q of queues) if (q.length && out.length < n) out.push(q.shift());
@@ -143,4 +124,4 @@ function reportText(results) {
   return [head.join("\n"), ...body, ...tail].join("\n\n");
 }
 
-module.exports = { STEPS, REVIEW_TOOL, SYSTEM, MIN_SEC, matchManager, pickCalls, reportText, callLine, phoneKey };
+module.exports = { STEPS, REVIEW_TOOL, SYSTEM, MIN_SEC, pickCalls, reportText, callLine };

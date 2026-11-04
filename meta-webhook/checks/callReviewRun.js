@@ -1,4 +1,4 @@
-// AI ROP test run: reviews N recorded calls (default 10) and sends the
+// AI ROP test run: reviews N recorded amoCRM calls (default 10) and sends the
 // report to the admins on Telegram. Run on the server by
 // .github/workflows/call-review.yml with the server's .env loaded:
 //   node checks/callReviewRun.js 10
@@ -74,7 +74,7 @@ async function review(call, text) {
       messages: [
         {
           role: "user",
-          content: `Qo'ng'iroq: ${call.direction === "out" ? "menejer qo'ng'iroq qildi" : "mijoz qo'ng'iroq qildi"}, ${call.duration_seconds} soniya.\n\nMatn:\n${text.slice(0, 20000)}`,
+          content: `Qo'ng'iroq: ${call.dir === "out" ? "menejer qo'ng'iroq qildi" : "mijoz qo'ng'iroq qildi"}, ${call.duration} soniya${call.stage ? `, amoCRM bosqichi: ${call.stage}` : ""}.\n\nMatn:\n${text.slice(0, 20000)}`,
         },
       ],
     }),
@@ -95,33 +95,38 @@ async function main() {
   const { telegram } = require(path.join(base, "telegram"));
   const now = Date.now();
   const fromIso = new Date(now - DAYS * DAY).toISOString();
-  const [callsSnap, amoSnap, doneSnap, staffSnap] = await Promise.all([
-    db.collection("calls").where("start_time", ">=", fromIso).get(),
-    db.collection("amo_calls").where("at", ">=", new Date(now - (DAYS + 1) * DAY).toISOString()).get(),
+  const [callsSnap, doneSnap, staffSnap] = await Promise.all([
+    db.collection("amo_calls").where("at", ">=", fromIso).get(),
     db.collection("call_reviews").get(),
     db.collection("staff").get(),
   ]);
-  const calls = callsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const amoCalls = amoSnap.docs.map((d) => d.data());
+  // amoCRM user names («Diyorbek», «Menejer 2») → the staff member's name.
+  const staffName = new Map(staffSnap.docs.map((d) => [d.id, d.data().full_name || ""]));
+  const calls = callsSnap.docs.map((d) => {
+    const c = { id: d.id, ...d.data() };
+    return { ...c, manager: (c.staff_email && staffName.get(c.staff_email)) || c.manager || "" };
+  });
   const reviewed = new Set(doneSnap.docs.map((d) => d.id));
-  const picked = R.pickCalls({ calls, amoCalls, reviewed, n: N, now, days: DAYS });
-  console.log(`calls in ${DAYS} days: ${calls.length}, eligible picked: ${picked.length} (managers matched: ${picked.filter((c) => c.who).length})`);
+  const picked = R.pickCalls({ calls, reviewed, n: N, now, days: DAYS });
+  console.log(`amoCRM calls in ${DAYS} days: ${calls.length}, with recording 90+ s: ${calls.filter((c) => c.record && c.duration >= R.MIN_SEC).length}, picked: ${picked.length} (with manager: ${picked.filter((c) => c.manager).length})`);
 
   const results = [];
   for (const c of picked) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rop-"));
     try {
-      const t = await transcribe(c.recording_url, dir);
+      const t = await transcribe(c.record, dir);
       const rv = await review(c, t.text);
       const doc = {
         call_id: c.id,
-        at: c.start_time || c.created_at || null,
-        direction: c.direction || null,
-        duration: Number(c.duration_seconds || 0),
-        manager: (c.who && c.who.manager) || "",
-        staff_email: (c.who && c.who.staff_email) || null,
+        source: "amocrm",
+        at: c.at || null,
+        direction: c.dir || null,
+        duration: Number(c.duration || 0),
+        manager: c.manager || "",
+        amo_user_id: c.amo_user_id || null,
+        staff_email: c.staff_email || null,
         lead_id: c.lead_id || null,
-        customer_id: c.customer_id || null,
+        stage: c.stage || "",
         transcript: t.text,
         transcribe_model: t.model,
         model: MODEL,
@@ -134,7 +139,7 @@ async function main() {
       console.log(`reviewed: ${Math.round(doc.duration)} s, ${t.model}, ${t.text.length} chars, sales_call=${rv.sales_call}, score=${rv.score}`);
     } catch (err) {
       console.log(`failed: ${String(err.message || err).slice(0, 160)}`);
-      results.push({ manager: (c.who && c.who.manager) || "", direction: c.direction, duration: Number(c.duration_seconds || 0), review: null });
+      results.push({ manager: c.manager || "", direction: c.dir, duration: Number(c.duration || 0), review: null });
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

@@ -60,6 +60,8 @@ export type AmoCall = {
   lead_id: number | string | null;
   lead_name: string;
   stage: string;
+  /** The recording's link (Mois Zvonki), when there is one. */
+  record?: string;
 };
 // An open lead as the server lists it for Sotuv nazorati (no contacts).
 export type AmoLeadBrief = { id: number; name: string; price: number; stage: string; updated: string };

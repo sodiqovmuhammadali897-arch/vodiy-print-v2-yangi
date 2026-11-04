@@ -103,6 +103,8 @@ const toCall = (n) => ({
   entity: n.entity_type || null, // "l" lead, "c" contact
   entityId: Number(n.entity_id || 0) || null,
   phone: phoneLabel(n.params && n.params.phone),
+  // Mois Zvonki puts the recording's link on the note (AI ROP listens to it).
+  record: String((n.params && n.params.link) || ""),
 });
 
 // Counts for one month, one doc per amoCRM user (0 = no manager). `open`,
@@ -655,6 +657,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
         lead_id: l ? l.id : null,
         lead_name: l ? l.name || "" : "",
         stage: !l ? "" : l.status === WON ? "Yutildi" : l.status === LOST ? "Yo'qotildi" : st ? st.name : "",
+        record: c.record || "",
       };
       const id = `c_${String(c.id).replace(/[^A-Za-z0-9_-]/g, "_")}`.slice(0, 200);
       const json = JSON.stringify(doc);

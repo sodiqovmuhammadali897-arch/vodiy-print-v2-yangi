@@ -208,6 +208,15 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   - approve October for Nuriddin and Muhammadali;
   - decide on Muhammadali's debts;
   - add Maryam and Moxlaroy to Managerlar if needed.
-- **Still to build for sales control:** weekly ranking, AI ROP.
+- **AI ROP (test, 2026-11-04):** `meta-webhook/callReview.js` +
+  `checks/callReviewRun.js`, run by hand from `call-review.yml`. It takes
+  amoCRM calls (`amo_calls.record` = Mois Zvonki's recording link on the
+  amoCRM note, downloadable without auth; ~270 of 505 calls in 3 days have
+  one), transcribes them (OpenAI), scores them with Claude against the
+  Darslik call order, writes `call_reviews/{amoCallId}` (admin only) and
+  sends the admins a Telegram report. The server's ANTHROPIC_API_KEY was
+  invalid (401) on 2026-11-04 — the owner must renew the GitHub Secret;
+  `ai-check.yml` verifies it. `amo-records.yml` checks the recording links.
+- **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
