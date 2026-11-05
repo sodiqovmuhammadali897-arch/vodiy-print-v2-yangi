@@ -233,6 +233,12 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   price, competitor, no_answer, wrong_number, cancelled, other, none.
   The owner may want each manager to get their own list too (asked, not
   answered yet). «Тахи» meaning unknown — asked the owner.
+- **Qarzdorlik filters — built 2026-11-05** (Moliya → Qarzdorlik,
+  `DebtsPanel.tsx` + `src/lib/debts.ts`): period by order date (Hammasi,
+  Hafta, Oy, O'tgan oy, Yil), four status groups (Yangi/dizayn, Ishlab
+  chiqarilmoqda, Tayyor, Yetkazildi — pul yo'q, shown red), manager chips
+  by `manager_name`, Excel export. Real on 2026-11-05: 119.0 mln / 42
+  orders; delivered-unpaid 17.2 mln (8).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
