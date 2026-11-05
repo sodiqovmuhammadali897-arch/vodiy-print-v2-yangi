@@ -43,7 +43,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.13"
 
       - name: Signing key (from the server, or made once)
         run: |
@@ -75,23 +75,32 @@ jobs:
           echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           echo "KEYSTORE_PASSWORD=$PW" >> "$GITHUB_ENV"
 
-      - name: Build APK
+      - name: Build APK and the Play bundle
         env:
           VERSION_CODE: ${{ github.run_number }}
-        run: gradle -p android assembleRelease --no-daemon
+        run: gradle -p android assembleRelease bundleRelease --no-daemon
 
       - name: Digital asset links
         run: |
           FP=$(keytool -list -v -keystore "$KEYSTORE_FILE" -alias vodiyprint -storepass "$KEYSTORE_PASSWORD" | awk '/SHA256:/ {print $2; exit}')
           test -n "$FP"
           echo "Signing certificate SHA-256: $FP"
+          # Google Play re-signs the app with its own key (Play App Signing),
+          # so its fingerprint must be listed too: android/play-signing-sha256.txt
+          # (Play Console → App integrity → App signing key certificate).
+          ALL="\"$FP\""
+          if [ -f android/play-signing-sha256.txt ]; then
+            for P in $(grep -oE '([0-9A-F]{2}:){31}[0-9A-F]{2}' android/play-signing-sha256.txt); do ALL="$ALL, \"$P\""; done
+          fi
+          echo "Fingerprints: $ALL"
           cat > "$RUNNER_TEMP/assetlinks.json" <<JSON
           [{
             "relation": ["delegate_permission/common.handle_all_urls"],
-            "target": { "namespace": "android_app", "package_name": "uz.printvodiy.app", "sha256_cert_fingerprints": ["$FP"] }
+            "target": { "namespace": "android_app", "package_name": "uz.printvodiy.app", "sha256_cert_fingerprints": [$ALL] }
           }]
           JSON
           cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/app.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/app.aab"
 
       - name: Publish to printvodiy.uz/app.apk
         run: |
@@ -100,10 +109,13 @@ jobs:
           $SSH 'mkdir -p /var/www/printvodiy.uz/.well-known'
           $SCP "$RUNNER_TEMP/assetlinks.json" "$USR@$HOST:/var/www/printvodiy.uz/.well-known/assetlinks.json"
           $SCP "$RUNNER_TEMP/app.apk" "$USR@$HOST:/var/www/printvodiy.uz/app.apk.new"
-          $SSH 'mv /var/www/printvodiy.uz/app.apk.new /var/www/printvodiy.uz/app.apk && ls -l /var/www/printvodiy.uz/app.apk'
+          $SCP "$RUNNER_TEMP/app.aab" "$USR@$HOST:/var/www/printvodiy.uz/app.aab.new"
+          $SSH 'mv /var/www/printvodiy.uz/app.apk.new /var/www/printvodiy.uz/app.apk && mv /var/www/printvodiy.uz/app.aab.new /var/www/printvodiy.uz/app.aab && ls -l /var/www/printvodiy.uz/app.apk /var/www/printvodiy.uz/app.aab'
 
-      - name: Keep the APK with the run
+      - name: Keep the APK and the Play bundle with the run
         uses: actions/upload-artifact@v4
         with:
           name: Vodiyprint-apk
-          path: ${{ runner.temp }}/app.apk
+          path: |
+            ${{ runner.temp }}/app.apk
+            ${{ runner.temp }}/app.aab

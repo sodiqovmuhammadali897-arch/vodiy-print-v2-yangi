@@ -2,6 +2,8 @@
 // https://printvodiy.uz full screen in Chrome (camera, location, file
 // downloads and the login all work as in the browser). Built and signed by
 // .github/workflows/android.yml; the signing key lives on the server.
+// The same build gives the APK (printvodiy.uz/app.apk) and the bundle for
+// Google Play (app.aab, Ichki sinov). Play requires a recent targetSdk.
 plugins {
     id "com.android.application"
 }
@@ -10,12 +12,12 @@ def env = System.getenv()
 
 android {
     namespace "uz.printvodiy.app"
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId "uz.printvodiy.app"
         minSdk 21
-        targetSdk 34
+        targetSdk 36
         versionCode Integer.parseInt(env.VERSION_CODE ?: "1")
         versionName "1.0.${env.VERSION_CODE ?: "0"}"
     }
