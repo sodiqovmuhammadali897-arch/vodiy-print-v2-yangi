@@ -41,7 +41,7 @@ function stagesOf(statuses, leads) {
 }
 
 function newRow() {
-  return { leads: 0, talked: 0, reached: {}, won: 0, lost: 0, lost_no_reason: 0, lost_after: {}, ordered: 0, paid: 0, order_sum: 0, first_call: [], to_order: [] };
+  return { leads: 0, talked: 0, reached: {}, won: 0, lost: 0, lost_no_reason: 0, loss: {}, lost_after: {}, ordered: 0, paid: 0, order_sum: 0, first_call: [], to_order: [] };
 }
 const finish = (r, callsKnown) => {
   const { first_call, to_order, ...rest } = r;
@@ -124,6 +124,7 @@ function computeFunnel({ month, leads, calls, history, statuses, contactPhones, 
       for (const r of rows) {
         r.lost++;
         if (!l.loss) r.lost_no_reason++;
+        else r.loss[l.loss] = (r.loss[l.loss] || 0) + 1;
         const k = at ? at.key : "none";
         r.lost_after[k] = (r.lost_after[k] || 0) + 1;
       }

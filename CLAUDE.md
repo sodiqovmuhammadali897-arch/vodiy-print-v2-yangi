@@ -121,7 +121,12 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     Дизайн/аванс → ишлаб чикариш → етказилди (won, 142) / Муваффақиятсиз (lost, 143).
   - October: 745 leads; 24 won in amoCRM against ~94 orders in the ERP.
   - 513 leads sit in Қабул Қилинди; no lead is in Таклиф.
-  - No lost lead has a reason.
+  - Loss reasons: managers fill the custom select field «Ёпилиш сабаби»
+    (id 304899), not amoCRM's built-in loss reason (0 used). 2 082 of
+    2 181 deals lost from July to 5 Nov have it: Алоқа йўқ 576, Хато рақам 477,
+    Буюртма бекор бўлди 398, Нарх қиммат 343, Рақобатчи танланди 142,
+    Қадриятимизга тушмади 77, Тахи 54. `lossOf` in `amocrm.js` reads both;
+    `amo-loss.yml` counts them.
 - **KPI:**
   - payout = sales × `sales_rate` (7.5%, always paid) + collected ×
     `collect_rate` (2%). The second part is paid only if attendance and
@@ -190,8 +195,10 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     → 24 ERP orders matched → 24 paid. Of the 101 ERP orders in October,
     only 24 came from an October amoCRM lead; the rest are repeat
     customers, other channels or phone mismatches. 517 leads are stuck in
-    the first stage, and all 375 lost leads have no reason.
-  - The owner should make the loss reason required in amoCRM.
+    the first stage.
+  - Until 2026-11-05 the server read only the built-in loss reason, so the
+    funnel and the 10:00 message wrongly said «no reason». Fixed: the
+    reasons now show on the Voronka page («Nega yo'qotdik»).
 - **New-seller onboarding — built 2026-11-03** (Darslik → «Mahsulot
   qo'llanmasi», `/darslik/qollanma`):
   - `meta-webhook/guideFacts.js` writes `guide_facts/{family}` and `_meta`

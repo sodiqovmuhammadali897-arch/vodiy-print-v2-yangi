@@ -46,7 +46,7 @@ describe("sales funnel", () => {
   it("counts how far the month's leads got", () => {
     expect(f.info_key).toBe(`${P}:3`);
     expect(f.offer_key).toBe(`${P}:4`);
-    expect(f.all).toMatchObject({ leads: 4, talked: 2, won: 1, lost: 1, lost_no_reason: 1, ordered: 1, paid: 1, order_sum: 5_000_000 });
+    expect(f.all).toMatchObject({ leads: 4, talked: 2, won: 1, lost: 1, lost_no_reason: 1, loss: {}, ordered: 1, paid: 1, order_sum: 5_000_000 });
     expect(f.all.reached[`${P}:3`]).toBe(3); // lead 2 (history), 3 (won), 4 (offer)
     expect(f.all.reached[`${P}:4`]).toBe(2);
     expect(f.all.lost_after).toEqual({ [`${P}:3`]: 1 });

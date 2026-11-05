@@ -65,7 +65,7 @@ function managerText(name, s, later = false) {
   if (s.noTask.length) out.push(`⚠️ ${name}, ${s.noTask.length} ta bitimda keyingi vazifa yo'q:`, ...list(s.noTask));
   if (s.stale.length) out.push(...(out.length ? [""] : []), `🕒 3 kundan beri harakatsiz — ${s.stale.length} ta:`, ...list(s.stale, true));
   if (noReason.length)
-    out.push(...(out.length ? [""] : []), `❌ Yo'qotildi, sababi yozilmagan — ${noReason.length} ta:`, ...list(noReason), "Har biriga amoCRM'da yo'qotish sababini tanlang — voronkada nega ketayotganini shundan bilamiz.");
+    out.push(...(out.length ? [""] : []), `❌ Yo'qotildi, sababi yozilmagan — ${noReason.length} ta:`, ...list(noReason), "Har biriga amoCRM'da «Ёпилиш сабаби»ni tanlang — voronkada nega ketayotganini shundan bilamiz.");
   out.push("", "amoCRM'da vazifa qo'ying yoki bitimni yangilang — ro'yxat o'zi yangilanadi.");
   return out.join("\n");
 }
@@ -78,6 +78,6 @@ function adminText(rows) {
 
 // Deals closed as lost today with no reason written.
 const lostNoReason = (leads, today) => leads.filter((l) => l.status === LOST && !l.loss && l.closed && T.dayOf(l.closed) === today);
-const lostText = (l, manager) => `❌ Bitim yo'qotildi, sababi yozilmagan: ${l.name || `#${l.id}`}${mln(l.price) ? ` — ${mln(l.price)}` : ""}${manager ? ` · ${manager}` : ""}\namoCRM'da yo'qotish sababini tanlash kerak.`;
+const lostText = (l, manager) => `❌ Bitim yo'qotildi, sababi yozilmagan: ${l.name || `#${l.id}`}${mln(l.price) ? ` — ${mln(l.price)}` : ""}${manager ? ` · ${manager}` : ""}\namoCRM'da «Ёпилиш сабаби»ni tanlash kerak.`;
 
 module.exports = { dealLists, managerText, adminText, lostNoReason, lostText, STALE_DAYS };

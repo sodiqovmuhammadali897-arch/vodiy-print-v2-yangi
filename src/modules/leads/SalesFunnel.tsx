@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Loader2 } from "lucide-react";
 import { listAll, subscribeAll } from "../../lib/firestoreDb";
 import { exportCsv } from "../../lib/exportCsv";
-import { behind, leaks, pct, prevMonth, stepsOf, type FunnelDoc, type FunnelRow } from "../../lib/funnel";
+import { behind, leaks, lossReasons, pct, prevMonth, stepsOf, type FunnelDoc, type FunnelRow } from "../../lib/funnel";
 import { monthLabel, num, short } from "../../lib/salesKpi";
 
 // Sotuv bo'limi → «Voronka» (admin): the month's leads from amoCRM to
@@ -61,6 +61,9 @@ export default function SalesFunnel() {
   const steps = stepsOf(doc, row);
   const teamSteps = stepsOf(doc, doc.all);
   const lk = leaks(steps);
+  const reasons = lossReasons(row);
+  const reasonMax = Math.max(1, ...reasons.map((r) => r.n));
+  const noTalk = reasons.filter((r) => r.noTalk).reduce((sum, r) => sum + r.n, 0);
   const max = Math.max(1, ...steps.map((s) => s.n || 0));
   const canPrev = months.includes(prevMonth(month));
   const canNext = months.includes(nextMonth(month));
@@ -247,15 +250,42 @@ export default function SalesFunnel() {
               <div className="flex gap-3 py-3">
                 <span className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-amber-50 px-1.5 text-sm font-extrabold tabular-nums text-amber-700 dark:bg-amber-900/30">{num(row.lost_no_reason)}</span>
                 <div className="text-sm">
-                  <b className="text-ink-900">Yo'qotilgan — sababi yozilmagan</b>
+                  <b className="text-ink-900">Yo'qotilgan — sababi belgilanmagan</b>
                   <div className="text-xs text-ink-500">
-                    {row.lost} ta yo'qotilgandan {pctLabel(pct(row.lost_no_reason, row.lost))} ida sabab yo'q. amoCRM'da sababni majburiy qiling — nega ketayotganini bilamiz.
+                    {row.lost} ta yo'qotilgandan {pctLabel(pct(row.lost_no_reason, row.lost))} ida amoCRM'da «Ёпилиш сабаби» tanlanmagan.
                   </div>
                 </div>
               </div>
             )}
             {!lk.length && !row.lost_no_reason && <p className="py-3 text-sm text-ink-500">Teshik topilmadi</p>}
           </div>
+          {reasons.length > 0 && (
+            <div className="mt-3 border-t border-ink-100 pt-3">
+              <h3 className="text-sm font-bold text-ink-900">Nega yo'qotdik · {num(row.lost)} ta</h3>
+              <p className="text-xs text-ink-500">amoCRM «Ёпилиш сабаби» bo'yicha</p>
+              <div className="mt-2 space-y-1.5">
+                {reasons.slice(0, 8).map((r) => (
+                  <div key={r.reason} className="grid grid-cols-[minmax(0,150px)_1fr_auto] items-center gap-2 text-sm">
+                    <span className="truncate text-ink-700" title={r.reason}>
+                      {r.reason}
+                    </span>
+                    <div className="h-2 rounded-full bg-ink-100 dark:bg-ink-200">
+                      <div className={`h-full rounded-full ${r.noTalk ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${(r.n / reasonMax) * 100}%` }} />
+                    </div>
+                    <b className="whitespace-nowrap text-right tabular-nums text-ink-900">
+                      {num(r.n)} · {pctLabel(r.pct)}
+                    </b>
+                  </div>
+                ))}
+              </div>
+              {noTalk > 0 && (
+                <p className="mt-2 text-xs text-ink-500">
+                  <span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-500" />
+                  {pctLabel(pct(noTalk, row.lost))} — mijoz bilan gaplashilmagan (aloqa yo'q, xato raqam). Bu sotuvda emas, lid kelishi va tez qo'ng'iroqda yo'qotish.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

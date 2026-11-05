@@ -80,15 +80,18 @@ jobs:
                 const lr = ((l._embedded && l._embedded.loss_reason) || [])[0];
                 const month = new Date((l.closed_at || l.updated_at) * 1000 + 5 * 3600000).toISOString().slice(0, 7);
                 const who = users.get(l.responsible_user_id) || `#${l.responsible_user_id}`;
+                const cf = (l.custom_fields_values || []).find((f) => /сабаб|sabab|причин/i.test(String(f.field_name || "")));
+                const cfv = cf && cf.values && cf.values[0] ? String(cf.values[0].value).trim() : "";
+                const any = (lr && lr.name) || cfv;
                 const reason = lr ? lr.name : "(sabab yo'q)";
                 if (lr) withBuiltin++;
                 tally(builtin, reason);
-                byMonth[month] = byMonth[month] || { n: 0, r: 0 };
+                byMonth[month] = byMonth[month] || { n: 0, r: 0, top: {} };
                 byMonth[month].n++;
-                if (lr) byMonth[month].r++;
+                if (any) { byMonth[month].r++; tally(byMonth[month].top, any); }
                 byUser[who] = byUser[who] || { n: 0, r: 0, top: {} };
                 byUser[who].n++;
-                if (lr) { byUser[who].r++; tally(byUser[who].top, lr.name); }
+                if (any) { byUser[who].r++; tally(byUser[who].top, any); }
                 for (const f of l.custom_fields_values || []) {
                   if (!selects.some((s) => s.id === f.field_id)) continue;
                   tally(fieldFill, f.field_name);
@@ -97,10 +100,11 @@ jobs:
               }
               console.log(`with the built-in loss reason: ${withBuiltin}/${lost.length}`);
               print("built-in loss reasons", builtin);
-              console.log("-- by month (lost | with reason)");
-              for (const m of Object.keys(byMonth).sort()) console.log(`   ${m}: ${byMonth[m].n} | ${byMonth[m].r}`);
-              console.log("-- by manager (lost | with reason | top reasons)");
-              for (const [u, s] of Object.entries(byUser).sort((a, b) => b[1].n - a[1].n)) console.log(`   ${u}: ${s.n} | ${s.r} | ${Object.entries(s.top).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k} ${n}`).join(", ") || "—"}`);
+              const tops = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(", ") || "—";
+              console.log("-- by month (lost | with any reason | reasons)");
+              for (const m of Object.keys(byMonth).sort()) console.log(`   ${m}: ${byMonth[m].n} | ${byMonth[m].r} | ${tops(byMonth[m].top)}`);
+              console.log("-- by manager (lost | with any reason | reasons)");
+              for (const [u, s] of Object.entries(byUser).sort((a, b) => b[1].n - a[1].n)) console.log(`   ${u}: ${s.n} | ${s.r} | ${tops(s.top)}`);
               print("select fields filled on lost deals", fieldFill);
               for (const [f, vals] of Object.entries(fieldVals)) print(`values of «${f}» on lost deals`, vals);
             })().catch((e) => console.log("check failed", e.message));

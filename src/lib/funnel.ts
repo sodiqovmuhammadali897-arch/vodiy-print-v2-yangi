@@ -10,6 +10,8 @@ export type FunnelRow = {
   won: number;
   lost: number;
   lost_no_reason: number;
+  /** Why lost deals were lost (amoCRM «Ёпилиш сабаби»); missing in docs written before 2026-11-05. */
+  loss?: Record<string, number>;
   lost_after: Record<string, number>;
   ordered: number;
   paid: number;
@@ -83,3 +85,14 @@ export const prevMonth = (m: string) => {
   const [y, mo] = m.split("-").map(Number);
   return mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, "0")}`;
 };
+
+// Loss reasons, biggest first, with their share of all lost deals. «No
+// contact» and «wrong number» say the lead never became a conversation —
+// a lead-quality or speed problem, not a lost sale.
+const NO_TALK = /алоқа|хато рақам|ишхона рақам|aloqa|xato raqam|ishxona raqam/i;
+export type LossReason = { reason: string; n: number; pct: number | null; noTalk: boolean };
+export function lossReasons(row: FunnelRow): LossReason[] {
+  return Object.entries(row.loss || {})
+    .map(([reason, n]) => ({ reason, n, pct: pct(n, row.lost), noTalk: NO_TALK.test(reason) }))
+    .sort((a, b) => b.n - a.n);
+}

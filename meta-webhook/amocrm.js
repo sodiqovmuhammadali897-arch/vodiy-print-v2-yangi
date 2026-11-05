@@ -71,9 +71,20 @@ const toContact = (c) => {
   return { name: String(c.name || "").trim().slice(0, 80), phone: phone ? phoneLabel(phone.value) : "" };
 };
 
+// Why a deal was lost: amoCRM's built-in loss reason, or (as Vodiy Print
+// does) a select field named like «Ёпилиш сабаби» that managers fill when
+// they close a deal. AMO_LOSS_FIELD_ID picks the field by id if needed.
+const LOSS_FIELD = /сабаб|sabab|причин/i;
+const lossOf = (l, fieldId = Number(process.env.AMO_LOSS_FIELD_ID || 0)) => {
+  const builtin = ((l._embedded || {}).loss_reason || [])[0];
+  if (builtin && builtin.name) return String(builtin.name);
+  const f = (l.custom_fields_values || []).find((x) => (fieldId ? Number(x.field_id) === fieldId : LOSS_FIELD.test(String(x.field_name || ""))));
+  const v = f && (f.values || [])[0];
+  return v && v.value ? String(v.value).trim() : null;
+};
+
 const toLead = (l, sources) => {
   const emb = l._embedded || {};
-  const loss = (emb.loss_reason || [])[0];
   const contacts = emb.contacts || [];
   const main = contacts.find((c) => c.is_main) || contacts[0];
   const tag = (emb.tags || [])[0];
@@ -88,7 +99,7 @@ const toLead = (l, sources) => {
     name: String(l.name || "").slice(0, 120),
     contact: main ? Number(main.id) : null,
     price: Number(l.price || 0),
-    loss: loss ? loss.name : null,
+    loss: lossOf(l),
     source: (l.source_id && sources.get(Number(l.source_id))) || (tag && tag.name) || "Noma'lum",
   };
 };
@@ -1091,4 +1102,4 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   return { start, stop, tick, enabled, handleCallback, _test: { leads, calls, users, statuses, tasks, misses } };
 };
 
-module.exports = { create, computeStats, hostOf, toLead, toCall };
+module.exports = { create, computeStats, hostOf, toLead, toCall, lossOf };
