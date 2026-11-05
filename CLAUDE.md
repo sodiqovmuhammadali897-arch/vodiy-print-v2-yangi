@@ -163,7 +163,8 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   - `managers` — `monthly_plan` and the rates.
 - **KPI:** `kpi_sales`, `kpi_months`, `kpi_settings/sales`.
 - **amoCRM:** `amo_stats`, `amo_tasks`, `amo_calls`, `amo_meta/status`
-  (users and stages), `amo_missed`.
+  (users and stages), `amo_missed`, `amo_funnel/{month}`,
+  `amo_lost/{day}` (lost deals with reason, admin read).
 - **Bots:** `recall_calls`, `recall_days`, `debt_calls`, `debt_days`.
 - **Content:** `lessons` (Darslik overrides), `products`, `product_costs` (admin).
 - **Audit of data fixes:** `data_fixes`.
@@ -224,6 +225,14 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   sends the admins a Telegram report. The server's ANTHROPIC_API_KEY was
   invalid (401) on 2026-11-04 — the owner must renew the GitHub Secret;
   `ai-check.yml` verifies it. `amo-records.yml` checks the recording links.
+- **Yutqazilganlar — built 2026-11-05** (Sotuv bo'limi → Yutqazilganlar,
+  `?v=yutqazilgan`): `meta-webhook/amoLost.js` writes `amo_lost/{day}`
+  every 10 minutes (lost deals since July: reason, group, stage reached,
+  sum, manager by staff name) and at 19:00 sends the admins the day's
+  lost deals by reason and manager (`amo_meta/lost_daily`). Groups:
+  price, competitor, no_answer, wrong_number, cancelled, other, none.
+  The owner may want each manager to get their own list too (asked, not
+  answered yet). «Тахи» meaning unknown — asked the owner.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

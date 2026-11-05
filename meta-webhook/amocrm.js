@@ -27,6 +27,7 @@ const T = require("./amoTasks");
 const C = require("./amoCalls");
 const D = require("./amoDeals");
 const F = require("./amoFunnel");
+const L = require("./amoLost");
 
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // Asia/Tashkent
 const WON = 142;
@@ -990,6 +991,58 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     if (n) log.log(`amoCRM funnel: ${n} month docs written (${history.size} leads with stage history)`);
   };
 
+  // ── Yutqazilganlar (amoLost.js) ─────────────────────────────────
+  // amo_lost/{day} for the page every 10 minutes (only changed days are
+  // written); at 19:00 the day's lost deals → the admins, once a day
+  // (amo_meta/lost_daily keeps the day it was sent).
+  let lostAt = 0;
+  let lostSent = null;
+  const lostDays = new Set();
+  const managerName = (user) => {
+    const email = staffByUser.get(user);
+    return (email && (staffInfo.get(email) || {}).name) || (users.get(user) || {}).name || (user ? `#${user}` : "");
+  };
+  const lostDeals = async (now) => {
+    const today = dayOf(now);
+    const items = L.lostItems([...leads.values()], { fromMs: monthStartMs(FUNNEL_FROM), history, statuses, nameOf: managerName });
+    if (now - lostAt >= 10 * 60 * 1000) {
+      lostAt = now;
+      const docs = L.dayDocs(items);
+      for (const day of lostDays) if (!docs.has(day)) docs.set(day, { day, total: 0, sum: 0, counts: {}, items: [] });
+      let batch = db.batch();
+      let inBatch = 0;
+      for (const [day, doc] of docs) {
+        lostDays.add(day);
+        const json = JSON.stringify(doc);
+        if (written.get(`lost:${day}`) === json) continue;
+        batch.set(db.collection("amo_lost").doc(day), { ...doc, updated_at: new Date(now).toISOString() });
+        written.set(`lost:${day}`, json);
+        if (++inBatch >= 400) {
+          await batch.commit();
+          batch = db.batch();
+          inBatch = 0;
+        }
+      }
+      if (inBatch) await batch.commit();
+    }
+    if (!notify) return;
+    const hm = hmOf(now);
+    if (hm < "19:00" || hm >= "21:00") return;
+    if (!lostSent || lostSent.day !== today) {
+      const snap = await db.collection("amo_meta").doc("lost_daily").get();
+      lostSent = snap.exists ? snap.data() : {};
+    }
+    if (lostSent.sent === today) return;
+    lostSent = { day: today, sent: today };
+    await db.collection("amo_meta").doc("lost_daily").set(lostSent);
+    const text = L.dailyText(
+      today,
+      items.filter((it) => it.day === today),
+      items.filter((it) => it.day.slice(0, 7) === today.slice(0, 7) && it.day <= today),
+    );
+    if (text) await toAdmins(text);
+  };
+
   const writeStatus = (fields) =>
     db.collection("amo_meta").doc("status").set(
       {
@@ -1049,6 +1102,11 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
         await funnel(now);
       } catch (err) {
         log.error("amoCRM funnel failed", err.message || err);
+      }
+      try {
+        await lostDeals(now);
+      } catch (err) {
+        log.error("amoCRM lost deals failed", err.message || err);
       }
       const month = monthOf(now);
       const all = [...leads.values(), ...[...unsorted.values()].filter((u) => !leads.has(u.id))];

@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../lib/AuthContext";
 import AmoAnalyticsView from "./AmoAnalyticsView";
+import LostDeals from "./LostDeals";
 import SalesControl from "./SalesControl";
 import SalesFunnel from "./SalesFunnel";
 
@@ -14,7 +15,7 @@ export default function SalesPipeline() {
   const amo = <AmoAnalyticsView isAdmin={isAdmin} email={user?.email?.toLowerCase() || ""} />;
   if (!isAdmin) return amo;
   const v = params.get("v");
-  const view = v === "amo" || v === "voronka" ? v : "control";
+  const view = v === "amo" || v === "voronka" || v === "yutqazilgan" ? v : "control";
   return (
     <div className="space-y-5">
       <div className="inline-flex rounded-xl border border-ink-200 bg-surface p-1">
@@ -22,6 +23,7 @@ export default function SalesPipeline() {
           [
             ["control", "Nazorat"],
             ["voronka", "Voronka"],
+            ["yutqazilgan", "Yutqazilganlar"],
             ["amo", "amoCRM tahlil"],
           ] as const
         ).map(([k, label]) => (
@@ -35,7 +37,7 @@ export default function SalesPipeline() {
           </button>
         ))}
       </div>
-      {view === "control" ? <SalesControl /> : view === "voronka" ? <SalesFunnel /> : amo}
+      {view === "control" ? <SalesControl /> : view === "voronka" ? <SalesFunnel /> : view === "yutqazilgan" ? <LostDeals /> : amo}
     </div>
   );
 }
