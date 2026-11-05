@@ -7,7 +7,7 @@
 // Sections: sales, managers, kpi, debt, cost, amo, products (default: all).
 const path = require("path");
 
-const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide", "guidejson", "funnel", "proposals", "calls"];
+const SECTIONS = ["sales", "managers", "kpi", "debt", "cost", "amo", "products", "productfacts", "guide", "guidejson", "funnel", "proposals", "calls", "lost"];
 const SYSTEM_FROM = "2026-07"; // the ERP is used for every order from July 2026
 const COST_FROM = "2026-09"; // costs are typed per line from September 2026
 
@@ -375,7 +375,25 @@ function calls(d, out) {
   out.push(`server keys set: ${(d.env_keys || []).join(", ") || "—"}`);
 }
 
-const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide, guidejson, funnel, proposals, calls };
+// Yutqazilganlar (amo_lost/{day}): per month, how many deals were lost and
+// in which reason group; reasons as the managers picked them. Counts only.
+function lost(d, out) {
+  const by = {};
+  const reasons = {};
+  let last = "";
+  for (const doc of d.amo_lost) {
+    const m = String(doc.day || doc.id).slice(0, 7);
+    if (String(doc.day) > last) last = String(doc.day);
+    const r = (by[m] = by[m] || { n: 0, groups: {} });
+    r.n += Number(doc.total || 0);
+    for (const [g, n] of Object.entries(doc.counts || {})) r.groups[g] = (r.groups[g] || 0) + n;
+    for (const it of doc.items || []) reasons[it.reason || "(tanlanmagan)"] = (reasons[it.reason || "(tanlanmagan)"] || 0) + 1;
+  }
+  table(out, `amo_lost: ${d.amo_lost.length} day docs, last ${last || "—"} — month | lost | by group`, Object.keys(by).sort().map((m) => `${m} | ${by[m].n} | ${Object.entries(by[m].groups).sort((a, b) => b[1] - a[1]).map(([g, n]) => `${g} ${n}`).join(", ")}`));
+  table(out, "lost reasons (as picked)", Object.entries(reasons).sort((a, b) => b[1] - a[1]).map(([r, n]) => `${r}: ${n}`));
+}
+
+const RUN = { sales, managers, kpi, debt, cost, amo, products, productfacts, guide, guidejson, funnel, proposals, calls, lost };
 
 // The report for already loaded data; `lib` is meta-webhook/salesKpi.js.
 function report(d, wanted = SECTIONS, lib = null) {
@@ -404,6 +422,7 @@ const NEEDS = {
   funnel: ["amo_funnel"],
   proposals: ["proposals", "orders"],
   calls: ["calls"],
+  lost: ["amo_lost"],
 };
 
 async function main() {
@@ -414,7 +433,7 @@ async function main() {
   const args = process.argv.slice(2).flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
   const wanted = !args.length || args.includes("all") ? SECTIONS : args;
   const cols = [...new Set(wanted.flatMap((s) => NEEDS[s] || []))];
-  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [], lessons: [], amo_funnel: [], proposals: [], calls: [] };
+  const d = { now: Date.now(), orders: [], order_payments: [], order_products: [], order_costs: [], managers: [], staff: [], kpi_sales: [], kpi_months: [], products: [], amo_stats: [], customers: [], guide_facts: [], lessons: [], amo_funnel: [], proposals: [], calls: [], amo_lost: [] };
   // Which keys the server's .env has (names of the non-empty ones only).
   try {
     const env = require("fs").readFileSync(path.join(base, ".env"), "utf8");

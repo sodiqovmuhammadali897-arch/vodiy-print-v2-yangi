@@ -25,6 +25,7 @@ const data = {
   amo_funnel: [],
   calls: [{ id: "k", start_time: "2026-10-02T10:00:00Z", answered: true, direction: "out", recording_url: "https://x/r.aac", duration_seconds: 95, phone: "+998901234567", client_name: "Secret" }],
   proposals: [{ id: "p", customer_id: "c1", total: 2e6, items: [{}], created_at: "2026-10-01T10:00:00Z", recipient_name: "Secret" }],
+  amo_lost: [{ id: "2026-11-05", day: "2026-11-05", total: 2, counts: { price: 1, none: 1 }, items: [{ name: "Secret LLC paket", reason: "Нарх қиммат" }, { name: "Secret", reason: "" }] }],
   amo_stats: [{ month: "2026-11", funnel: { "1:2": 3 }, leads: { created: 5, won: 1, lost: 2, won_amount: 1e6 }, loss: {} }],
   amo_status: { users: [{ id: 7, name: "Maryam" }], statuses: { "1:2": { pipeline: "Voronka", name: "Qabul", sort: 20 } } },
 };
@@ -45,6 +46,11 @@ describe("business snapshot", () => {
   it("describes product families for the sales guide", () => {
     expect(text).toContain("-- paket: 1 orders, 5.0 mln, 1 buyers");
     expect(text).toContain("who: Ta'lim 1");
+  });
+
+  it("counts lost deals by month and reason", () => {
+    expect(text).toContain("2026-11 | 2 | price 1, none 1");
+    expect(text).toContain("Нарх қиммат: 1");
   });
 
   it("never prints customer data", () => {
