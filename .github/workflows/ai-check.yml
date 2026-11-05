@@ -26,6 +26,12 @@ jobs:
             );
             const key = env.ANTHROPIC_API_KEY || "";
             console.log(`anthropic key set: ${Boolean(key)} · openai key set: ${Boolean(env.OPENAI_API_KEY)}`);
+            // The key's shape only (never the key): length, the standard
+            // prefix, stray spaces/quotes/odd characters, and when the
+            // deploy last wrote the .env.
+            const raw = (fs.readFileSync("/opt/meta-webhook/.env", "utf8").split("\n").find((l) => l.startsWith("ANTHROPIC_API_KEY=")) || "").slice("ANTHROPIC_API_KEY=".length);
+            console.log(`key shape: length ${key.length}, raw length ${raw.length}, starts with sk-ant-api: ${key.startsWith("sk-ant-api")}, starts with sk-ant-: ${key.startsWith("sk-ant-")}, spaces/tabs inside: ${/\s/.test(key)}, quotes: ${/["']/.test(raw)}, non-ASCII: ${/[^\x21-\x7e]/.test(key)}, lines named ANTHROPIC_API_KEY: ${fs.readFileSync("/opt/meta-webhook/.env", "utf8").split("\n").filter((l) => l.startsWith("ANTHROPIC_API_KEY=")).length}`);
+            console.log(`.env written: ${fs.statSync("/opt/meta-webhook/.env").mtime.toISOString()}`);
             (async () => {
               for (const model of [env.ASSISTANT_MODEL || "claude-sonnet-5", env.CHIEF_MODEL || "claude-opus-5"]) {
                 const res = await fetch("https://api.anthropic.com/v1/messages", {
