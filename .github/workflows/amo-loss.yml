@@ -1,0 +1,109 @@
+name: amoCRM loss reasons check (read only)
+
+# Run by hand: where amoCRM keeps the reason a deal was lost (the built-in
+# loss reason or a custom select field), and how often each reason was
+# chosen — by month and by manager. Prints reason names and counts only,
+# never a lead, contact, phone or note.
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "How many days back (lost deals by close date)"
+        default: "90"
+        required: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Count loss reasons in amoCRM
+        uses: appleboy/ssh-action@v1
+        env:
+          DAYS: ${{ github.event.inputs.days || '90' }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 10m
+          envs: DAYS
+          script: |
+            cat > /tmp/vp-amo-loss.js <<'JS'
+            const fs = require("fs");
+            const env = {};
+            for (const l of fs.readFileSync("/opt/meta-webhook/.env", "utf8").split("\n")) {
+              const m = l.match(/^([A-Z0-9_]+)=(.*)$/);
+              if (m) env[m[1]] = m[2].trim().replace(/^"(.*)"$/, "$1");
+            }
+            const sub = String(env.AMO_SUBDOMAIN || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+            const host = sub.includes(".") ? sub : `${sub}.amocrm.ru`;
+            const headers = { Authorization: `Bearer ${env.AMO_TOKEN}`, Accept: "application/json" };
+            const days = Math.max(1, Math.min(400, Number(process.argv[2]) || 90));
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+            const get = async (path) => {
+              const r = await fetch(`https://${host}/api/v4/${path}`, { headers });
+              if (r.status === 204) return null;
+              if (!r.ok) throw new Error(`${path.split("?")[0]}: HTTP ${r.status}`);
+              return r.json();
+            };
+            const all = async (path, key) => {
+              const out = [];
+              for (let page = 1; page < 200; page++) {
+                const d = await get(`${path}${path.includes("?") ? "&" : "?"}limit=250&page=${page}`);
+                const rows = (d && d._embedded && d._embedded[key]) || [];
+                out.push(...rows);
+                if (!rows.length || !(d._links && d._links.next)) break;
+                await sleep(200);
+              }
+              return out;
+            };
+            const tally = (o, k) => (o[k] = (o[k] || 0) + 1);
+            const print = (title, o) => {
+              console.log(`-- ${title}`);
+              for (const [k, n] of Object.entries(o).sort((a, b) => b[1] - a[1])) console.log(`   ${k}: ${n}`);
+            };
+            (async () => {
+              const users = new Map((await all("users", "users")).map((u) => [u.id, u.name]));
+              let catalog = [];
+              try { catalog = await all("leads/loss_reasons", "loss_reasons"); } catch (e) { console.log("loss reason catalog:", e.message); }
+              console.log(`built-in loss reason catalog (${catalog.length}): ${catalog.map((r) => r.name).join(" | ") || "—"}`);
+              const fields = await all("leads/custom_fields", "custom_fields");
+              const selects = fields.filter((f) => ["select", "multiselect", "radiobutton", "category"].includes(f.type));
+              console.log(`lead select fields (${selects.length}): ${selects.map((f) => `${f.name} [${f.id}] (${(f.enums || []).length} options)`).join(" | ") || "—"}`);
+              const since = Math.floor(Date.now() / 1000) - days * 86400;
+              const lost = await all(`leads?with=loss_reason&filter[statuses][0][status_id]=143&filter[closed_at][from]=${since}`, "leads");
+              const pipes = new Set(lost.map((l) => l.pipeline_id));
+              console.log(`lost deals closed in the last ${days} days: ${lost.length} (pipelines: ${pipes.size})`);
+              const builtin = {}, byMonth = {}, byUser = {}, fieldVals = {}, fieldFill = {};
+              let withBuiltin = 0;
+              for (const l of lost) {
+                const lr = ((l._embedded && l._embedded.loss_reason) || [])[0];
+                const month = new Date((l.closed_at || l.updated_at) * 1000 + 5 * 3600000).toISOString().slice(0, 7);
+                const who = users.get(l.responsible_user_id) || `#${l.responsible_user_id}`;
+                const reason = lr ? lr.name : "(sabab yo'q)";
+                if (lr) withBuiltin++;
+                tally(builtin, reason);
+                byMonth[month] = byMonth[month] || { n: 0, r: 0 };
+                byMonth[month].n++;
+                if (lr) byMonth[month].r++;
+                byUser[who] = byUser[who] || { n: 0, r: 0, top: {} };
+                byUser[who].n++;
+                if (lr) { byUser[who].r++; tally(byUser[who].top, lr.name); }
+                for (const f of l.custom_fields_values || []) {
+                  if (!selects.some((s) => s.id === f.field_id)) continue;
+                  tally(fieldFill, f.field_name);
+                  for (const v of f.values || []) tally((fieldVals[f.field_name] = fieldVals[f.field_name] || {}), String(v.value));
+                }
+              }
+              console.log(`with the built-in loss reason: ${withBuiltin}/${lost.length}`);
+              print("built-in loss reasons", builtin);
+              console.log("-- by month (lost | with reason)");
+              for (const m of Object.keys(byMonth).sort()) console.log(`   ${m}: ${byMonth[m].n} | ${byMonth[m].r}`);
+              console.log("-- by manager (lost | with reason | top reasons)");
+              for (const [u, s] of Object.entries(byUser).sort((a, b) => b[1].n - a[1].n)) console.log(`   ${u}: ${s.n} | ${s.r} | ${Object.entries(s.top).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k} ${n}`).join(", ") || "—"}`);
+              print("select fields filled on lost deals", fieldFill);
+              for (const [f, vals] of Object.entries(fieldVals)) print(`values of «${f}» on lost deals`, vals);
+            })().catch((e) => console.log("check failed", e.message));
+            JS
+            node /tmp/vp-amo-loss.js "$(echo "$DAYS" | tr -cd '0-9')"
+            rm -f /tmp/vp-amo-loss.js
