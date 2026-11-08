@@ -253,9 +253,13 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     viloyat / manba / mahsulot, debt aging, 30-day outlook, reklama CPL/CAC;
   - Doimiy xarajatlar: `expense_templates` (finance rules); «Kiritish»
     adds that month's expense with `template_id` — never automatic.
-  - Not built (needs a buxgalter / owner decisions): double-entry ledger,
-    kassa/bank accounts, inventory valuation, payroll, branches, period
-    close, the PDF's progressive KPI (pays far less than today's 7.5% + 2%).
+  - Not built: double-entry ledger, kassa/bank accounts, inventory
+    valuation, payroll, branches, period close, the PDF's progressive KPI.
+  - **Owner's decisions (2026-11-08):** one branch only (Farg'ona) — no
+    branch/consolidation; no buxgalter — keep everything simple, one-click;
+    sales are recognised **when the order is taken** (order date — as now;
+    «Topshirilgan» is information only); **KPI stays** as it is
+    (7.5% of sales + 2% of collected), no progressive scale.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
