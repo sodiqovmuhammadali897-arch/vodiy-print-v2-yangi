@@ -239,6 +239,23 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   chiqarilmoqda, Tayyor, Yetkazildi — pul yo'q, shown red), manager chips
   by `manager_name`, Excel export. Real on 2026-11-05: 119.0 mln / 42
   orders; delivered-unpaid 17.2 mln (8).
+- **Moliya dashboard — built 2026-11-08** (Moliya page top,
+  `src/modules/finance/dash/*`, logic in `src/lib/financeDash.ts`). From
+  the owner's «ERP Moliya 2.0» PDF (45 pages, a full accounting TZ) only the
+  parts that work with today's data were built:
+  - KPI cards with ↑↓: Buyurtmalar (order date), Topshirilgan (first
+    «Yetkazildi/Yopildi» in order_status_history), Tushgan pul (payment
+    date), Yalpi foyda, Sof foyda («Dastlabki» while data is missing);
+    «Bu oy» compares with the same days of last month (`compareSpan`);
+  - Ma'lumot sifati (missing cost, no ijara/maosh/reklama/kommunal this
+    month, «Naqd» share, customers without region);
+  - month charts from July 2026, the savdo→foyda waterfall, breakdowns by
+    viloyat / manba / mahsulot, debt aging, 30-day outlook, reklama CPL/CAC;
+  - Doimiy xarajatlar: `expense_templates` (finance rules); «Kiritish»
+    adds that month's expense with `template_id` — never automatic.
+  - Not built (needs a buxgalter / owner decisions): double-entry ledger,
+    kassa/bank accounts, inventory valuation, payroll, branches, period
+    close, the PDF's progressive KPI (pays far less than today's 7.5% + 2%).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

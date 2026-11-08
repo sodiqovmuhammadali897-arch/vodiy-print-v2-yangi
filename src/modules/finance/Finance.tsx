@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Wallet,
-  TrendingUp,
-  TrendingDown,
-  PiggyBank,
   Target,
   Download,
   FileDown,
@@ -12,6 +9,7 @@ import {
   UserPlus,
   Repeat,
   Lock,
+  ChevronDown,
 } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
 import type {
@@ -22,6 +20,7 @@ import type {
   OrderCost,
   OrderPayment,
   OrderProduct,
+  StatusHistoryEntry,
 } from "../../lib/types";
 import { buildMarginRows, isSaleOrder, profitBreakdown, summarize } from "../../lib/margin";
 import { canViewMargin } from "../../lib/rolePermissions";
@@ -44,6 +43,9 @@ import SimpleDonutChart, { type DonutSlice } from "../../components/ui/SimpleDon
 import ExpensesPanel from "./ExpensesPanel";
 import DebtsPanel from "./DebtsPanel";
 import SuppliersPanel from "./SuppliersPanel";
+import FinanceDashboard from "./dash/FinanceDashboard";
+import type { AmoMonthLeads, ExpenseTemplate, FinanceInput } from "../../lib/financeDash";
+import { tashkentDay } from "../../lib/salesPeriod";
 
 const PAYMENT_COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#0ea5e9", "#f43f5e", "#8b5cf6"];
 
@@ -63,6 +65,9 @@ export default function Finance() {
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
   const [orderProducts, setOrderProducts] = useState<OrderProduct[]>([]);
   const [orderCosts, setOrderCosts] = useState<Map<string, OrderCost>>(new Map());
+  const [history, setHistory] = useState<StatusHistoryEntry[]>([]);
+  const [templates, setTemplates] = useState<ExpenseTemplate[]>([]);
+  const [amo, setAmo] = useState<AmoMonthLeads[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -81,13 +86,22 @@ export default function Finance() {
     setCustomers(new Map(customersData.map((c) => [c.id, c])));
     setPlan(planData);
 
+    // For the dashboard: order lines (product groups), delivery days,
+    // recurring expenses and amoCRM leads. A collection this account can't
+    // read just leaves its part empty.
+    const optional = <T,>(p: Promise<T[]>) => p.catch(() => [] as T[]);
+    const [linesData, historyData, templatesData] = await Promise.all([
+      optional(listAll<OrderProduct>("order_products")),
+      optional(listAll<StatusHistoryEntry>("order_status_history")),
+      optional(listAll<ExpenseTemplate>("expense_templates")),
+    ]);
+    setOrderProducts(linesData);
+    setHistory(historyData);
+    setTemplates(templatesData);
     if (showMargin) {
-      const [orderProductsData, costsData] = await Promise.all([
-        listAll<OrderProduct>("order_products"),
-        listAll<OrderCost>("order_costs"),
-      ]);
-      setOrderProducts(orderProductsData);
+      const [costsData, amoData] = await Promise.all([listAll<OrderCost>("order_costs"), optional(listAll<AmoMonthLeads>("amo_stats"))]);
       setOrderCosts(new Map(costsData.map((c) => [c.id, c])));
+      setAmo(amoData);
     }
 
     setLoading(false);
@@ -142,15 +156,7 @@ export default function Finance() {
   // it ("O'tgan oy" — what is left of last month's orders); overall, on all.
   const debtTotal = debtOf(orders);
   const periodDebt = debtOf(ordersInRange);
-  const debtCard = (
-    <StatCard
-      title="Qarzdorlik (shu davr)"
-      value={formatMoneyShort(periodDebt)}
-      hint={`${formatMoney(periodDebt)} · Umumiy: ${formatMoney(debtTotal)}`}
-      tone="amber"
-      icon={<Wallet className="h-5 w-5" />}
-    />
-  );
+
 
   const planProgress = plan && plan.plan_amount > 0 ? (income / plan.plan_amount) * 100 : 0;
 
@@ -179,6 +185,12 @@ export default function Finance() {
       color: PAYMENT_COLORS[i % PAYMENT_COLORS.length],
     }));
   }, [paymentsInRange]);
+
+  const dashInput: FinanceInput = useMemo(
+    () => ({ orders, payments, expenses, lines: orderProducts, costs: orderCosts, history, withCost: showMargin }),
+    [orders, payments, expenses, orderProducts, orderCosts, history, showMargin],
+  );
+  const today = tashkentDay(new Date().toISOString());
 
   const exportOverviewCsv = () => {
     exportCsv(`moliya-${range.from}_${range.to}`, ["Ko'rsatkich", "Qiymat"], [
@@ -232,146 +244,46 @@ export default function Finance() {
 
       <DateRangeFilter value={range} onChange={setRange} />
 
-      {breakdown ? (
-        // Admins: cost from the Marja page, then the expenses typed below.
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard
-            title="Kirim"
-            value={formatMoneyShort(breakdown.revenue)}
-            hint={`${formatMoney(breakdown.revenue)} · Buyurtmalar summasi`}
-            tone="emerald"
-            icon={<TrendingUp className="h-5 w-5" />}
-          />
-          <StatCard
-            title="Tannarx (Marja)"
-            value={breakdown.costedLines ? formatMoneyShort(breakdown.cost) : "—"}
-            hint={
-              <>
-                {breakdown.costedLines ? `kiritilgan: ${breakdown.costedLines} / ${breakdown.lines - breakdown.untrackedLines} qator${breakdown.untrackedLines ? " (sentyabrdan)" : ""} · ` : breakdown.untrackedLines === breakdown.lines && breakdown.lines ? "sentyabr 2026 gacha yuritilmagan · " : "hali kiritilmagan · "}
-                <Link to="/margin" className="font-semibold text-brand-700 hover:underline">
-                  Marja →
-                </Link>
-              </>
-            }
-            tone="violet"
-            icon={<Lock className="h-5 w-5" />}
-            progress={breakdown.lines - breakdown.untrackedLines > 0 ? (breakdown.costedLines / (breakdown.lines - breakdown.untrackedLines)) * 100 : undefined}
-          />
-          <StatCard
-            title={breakdown.mode === "margin" ? "Xarajatlar" : "Chiqim"}
-            value={formatMoneyShort(breakdown.otherExpenses)}
-            hint={
-              breakdown.mode === "margin" && breakdown.costExpenses > 0
-                ? `${formatMoney(breakdown.otherExpenses)} · ta'minotchi/xomashyo (${formatMoneyShort(breakdown.costExpenses)}) tannarxda`
-                : formatMoney(breakdown.otherExpenses)
-            }
-            tone="rose"
-            icon={<TrendingDown className="h-5 w-5" />}
-          />
-          <StatCard
-            title="Sof foyda"
-            value={formatMoneyShort(breakdown.net)}
-            hint={
-              breakdown.mode === "margin"
-                ? `${formatMoney(breakdown.net)} · kirim − tannarx − xarajat${breakdown.missingLines ? ` (${breakdown.missingLines} qator tannarxsiz)` : ""}`
-                : `${formatMoney(breakdown.net)} · kirim − chiqim`
-            }
-            tone={breakdown.net >= 0 ? "brand" : "rose"}
-            icon={<PiggyBank className="h-5 w-5" />}
-          />
-          {debtCard}
-        </div>
+      {loading ? (
+        <div className="card p-10 text-center text-sm text-ink-500">Yuklanmoqda…</div>
       ) : (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Kirim"
-          value={formatMoneyShort(income)}
-          hint={`${formatMoney(income)} · Buyurtmalar summasi`}
-          tone="emerald"
-          icon={<TrendingUp className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Chiqim"
-          value={formatMoneyShort(expenseTotal)}
-          hint={formatMoney(expenseTotal)}
-          tone="rose"
-          icon={<TrendingDown className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Sof foyda"
-          value={formatMoneyShort(profit)}
-          hint={formatMoney(profit)}
-          tone={profit >= 0 ? "brand" : "rose"}
-          icon={<PiggyBank className="h-5 w-5" />}
-        />
-        {debtCard}
-      </div>
+        <FinanceDashboard input={dashInput} range={range} customers={customers} templates={templates} amo={amo} today={today} onChanged={load} canEdit={auth.can("finance", "edit")} />
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <StatCard
-          title="To'langan (naqd kirim)"
-          value={formatMoneyShort(collected)}
-          hint={`${formatMoney(collected)} · Qarzdorlik (shu davr): ${formatMoney(periodDebt)}`}
-          tone="emerald"
-          icon={<Wallet className="h-5 w-5" />}
-        />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {plan && range.preset === "month" && (
           <StatCard
             title="Reja / Fakt (bu oy)"
             value={`${planProgress.toFixed(0)}%`}
-            hint={`Reja: ${formatMoney(plan.plan_amount)} · Fakt: ${formatMoney(income)}`}
+            hint={`Reja: ${formatMoneyShort(plan.plan_amount)} · Fakt: ${formatMoneyShort(income)}`}
             tone={planProgress >= 100 ? "emerald" : "brand"}
             icon={<Target className="h-5 w-5" />}
             progress={planProgress}
           />
         )}
-        <StatCard
-          title="Chegirmalar"
-          value={formatMoneyShort(discountTotal)}
-          hint={formatMoney(discountTotal)}
-          tone="sky"
-          icon={<Percent className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Yetkazish xarajati"
-          value={formatMoneyShort(deliveryTotal)}
-          hint={formatMoney(deliveryTotal)}
-          tone="violet"
-          icon={<Truck className="h-5 w-5" />}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <StatCard
-          title="Yangi mijozlardan kirim"
-          value={formatMoneyShort(customerSegments.newRevenue)}
-          hint={`${customerSegments.newCount} ta yangi mijoz`}
-          tone="sky"
-          icon={<UserPlus className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Doimiy mijozlardan kirim"
-          value={formatMoneyShort(customerSegments.returningRevenue)}
-          hint={`${customerSegments.returningCount} ta doimiy mijoz`}
-          tone="emerald"
-          icon={<Repeat className="h-5 w-5" />}
-        />
+        <StatCard title="Chegirmalar" value={formatMoneyShort(discountTotal)} hint={formatMoney(discountTotal)} tone="sky" icon={<Percent className="h-5 w-5" />} />
+        <StatCard title="Yetkazish xarajati" value={formatMoneyShort(deliveryTotal)} hint={formatMoney(deliveryTotal)} tone="violet" icon={<Truck className="h-5 w-5" />} />
+        <StatCard title="Yangi mijozlardan" value={formatMoneyShort(customerSegments.newRevenue)} hint={`${customerSegments.newCount} ta yangi mijoz`} tone="sky" icon={<UserPlus className="h-5 w-5" />} />
+        <StatCard title="Doimiy mijozlardan" value={formatMoneyShort(customerSegments.returningRevenue)} hint={`${customerSegments.returningCount} ta doimiy mijoz`} tone="emerald" icon={<Repeat className="h-5 w-5" />} />
+        <StatCard title="Qarzdorlik (shu davr)" value={formatMoneyShort(periodDebt)} hint={`Umumiy: ${formatMoneyShort(debtTotal)}`} tone="amber" icon={<Wallet className="h-5 w-5" />} />
       </div>
 
       {breakdown && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+        <details className="group rounded-2xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900/50 dark:bg-amber-900/10">
+          <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
               <Lock className="h-4 w-4 text-amber-700" />
-              <h2 className="font-display text-base font-bold text-ink-900">Foyda tarkibi (tannarx bilan) — faqat admin</h2>
-            </div>
+              <span className="font-display text-base font-bold text-ink-900">Foyda tarkibi qatorma-qator — faqat admin</span>
+            </span>
+            <ChevronDown className="h-4 w-4 text-ink-500 transition group-open:rotate-180" />
+          </summary>
+          <div className="mt-3 flex justify-end">
             <Link to="/margin" className="text-sm font-semibold text-brand-700 hover:underline">
               Marja panelida tannarx kiritish →
             </Link>
           </div>
           <ProfitLines b={breakdown} />
-        </div>
+        </details>
       )}
 
       <div className="card p-5">
@@ -381,9 +293,13 @@ export default function Finance() {
         <SimpleDonutChart data={paymentTypeDonut} />
       </div>
 
-      <ExpensesPanel expenses={expensesInRange} loading={loading} onChanged={load} />
+      <div id="xarajatlar">
+        <ExpensesPanel expenses={expensesInRange} loading={loading} onChanged={load} />
+      </div>
 
-      <DebtsPanel orders={orders} customers={customers} loading={loading} />
+      <div id="qarzdorlik">
+        <DebtsPanel orders={orders} customers={customers} loading={loading} />
+      </div>
 
       <SuppliersPanel expenses={expenses} loading={loading} onChanged={load} />
     </div>

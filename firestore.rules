@@ -200,6 +200,13 @@ service cloud.firestore {
       allow delete: if can('proposals', 'delete');
     }
 
+    // Doimiy xarajatlar (ijara, maosh …): set up once, entered each month
+    // with one click on the Moliya page.
+    match /expense_templates/{id} {
+      allow read: if can('finance', 'view');
+      allow create, update: if can('finance', 'edit');
+      allow delete: if can('finance', 'delete');
+    }
     match /expenses/{id} {
       allow read: if can('finance', 'view');
       allow create, update: if can('finance', 'edit');
