@@ -21,4 +21,5 @@ jobs:
           # Google Play files: the privacy policy page, the bundle and the app links.
           echo "privacy.html: $(curl -sS -m 20 -o /dev/null -w '%{http_code} %{content_type}' https://printvodiy.uz/privacy.html) · $(curl -sS -m 20 https://printvodiy.uz/privacy.html | grep -o '<title>[^<]*' | head -1)"
           echo "app.aab: $(curl -sS -m 20 -o /dev/null -I -w '%{http_code} %{content_type}' https://printvodiy.uz/app.aab)"
+          echo "app.apk: $(curl -sS -m 20 -o /dev/null -I -w '%{http_code} %{content_type} %{size_download}' https://printvodiy.uz/app.apk) · $(curl -sS -m 30 https://printvodiy.uz/app.apk | wc -c) bytes"
           echo "assetlinks fingerprints: $(curl -sS -m 20 https://printvodiy.uz/.well-known/assetlinks.json | grep -oE '([0-9A-F]{2}:){31}[0-9A-F]{2}' | wc -l)"
