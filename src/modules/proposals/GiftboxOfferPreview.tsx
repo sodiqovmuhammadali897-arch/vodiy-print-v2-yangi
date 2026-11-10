@@ -40,7 +40,7 @@ const GiftboxOfferPreview = forwardRef<HTMLDivElement, Props>(({ proposal, compa
           <div className="flex items-center text-xs font-extrabold uppercase tracking-wider text-emerald-700">
             <Gift className="mr-1.5 h-4 w-4" /> Gift box
           </div>
-          <div className="mt-1 font-display text-2xl font-extrabold">{g?.type_name || "—"}</div>
+          <div className="mt-1 font-display text-2xl font-extrabold">{g?.name || g?.type_name || "—"}</div>
           <div className="mt-3">
             {items.map((it, i) => (
               <div key={i} className={`flex items-center py-2 text-[15px] ${i ? "border-t border-emerald-100" : ""}`}>

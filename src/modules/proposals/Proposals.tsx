@@ -96,7 +96,7 @@ export default function Proposals() {
                         className="inline-flex items-center gap-1.5 font-medium text-ink-800 hover:text-brand-700"
                       >
                         {p.giftbox && <Gift className="h-4 w-4 text-violet-600" />}
-                        {p.giftbox?.type_name ? `Gift box · ${p.giftbox.type_name}` : p.title || "-"}
+                        {p.giftbox ? `Gift box · ${p.giftbox.name || p.giftbox.type_name || ""}` : p.title || "-"}
                       </Link>
                     </td>
                     <td className="table-td">

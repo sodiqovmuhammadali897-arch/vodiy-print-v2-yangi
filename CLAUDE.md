@@ -268,30 +268,33 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   breakEnd «abet vaqti tugadi» with «✅ Ishxonadaman» (callback `ln:`,
   `lunch_breaks/{day}_{email}`, admin read); at breakEnd+15 the admins get
   who came back. `LUNCH_REMINDERS=off` turns it off.
-- **Gift box narxi — built 2026-11-10** (menu «Gift box narxi», `/giftbox`,
-  admin with cost access; logic in `src/lib/giftbox.ts`). A box is bought at
-  the market (170–200k) and the logo is UV-printed on the items inside.
-  Cost of one box = market price + Σ items × print price; the price = cost +
-  markup by quantity tier (admin's table), rounded up to 1 000.
-  - `giftbox_settings/main` (prints, tiers, round) and `giftbox_costs/{type}`
-    (box_cost) are admin-only; managers read only `giftbox_types` (name,
-    usual items, `prices` = sale-price parts per tier — no cost, no markup).
-  - Order form: category «Gift Box» shows the picker (type, items); the unit
-    price follows the quantity and is read-only for managers; an admin's
-    typed price sets `price_manual`. Lines keep `giftbox {type_id, items}`.
-  - Marja suggests a gift box line's cost (one click / «hammasini to'ldirish»).
-  - The owner fills in the prints, tiers and types; the defaults are 0.
+- **Gift box narxi — built 2026-11-10, reworked the same day** (menu
+  «Gift box narxi», `/giftbox`; logic in `src/lib/giftbox.ts`). A box is
+  bought at the market (170–200k) and the logo is UV-printed on the items
+  inside. **The manager types the box's name and market price and ticks the
+  items** (owner: no admin-made types — «chalg'itadi»). Cost of one box =
+  market price + Σ items × print price; price = cost + markup by quantity
+  tier, rounded up to 1 000.
+  - `giftbox_settings/main` (prints, tiers, round) is admin-only. Saving
+    also writes `giftbox_prices/main` (per tier: box multiplier `k` and each
+    item's sale-price part; `names`) — what managers read. The markup can
+    still be worked out from price ÷ market price; told the owner.
+    `giftbox_types` / `giftbox_costs` are the first version's, unused.
+  - Order form: category «Gift Box» shows name, market price, items; the
+    unit price follows the quantity and is read-only for managers (once the
+    table exists); an admin's typed price sets `price_manual`. Lines keep
+    `giftbox {name, box_cost, items}`.
+  - Marja suggests a gift box line's cost from `box_cost` + prints.
   - Access: the owner, or staff given «Gift box narxi» in Xodimlar
     (permission `giftbox`: view = see costs, edit = save; `canGiftbox` in
     `rolePermissions.ts`, `giftboxPerm` in the rules). Never a manager
     account, even with role=admin.
-  - Gift box taklifi (Tijorat taklifi → «Gift box taklifi»,
-    `/proposals/giftbox/:id`, `GiftboxOfferEditor.tsx` + `GiftboxOfferPreview.tsx`):
-    customer name, type, items, quantity, «Tayyor bo'ladi» typed by hand
-    (e.g. «5 kunda»), optional valid-until date; the note writes itself
-    (`offerNote`: UV logo, won't wear off, the items). Saved in `proposals`
-    with `giftbox`; PNG/PDF like the proposal. No photo (owner: not needed).
-    Also a menu item «Gift box taklifi» (`/gift-box`) for everyone with Tijorat taklifi.
+  - Gift box taklifi (menu «Gift box taklifi» `/gift-box`, or Tijorat
+    taklifi → «Gift box taklifi»; `GiftboxOfferEditor.tsx` +
+    `GiftboxOfferPreview.tsx`): customer, box name, market price, items,
+    quantity, «Tayyor bo'ladi» typed by hand, optional valid-until; the
+    note writes itself (`offerNote`). Saved in `proposals` with `giftbox`;
+    PNG/PDF like the proposal. No photo (owner: not needed).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

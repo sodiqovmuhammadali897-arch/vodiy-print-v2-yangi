@@ -14,7 +14,7 @@ import { computeProductTotal } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
 import TextileSizeMatrixModal from "./TextileSizeMatrixModal";
 import GiftboxPicker from "./GiftboxPicker";
-import { priceFor, type GiftboxType } from "../../../lib/giftbox";
+import { priceFor, type GiftboxPrices } from "../../../lib/giftbox";
 import { useAuth } from "../../../lib/AuthContext";
 import { canGiftbox } from "../../../lib/rolePermissions";
 
@@ -22,7 +22,7 @@ type Props = {
   index: number;
   product: WizardProduct;
   catalog: Product[];
-  giftboxTypes?: GiftboxType[];
+  giftboxPrices?: GiftboxPrices | null;
   onChange: (patch: Partial<WizardProduct>) => void;
   onRemove: () => void;
   historyPrice?: number | null;
@@ -48,7 +48,7 @@ export default function ProductLineItem({
   index,
   product,
   catalog,
-  giftboxTypes = [],
+  giftboxPrices = null,
   onChange,
   onRemove,
   historyPrice,
@@ -57,8 +57,8 @@ export default function ProductLineItem({
   // A gift box line's price comes from the owner's table; only the owner
   // (cost access) may type another price.
   const isGiftbox = product.category === "Gift Box";
-  const gbType = product.giftbox ? giftboxTypes.find((t) => t.id === product.giftbox!.type_id) || null : null;
-  const priceLocked = Boolean(product.giftbox && gbType) && !canGiftbox(auth, "edit");
+  // Locked once the owner's table exists: the manager can't type a price.
+  const priceLocked = isGiftbox && Boolean(product.giftbox && giftboxPrices?.rows?.length) && !canGiftbox(auth, "edit");
   const total = computeProductTotal(product);
   const lineGross = Number(product.quantity || 0) * Number(product.unit_price || 0);
   const lineDiscountLarge = Number(product.discount || 0) > 0 && Number(product.discount) >= lineGross * 0.3;
@@ -155,7 +155,7 @@ export default function ProductLineItem({
         {isGiftbox && (
           <GiftboxPicker
             product={product}
-            types={giftboxTypes}
+            prices={giftboxPrices}
             onApply={(patch) => patchAndRecalc(patch)}
           />
         )}
@@ -364,7 +364,8 @@ export default function ProductLineItem({
             disabled={hasBreakdown}
             onChange={(e) => {
               const qty = Number(e.target.value) || 0;
-              const gbPrice = gbType && product.giftbox && !product.price_manual ? priceFor(gbType, qty || 1, product.giftbox.items) : null;
+              const gb = product.giftbox;
+              const gbPrice = isGiftbox && gb && Number(gb.box_cost) > 0 && !product.price_manual ? priceFor(giftboxPrices, qty || 1, Number(gb.box_cost), gb.items) : null;
               patchAndRecalc({ quantity: qty, ...priceForQty(qty), ...(gbPrice !== null ? { unit_price: gbPrice } : {}) });
             }}
           />

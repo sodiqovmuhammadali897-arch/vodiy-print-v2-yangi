@@ -3,12 +3,12 @@ import { Plus } from "lucide-react";
 import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
 import type { Product, TextileCompany } from "../../../lib/types";
 import type { Staff } from "../../../lib/permissions";
-import { listAll } from "../../../lib/firestoreDb";
+import { getOne, listAll } from "../../../lib/firestoreDb";
 import { DESIGNER_STATUSES, DELIVERY_TYPES, PAYMENT_TYPES } from "../../../lib/orderConstants";
 import { formatMoney } from "../../../lib/format";
 import { discountShare } from "../../../lib/orderCalculations";
 import ProductLineItem from "./ProductLineItem";
-import type { GiftboxType } from "../../../lib/giftbox";
+import type { GiftboxPrices } from "../../../lib/giftbox";
 
 type Props = {
   payload: OrderPayload;
@@ -64,12 +64,12 @@ export default function ProductionStep({
       .catch(() => setCatalog([]));
   }, []);
 
-  // Gift box types and their price tables (lib/giftbox.ts) for «Gift Box» lines.
-  const [giftboxTypes, setGiftboxTypes] = useState<GiftboxType[]>([]);
+  // The owner's gift box price table (lib/giftbox.ts) for «Gift Box» lines.
+  const [giftboxPrices, setGiftboxPrices] = useState<GiftboxPrices | null>(null);
   useEffect(() => {
-    void listAll<GiftboxType>("giftbox_types")
-      .then(setGiftboxTypes)
-      .catch(() => setGiftboxTypes([]));
+    void getOne<GiftboxPrices>("giftbox_prices", "main")
+      .then(setGiftboxPrices)
+      .catch(() => setGiftboxPrices(null));
   }, []);
 
   const addProduct = () => setProducts((p) => [...p, { ...emptyProduct, position: p.length }]);
@@ -94,7 +94,7 @@ export default function ProductionStep({
         )}
         <div className="space-y-3">
           {products.map((p, i) => (
-            <ProductLineItem key={i} index={i} product={p} catalog={catalog} giftboxTypes={giftboxTypes} onChange={(patch) => updateProduct(i, patch)} onRemove={() => removeProduct(i)} historyPrice={historyPrices[p.product_name] ?? null} />
+            <ProductLineItem key={i} index={i} product={p} catalog={catalog} giftboxPrices={giftboxPrices} onChange={(patch) => updateProduct(i, patch)} onRemove={() => removeProduct(i)} historyPrice={historyPrices[p.product_name] ?? null} />
           ))}
         </div>
       </div>

@@ -173,6 +173,13 @@ service cloud.firestore {
       allow read: if giftboxPerm('view');
       allow write: if giftboxPerm('edit');
     }
+    // The managers' price table (box multiplier and items' sale-price parts
+    // per quantity tier); written when the owner saves «Gift box narxi».
+    match /giftbox_prices/{id} {
+      allow read: if can('orders', 'view') || can('orders', 'edit') || can('proposals', 'edit') || giftboxPerm('view');
+      allow write: if giftboxPerm('edit');
+    }
+    // The first version's types (2026-11-10), no longer written.
     match /giftbox_types/{id} {
       allow read: if can('orders', 'view') || can('orders', 'edit') || can('proposals', 'edit') || giftboxPerm('view');
       allow write: if giftboxPerm('edit');

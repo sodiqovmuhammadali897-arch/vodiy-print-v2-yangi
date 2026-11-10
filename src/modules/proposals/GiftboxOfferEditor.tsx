@@ -6,13 +6,14 @@ import type { CompanySettings, Customer, Proposal, ProposalGiftbox } from "../..
 import { formatMoney } from "../../lib/format";
 import { useAuth } from "../../lib/AuthContext";
 import { canGiftbox } from "../../lib/rolePermissions";
-import { offerNote, priceFor, printableItems, type GiftboxItem, type GiftboxType } from "../../lib/giftbox";
+import { offerNote, priceFor, type GiftboxItem, type GiftboxPrices } from "../../lib/giftbox";
 import GiftboxOfferPreview from "./GiftboxOfferPreview";
 import { exportProposalPdf, exportProposalPng } from "./exportProposal";
 
 // A gift box offer for a customer (the owner's request, 2026-11-10): the
-// manager picks the box and its items, types the quantity and when it is
-// ready; the price comes from «Gift box narxi» and the note writes itself.
+// manager types the box's name and market price, ticks the items, types the
+// quantity and when it is ready; the price comes from the owner's table
+// («Gift box narxi») and the note writes itself.
 // Saved as a proposal with `giftbox`, so it sits in the Tijorat taklifi list.
 
 const genNumber = () => {
@@ -20,7 +21,7 @@ const genNumber = () => {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `GB-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 };
-const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+const num = (v: string) => Number(String(v).replace(/\D/g, "")) || 0;
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export default function GiftboxOfferEditor() {
@@ -31,7 +32,7 @@ export default function GiftboxOfferEditor() {
   const canPrice = canGiftbox(auth, "edit");
   const previewRef = useRef<HTMLDivElement>(null);
 
-  const [types, setTypes] = useState<GiftboxType[]>([]);
+  const [prices, setPrices] = useState<GiftboxPrices | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [proposal, setProposal] = useState<Proposal>({
@@ -49,7 +50,7 @@ export default function GiftboxOfferEditor() {
     valid_until: null,
     note: "",
     created_at: new Date().toISOString(),
-    giftbox: { type_id: "", type_name: "", items: [], quantity: 0, unit_price: 0, ready_in: "" },
+    giftbox: { name: "", box_cost: 0, items: [], quantity: 0, unit_price: 0, ready_in: "" },
   });
   // The note follows the items until the manager edits it by hand.
   const [noteTouched, setNoteTouched] = useState(!isNew);
@@ -62,16 +63,21 @@ export default function GiftboxOfferEditor() {
     void (async () => {
       try {
         const [t, c, cs] = await Promise.all([
-          listAll<GiftboxType>("giftbox_types"),
+          getOne<GiftboxPrices>("giftbox_prices", "main").catch(() => null),
           listAll<Customer>("customers", { orderBy: ["first_name", "asc"] }).catch(() => [] as Customer[]),
           getOne<CompanySettings>("company_settings", "main"),
         ]);
-        setTypes(t);
+        setPrices(t);
         setCustomers(c);
         setCompany(cs);
         if (!isNew && id) {
           const data = await getOne<Proposal>("proposals", id);
-          if (data?.giftbox) setProposal({ ...data, recipient_name: data.recipient_name || "" });
+          if (data?.giftbox)
+            setProposal({
+              ...data,
+              recipient_name: data.recipient_name || "",
+              giftbox: { ...data.giftbox, name: data.giftbox.name || data.giftbox.type_name || "", box_cost: Number(data.giftbox.box_cost) || 0 },
+            });
         }
       } catch (e) {
         setError(e instanceof Error ? `Ma'lumotlarni yuklab bo'lmadi: ${e.message}` : "Ma'lumotlarni yuklab bo'lmadi");
@@ -80,43 +86,35 @@ export default function GiftboxOfferEditor() {
   }, [id, isNew]);
 
   const g = proposal.giftbox!;
-  const type = types.find((t) => t.id === g.type_id) || null;
-  const active = types.filter((t) => t.active !== false || t.id === g.type_id);
+  // Items with a print price, plus any already ticked.
   const options = useMemo(
-    () => (type ? Array.from(new Set([...type.items.map((i) => i.name), ...printableItems(type).map(cap)].map((n) => n.trim()).filter(Boolean))) : []),
-    [type],
+    () => Array.from(new Set([...(prices?.names || []), ...g.items.map((i) => i.name)].map((n) => n.trim()).filter(Boolean))),
+    [prices, g.items],
   );
-  const tablePrice = type ? priceFor(type, g.quantity || 1, g.items) : null;
+  const tablePrice = g.box_cost > 0 ? priceFor(prices, g.quantity || 1, g.box_cost, g.items) : null;
 
   // Every change goes through here: price, total and (until edited) the note.
   const apply = (patch: Partial<ProposalGiftbox>, opts: { manual?: boolean } = {}) =>
     setProposal((p) => {
       const next = { ...p.giftbox!, ...patch };
-      const t = types.find((x) => x.id === next.type_id) || null;
       const manual = opts.manual ?? priceManual;
-      if (!manual && t) next.unit_price = priceFor(t, next.quantity || 1, next.items) ?? 0;
+      if (!manual) next.unit_price = next.box_cost > 0 ? priceFor(prices, next.quantity || 1, next.box_cost, next.items) ?? 0 : 0;
       const total = Number(next.unit_price || 0) * Number(next.quantity || 0);
       return {
         ...p,
         giftbox: next,
-        items: [{ name: `Gift box «${next.type_name}»`, unit: "dona", quantity: next.quantity, price: next.unit_price, total }],
+        items: [{ name: `Gift box «${next.name.trim() || "—"}»`, unit: "dona", quantity: next.quantity, price: next.unit_price, total }],
         subtotal: total,
         total,
         note: noteTouched ? p.note : offerNote(next.items),
       };
     });
 
-  const pickType = (typeId: string) => {
-    const t = types.find((x) => x.id === typeId);
-    if (!t) return;
-    setPriceManual(false);
-    apply({ type_id: t.id, type_name: t.name, items: t.items.map((i) => ({ ...i })) }, { manual: false });
-  };
   const has = (n: string) => g.items.find((i) => same(i.name, n));
   const setItems = (items: GiftboxItem[]) => apply({ items });
 
   const save = async () => {
-    if (!g.type_id) return setError("Gift box turini tanlang");
+    if (!g.name.trim()) return setError("Gift box nomini yozing");
     setSaving(true);
     setError(null);
     const payload = JSON.parse(
@@ -164,7 +162,7 @@ export default function GiftboxOfferEditor() {
   };
 
   if (!auth.can("proposals", "edit")) return <Navigate to="/proposals" replace />;
-  const ready = Boolean(g.type_id && g.quantity > 0 && g.unit_price > 0);
+  const ready = Boolean(g.name.trim() && g.quantity > 0 && g.unit_price > 0);
 
   return (
     <div className="space-y-5">
@@ -201,45 +199,40 @@ export default function GiftboxOfferEditor() {
                 </datalist>
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="label">Gift box turi</label>
-                <select className="input" value={g.type_id} onChange={(e) => pickType(e.target.value)}>
-                  <option value="">— turini tanlang —</option>
-                  {active.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-                {!types.length && <p className="mt-1 text-xs text-amber-700">Gift box turlari hali kiritilmagan — rahbar «Gift box narxi» sahifasida qo'shadi.</p>}
+              <div>
+                <label className="label">Gift box nomi</label>
+                <input className="input" placeholder="masalan: Qora koja to'plam" value={g.name} onChange={(e) => apply({ name: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Bozordagi narxi (1 dona)</label>
+                <input className="input text-right font-semibold" inputMode="numeric" placeholder="170 000" value={g.box_cost ? g.box_cost.toLocaleString("ru-RU") : ""} onChange={(e) => apply({ box_cost: num(e.target.value) })} />
               </div>
 
-              {type && (
-                <div className="sm:col-span-2">
-                  <label className="label">Ichida nimalar bor (1 box'da)</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {options.map((n) => {
-                      const it = has(n);
-                      return (
-                        <span key={n} className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-sm ${it ? "border-violet-500 bg-surface text-ink-900" : "border-ink-200 text-ink-500"}`}>
-                          <button type="button" onClick={() => setItems(it ? g.items.filter((x) => x !== it) : [...g.items, { name: n, qty: 1 }])}>
-                            {it ? "☑" : "☐"} {n}
-                          </button>
-                          {it && (
-                            <input
-                              className="w-10 rounded border border-ink-200 bg-surface px-1 text-center text-xs"
-                              inputMode="numeric"
-                              aria-label={`${n} soni`}
-                              value={it.qty}
-                              onChange={(e) => setItems(g.items.map((x) => (x === it ? { ...x, qty: Math.max(1, Number(e.target.value) || 1) } : x)))}
-                            />
-                          )}
-                        </span>
-                      );
-                    })}
-                  </div>
+              <div className="sm:col-span-2">
+                <label className="label">Ichida nimalar bor (1 box'da)</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {options.map((n) => {
+                    const it = has(n);
+                    return (
+                      <span key={n} className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-sm ${it ? "border-violet-500 bg-surface text-ink-900" : "border-ink-200 text-ink-500"}`}>
+                        <button type="button" onClick={() => setItems(it ? g.items.filter((x) => x !== it) : [...g.items, { name: n, qty: 1 }])}>
+                          {it ? "☑" : "☐"} {n}
+                        </button>
+                        {it && (
+                          <input
+                            className="w-10 rounded border border-ink-200 bg-surface px-1 text-center text-xs"
+                            inputMode="numeric"
+                            aria-label={`${n} soni`}
+                            value={it.qty}
+                            onChange={(e) => setItems(g.items.map((x) => (x === it ? { ...x, qty: Math.max(1, num(e.target.value) || 1) } : x)))}
+                          />
+                        )}
+                      </span>
+                    );
+                  })}
+                  {!options.length && <span className="text-xs text-amber-700">Narsalar ro'yxati bo'sh — rahbar «Gift box narxi»da pechat narxlarini kiritsin.</span>}
                 </div>
-              )}
+              </div>
 
               <div>
                 <label className="label">Soni</label>
@@ -251,8 +244,10 @@ export default function GiftboxOfferEditor() {
               </div>
 
               <div className="sm:col-span-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-200">
-                {!type ? (
-                  "Turini tanlang — narx o'zi chiqadi."
+                {!prices?.rows?.length && !priceManual ? (
+                  <span className="font-semibold text-amber-700">Narx hali sozlanmagan — rahbar «Gift box narxi»da ustamani kiritsin.</span>
+                ) : !g.box_cost && !priceManual ? (
+                  "Bozordagi narxini yozing — narx o'zi chiqadi."
                 ) : tablePrice === null && !priceManual ? (
                   <span className="font-semibold text-amber-700">Narx hali sozlanmagan — rahbar «Gift box narxi»da ustamani kiritsin.</span>
                 ) : (
@@ -266,7 +261,7 @@ export default function GiftboxOfferEditor() {
                     )}
                   </>
                 )}
-                {canPrice && type && (
+                {canPrice && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-600">
                     <span>Narxni qo'lda o'zgartirish (faqat sizga):</span>
                     <input
@@ -325,7 +320,7 @@ export default function GiftboxOfferEditor() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button className="btn-primary" onClick={() => void save()} disabled={saving || !g.type_id}>
+            <button className="btn-primary" onClick={() => void save()} disabled={saving || !g.name.trim()}>
               <Save className="h-4 w-4" /> {saving ? "Saqlanmoqda..." : "Saqlash"}
             </button>
             <button className="btn-secondary" onClick={() => void doExport("png")} disabled={exporting || !ready}>

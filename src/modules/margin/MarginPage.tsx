@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, Coins, Download, Lock, Percent, Search, TrendingUp, Wallet, Wand2 } from "lucide-react";
 import { deleteOne, getOne, insertOne, listAll, listWhere, updateOne, upsertOne } from "../../lib/firestoreDb";
-import { giftboxCostLookup, type GiftboxCost, type GiftboxSettings } from "../../lib/giftbox";
+import { giftboxCostLookup, type GiftboxSettings } from "../../lib/giftbox";
 import { PAYMENT_TYPES } from "../../lib/orderConstants";
 import { saleDay } from "../../lib/salesPeriod";
 import { useAuth } from "../../lib/AuthContext";
@@ -61,7 +61,6 @@ export default function MarginPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productCosts, setProductCosts] = useState<ProductCost[]>([]);
   const [customers, setCustomers] = useState<Map<string, string>>(new Map());
-  const [gbCosts, setGbCosts] = useState<GiftboxCost[]>([]);
   const [gbSettings, setGbSettings] = useState<GiftboxSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,17 +71,15 @@ export default function MarginPage() {
     if (!allowed) return;
     void (async () => {
       try {
-        const [o, l, c, p, pc, cu, gc, gs] = await Promise.all([
+        const [o, l, c, p, pc, cu, gs] = await Promise.all([
           listAll<Order>("orders"),
           listAll<OrderProduct>("order_products"),
           listAll<OrderCost>("order_costs"),
           listAll<Product>("products"),
           listAll<ProductCost>("product_costs"),
           listAll<Customer>("customers").catch(() => [] as Customer[]),
-          listAll<GiftboxCost>("giftbox_costs").catch(() => [] as GiftboxCost[]),
           getOne<GiftboxSettings>("giftbox_settings", "main").catch(() => null),
         ]);
-        setGbCosts(gc);
         setGbSettings(gs);
         setCustomers(new Map(cu.map((x) => [x.id, [x.first_name, x.last_name].filter(Boolean).join(" ") || x.company || x.phone || ""])));
         setOrders(o.filter(isSaleOrder));
@@ -98,12 +95,13 @@ export default function MarginPage() {
     })();
   }, [allowed]);
 
-  // Gift box lines: one box's cost (market price + prints) from «Gift box narxi».
+  // Gift box lines: one box's cost = the market price the manager typed +
+  // the print prices from «Gift box narxi».
   const lookup = useMemo(() => {
     const catalog = catalogCostLookup(products, productCosts);
-    const gift = giftboxCostLookup(gbCosts, gbSettings);
+    const gift = giftboxCostLookup(gbSettings);
     return (line: OrderProduct) => gift(line) || catalog(line);
-  }, [products, productCosts, gbCosts, gbSettings]);
+  }, [products, productCosts, gbSettings]);
   const managers = useMemo(() => Array.from(new Set(orders.map((o) => o.manager_name).filter(Boolean))).sort(), [orders]);
   const rowsFor = (m: string) =>
     buildMarginRows(

@@ -1,106 +1,103 @@
 import { Gift } from "lucide-react";
 import type { WizardProduct } from "../../../lib/orderService";
-import { itemsLabel, priceFor, printableItems, type GiftboxItem, type GiftboxType } from "../../../lib/giftbox";
+import { itemsLabel, priceFor, type GiftboxItem, type GiftboxPrices, type LineGiftbox } from "../../../lib/giftbox";
 import { formatMoney } from "../../../lib/format";
 
-// A «Gift Box» order line: the manager picks the gift box type and the
-// items the logo goes on; the price for this quantity comes from the
-// owner's table (lib/giftbox.ts) — no cost or markup is shown here.
+// A «Gift Box» order line: the manager types the box's name and its market
+// price and ticks the items the logo goes on; the price for this quantity
+// comes from the owner's table (lib/giftbox.ts) — no cost or markup shown.
 type Props = {
   product: WizardProduct;
-  types: GiftboxType[];
+  prices: GiftboxPrices | null;
   onApply: (patch: Partial<WizardProduct>) => void;
 };
 
-const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+const num = (v: string) => Number(String(v).replace(/\D/g, "")) || 0;
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-// The line fields for a type, items and quantity.
-export function giftboxPatch(type: GiftboxType, items: GiftboxItem[], qty: number, prevName = ""): Partial<WizardProduct> {
-  const price = priceFor(type, qty, items);
+// The line fields for this box and quantity.
+export function giftboxPatch(prices: GiftboxPrices | null, gb: LineGiftbox, qty: number): Partial<WizardProduct> {
+  const box_cost = Number(gb.box_cost) || 0;
+  const price = box_cost > 0 ? priceFor(prices, qty || 1, box_cost, gb.items) : null;
   return {
-    giftbox: { type_id: type.id, items },
-    product_name: !prevName.trim() || prevName.startsWith("Gift box") || prevName === type.name ? type.name : prevName,
-    variant: itemsLabel(items),
+    giftbox: { name: gb.name || "", box_cost, items: gb.items },
+    product_name: gb.name?.trim() || "Gift box",
+    variant: itemsLabel(gb.items),
     ...(price !== null ? { unit_price: price } : {}),
     price_manual: false,
   };
 }
 
-export default function GiftboxPicker({ product, types, onApply }: Props) {
-  const active = types.filter((t) => t.active !== false);
-  const type = product.giftbox ? types.find((t) => t.id === product.giftbox!.type_id) || null : null;
-  const items = product.giftbox?.items || [];
+export default function GiftboxPicker({ product, prices, onApply }: Props) {
+  const gb: LineGiftbox = product.giftbox || { name: "", box_cost: 0, items: [] };
+  const items = gb.items || [];
   const qty = Number(product.quantity || 0);
-  const price = type ? priceFor(type, qty || 1, items) : null;
-  const options = type ? Array.from(new Set([...type.items.map((i) => i.name), ...printableItems(type).map(cap)].map((n) => n.trim()).filter(Boolean))) : [];
-  const has = (n: string) => items.find((i) => i.name.trim().toLowerCase() === n.trim().toLowerCase());
-  const setItems = (next: GiftboxItem[]) => type && onApply(giftboxPatch(type, next, qty, product.product_name));
+  const boxCost = Number(gb.box_cost) || 0;
+  const price = boxCost > 0 ? priceFor(prices, qty || 1, boxCost, items) : null;
+  // Items with a print price, plus any already on the line.
+  const options = Array.from(new Set([...(prices?.names || []), ...items.map((i) => i.name)].map((n) => n.trim()).filter(Boolean)));
+  const has = (n: string) => items.find((i) => same(i.name, n));
+  const set = (patch: Partial<LineGiftbox>) => onApply(giftboxPatch(prices, { ...gb, items, ...patch }, qty));
 
   return (
     <div className="col-span-12 rounded-xl border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/10">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
         <Gift className="h-4 w-4 text-violet-600" />
         <span className="text-sm font-semibold text-ink-900">Gift box</span>
-        <select
-          className="input w-auto min-w-[200px] py-1.5"
-          value={type?.id || ""}
-          onChange={(e) => {
-            const t = active.find((x) => x.id === e.target.value);
-            if (t) onApply(giftboxPatch(t, t.items.map((i) => ({ ...i })), qty, product.product_name));
-          }}
-        >
-          <option value="">— turini tanlang —</option>
-          {active.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        {!active.length && <span className="text-xs text-amber-700">Gift box turlari hali kiritilmagan — rahbar «Gift box narxi» sahifasida qo'shadi.</span>}
+      </div>
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_180px]">
+        <div>
+          <label className="label">Gift box nomi</label>
+          <input className="input" placeholder="masalan: Qora koja to'plam" value={gb.name || ""} onChange={(e) => set({ name: e.target.value })} />
+        </div>
+        <div>
+          <label className="label">Bozordagi narxi (1 dona)</label>
+          <input className="input text-right font-semibold" inputMode="numeric" placeholder="170 000" value={boxCost ? boxCost.toLocaleString("ru-RU") : ""} onChange={(e) => set({ box_cost: num(e.target.value) })} />
+        </div>
       </div>
 
-      {type && (
-        <>
-          <div className="mt-2 text-xs font-semibold text-ink-600">Ichida logo uriladigan narsalar (1 box'da):</div>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {options.map((n) => {
-              const it = has(n);
-              return (
-                <span key={n} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-sm ${it ? "border-violet-500 bg-surface text-ink-900" : "border-ink-200 text-ink-500"}`}>
-                  <button type="button" onClick={() => setItems(it ? items.filter((x) => x !== it) : [...items, { name: n, qty: 1 }])}>
-                    {it ? "☑" : "☐"} {n}
-                  </button>
-                  {it && (
-                    <input
-                      className="w-10 rounded border border-ink-200 bg-surface px-1 text-center text-xs"
-                      inputMode="numeric"
-                      value={it.qty}
-                      aria-label={`${n} soni`}
-                      onChange={(e) => setItems(items.map((x) => (x === it ? { ...x, qty: Math.max(1, Number(e.target.value) || 1) } : x)))}
-                    />
-                  )}
-                </span>
-              );
-            })}
-          </div>
-          <div className="mt-2 text-sm">
-            {price === null ? (
-              <span className="font-semibold text-amber-700">Narx hali sozlanmagan — rahbar ustamani kiritsin.</span>
-            ) : (
-              <span className="text-ink-700">
-                Narx: <b className="text-ink-900">{formatMoney(price)}</b> / dona
-                {qty > 0 && (
-                  <>
-                    {" "}
-                    · {qty} dona jami <b className="text-ink-900">{formatMoney(price * qty)}</b>
-                  </>
-                )}
-                <span className="ml-1 text-xs text-ink-500">(soni o'zgarsa narx o'zi qayta chiqadi)</span>
-              </span>
+      <div className="mt-2 text-xs font-semibold text-ink-600">Ichida logo uriladigan narsalar (1 box'da):</div>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {options.map((n) => {
+          const it = has(n);
+          return (
+            <span key={n} className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-sm ${it ? "border-violet-500 bg-surface text-ink-900" : "border-ink-200 text-ink-500"}`}>
+              <button type="button" onClick={() => set({ items: it ? items.filter((x) => x !== it) : [...items, { name: n, qty: 1 }] })}>
+                {it ? "☑" : "☐"} {n}
+              </button>
+              {it && (
+                <input
+                  className="w-10 rounded border border-ink-200 bg-surface px-1 text-center text-xs"
+                  inputMode="numeric"
+                  value={it.qty}
+                  aria-label={`${n} soni`}
+                  onChange={(e) => set({ items: items.map((x): GiftboxItem => (x === it ? { ...x, qty: Math.max(1, num(e.target.value) || 1) } : x)) })}
+                />
+              )}
+            </span>
+          );
+        })}
+        {!options.length && <span className="text-xs text-amber-700">Narsalar ro'yxati bo'sh — rahbar «Gift box narxi»da pechat narxlarini kiritsin.</span>}
+      </div>
+
+      <div className="mt-2 text-sm">
+        {!prices?.rows?.length ? (
+          <span className="font-semibold text-amber-700">Narx hali sozlanmagan — rahbar «Gift box narxi»da ustamani kiritsin.</span>
+        ) : !boxCost ? (
+          <span className="text-ink-500">Bozordagi narxini yozing — narx o'zi chiqadi.</span>
+        ) : price !== null ? (
+          <span className="text-ink-700">
+            Narx: <b className="text-ink-900">{formatMoney(price)}</b> / dona
+            {qty > 0 && (
+              <>
+                {" "}
+                · {qty} dona jami <b className="text-ink-900">{formatMoney(price * qty)}</b>
+              </>
             )}
-          </div>
-        </>
-      )}
+            <span className="ml-1 text-xs text-ink-500">(soni o'zgarsa narx o'zi qayta chiqadi)</span>
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

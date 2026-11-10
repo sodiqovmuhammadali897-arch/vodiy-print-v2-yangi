@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { giftboxCostLookup, itemsLabel, priceFor, priceTable, printableItems, roundUp, tierFor, unitCost } from "../src/lib/giftbox";
+import { giftboxCostLookup, itemsLabel, priceFor, publicPrices, roundUp, tierFor, unitCost } from "../src/lib/giftbox";
 
 const prints = [{ name: "Ruchka", cost: 800 }, { name: "Koja bloknot", cost: 6000 }, { name: "Bakal", cost: 10000 }, { name: "Termos", cost: 8000 }];
 const items = [{ name: "Ruchka", qty: 1 }, { name: "Koja bloknot", qty: 1 }, { name: "Bakal", qty: 1 }];
-const tiers = [{ min: 10, markup: 30 }, { min: 1, markup: 80 }, { min: 21, markup: 25 }];
+const tiers = [{ min: 10, markup: 30 }, { min: 1, markup: 80 }, { min: 31, markup: 25 }];
 
 describe("gift box", () => {
   it("counts one box's cost: the market price plus the prints", () => {
@@ -12,21 +12,24 @@ describe("gift box", () => {
     expect(unitCost(170000, [{ name: "Fleshka", qty: 1 }], prints)).toBe(170000); // no print price yet
   });
 
-  it("prices by quantity from the markup table, rounded up", () => {
-    const type = { prices: priceTable(170000, prints, tiers), round: 1000 };
-    expect(priceFor(type, 15, items)).toBe(243000); // 186 800 + 30% = 242 840
-    expect(priceFor(type, 5, items)).toBe(337000); // + 80%
-    expect(priceFor(type, 25, items)).toBe(234000); // + 25% = 233 500
-    expect(priceFor({ ...type, round: 0 }, 15, items)).toBe(242840);
-    expect(priceFor({ prices: [], round: 1000 }, 15, items)).toBeNull(); // markup not set
+  it("prices the manager's box by quantity, rounded up", () => {
+    const table = publicPrices(prints, tiers, 1000);
+    expect(priceFor(table, 15, 170000, items)).toBe(243000); // 186 800 + 30% = 242 840
+    expect(priceFor(table, 5, 170000, items)).toBe(337000); // + 80%
+    expect(priceFor(table, 40, 170000, items)).toBe(234000); // + 25% = 233 500
+    expect(priceFor(table, 15, 200000, items)).toBe(282000); // another box: 216 800 + 30%
+    expect(priceFor({ ...table, round: 0 }, 15, 170000, items)).toBe(242840);
+    expect(priceFor(publicPrices(prints, [], 1000), 15, 170000, items)).toBeNull(); // markup not set
+    expect(priceFor(null, 15, 170000, items)).toBeNull();
   });
 
-  it("gives managers no cost: only sale-price parts per tier", () => {
-    const t = priceTable(170000, prints, tiers);
-    expect(t.map((r) => r.min)).toEqual([1, 10, 21]);
-    expect(t[1].box).toBe(221000);
-    expect(t[1].items.ruchka).toBe(1040);
-    expect(printableItems({ prices: t })).toEqual(["ruchka", "koja bloknot", "bakal", "termos"]);
+  it("the managers' table has no print price written out", () => {
+    const t = publicPrices(prints, tiers, 1000);
+    expect(t.rows.map((r) => r.min)).toEqual([1, 10, 31]);
+    expect(t.rows[1].k).toBe(1.3);
+    expect(t.rows[1].items.ruchka).toBe(1040);
+    expect(t.names).toEqual(["Ruchka", "Koja bloknot", "Bakal", "Termos"]);
+    expect(JSON.stringify(t)).not.toContain('"cost"');
   });
 
   it("helpers", () => {
@@ -36,10 +39,10 @@ describe("gift box", () => {
     expect(itemsLabel([{ name: "ruchka", qty: 1 }, { name: "bakal", qty: 2 }, { name: "x", qty: 0 }])).toBe("ruchka, bakal ×2");
   });
 
-  it("suggests the box cost on the Marja page", () => {
-    const look = giftboxCostLookup([{ id: "t1", box_cost: 170000 }], { prints, tiers, round: 1000 });
-    expect(look({ giftbox: { type_id: "t1", items } })).toEqual([{ min_qty: 1, cost_price: 186800 }]);
-    expect(look({ giftbox: { type_id: "other", items } })).toBeNull();
+  it("suggests the box cost on the Marja page from the typed market price", () => {
+    const look = giftboxCostLookup({ prints, tiers, round: 1000 });
+    expect(look({ giftbox: { name: "Qora", box_cost: 170000, items } })).toEqual([{ min_qty: 1, cost_price: 186800 }]);
+    expect(look({ giftbox: { name: "Qora", items } })).toBeNull(); // old line, no market price
     expect(look({})).toBeNull();
   });
 });
