@@ -291,6 +291,7 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     (e.g. «5 kunda»), optional valid-until date; the note writes itself
     (`offerNote`: UV logo, won't wear off, the items). Saved in `proposals`
     with `giftbox`; PNG/PDF like the proposal. No photo (owner: not needed).
+    Also a menu item «Gift box taklifi» (`/gift-box`) for everyone with Tijorat taklifi.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

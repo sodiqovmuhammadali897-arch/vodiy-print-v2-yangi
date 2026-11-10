@@ -57,6 +57,7 @@ export default function App() {
             <Route path="/proposals" element={<Proposals />} />
             <Route path="/proposals/new" element={<ProposalEditor />} />
             <Route path="/proposals/giftbox/new" element={<GiftboxOfferEditor />} />
+            <Route path="/gift-box" element={<GiftboxOfferEditor />} />
             <Route path="/proposals/giftbox/:id" element={<GiftboxOfferEditor />} />
             <Route path="/proposals/:id" element={<ProposalEditor />} />
           </Route>

@@ -75,6 +75,7 @@ const ROUTE_PAGE: Record<string, keyof typeof loaders> = {
   "/reports": "Reports",
   "/margin": "MarginPage",
   "/giftbox": "GiftboxPage",
+  "/gift-box": "GiftboxOfferEditor",
   "/kpi": "KpiPage",
   "/ai-office": "AiOffice",
   "/production": "Production",

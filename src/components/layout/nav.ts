@@ -15,6 +15,9 @@ export const navItems = [
   { to: "/customers", label: "Mijozlar", icon: Users, module: "customers" as ModuleKey },
   { to: "/products", label: "Mahsulotlar", icon: Boxes, module: "products" as ModuleKey },
   { to: "/proposals", label: "Tijorat taklifi", icon: FileText, module: "proposals" as ModuleKey },
+  // A new gift box offer straight away (the same page as Tijorat taklifi →
+  // «Gift box taklifi»); for the owner and the managers alike.
+  { to: "/gift-box", label: "Gift box taklifi", icon: Gift, module: "proposals" as ModuleKey },
   { to: "/production", label: "Ishlab chiqarish", icon: Printer, module: "production" as ModuleKey },
   { to: "/pechatnik", label: "Pechatnik", icon: Stamp, module: "pechatnik" as ModuleKey },
   { to: "/textile", label: "Textil", icon: Shirt, module: "textile" as ModuleKey },
