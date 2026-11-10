@@ -281,6 +281,10 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     typed price sets `price_manual`. Lines keep `giftbox {type_id, items}`.
   - Marja suggests a gift box line's cost (one click / «hammasini to'ldirish»).
   - The owner fills in the prints, tiers and types; the defaults are 0.
+  - Access: the owner, or staff given «Gift box narxi» in Xodimlar
+    (permission `giftbox`: view = see costs, edit = save; `canGiftbox` in
+    `rolePermissions.ts`, `giftboxPerm` in the rules). Never a manager
+    account, even with role=admin.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

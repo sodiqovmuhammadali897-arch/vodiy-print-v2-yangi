@@ -3,6 +3,7 @@ import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 import AdminRoute from "./components/auth/AdminRoute";
+import GiftboxRoute from "./components/auth/GiftboxRoute";
 import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
 import { pages } from "./pages";
@@ -93,10 +94,13 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/notifications" element={<Navigate to="/settings#notifications" replace />} />
 
+          <Route element={<GiftboxRoute />}>
+            <Route path="/giftbox" element={<GiftboxPage />} />
+          </Route>
+
           <Route element={<AdminRoute />}>
             <Route path="/ai-office" element={<AiOffice />} />
             <Route path="/margin" element={<MarginPage />} />
-            <Route path="/giftbox" element={<GiftboxPage />} />
             <Route path="/kpi" element={<KpiPage />} />
           </Route>
 

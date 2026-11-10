@@ -16,7 +16,7 @@ import TextileSizeMatrixModal from "./TextileSizeMatrixModal";
 import GiftboxPicker from "./GiftboxPicker";
 import { priceFor, type GiftboxType } from "../../../lib/giftbox";
 import { useAuth } from "../../../lib/AuthContext";
-import { canViewMargin } from "../../../lib/rolePermissions";
+import { canGiftbox } from "../../../lib/rolePermissions";
 
 type Props = {
   index: number;
@@ -58,7 +58,7 @@ export default function ProductLineItem({
   // (cost access) may type another price.
   const isGiftbox = product.category === "Gift Box";
   const gbType = product.giftbox ? giftboxTypes.find((t) => t.id === product.giftbox!.type_id) || null : null;
-  const priceLocked = Boolean(product.giftbox && gbType) && !canViewMargin(auth);
+  const priceLocked = Boolean(product.giftbox && gbType) && !canGiftbox(auth, "edit");
   const total = computeProductTotal(product);
   const lineGross = Number(product.quantity || 0) * Number(product.unit_price || 0);
   const lineDiscountLarge = Number(product.discount || 0) > 0 && Number(product.discount) >= lineGross * 0.3;

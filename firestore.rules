@@ -159,15 +159,23 @@ service cloud.firestore {
     // Gift box (src/lib/giftbox.ts): market price, print prices and markup
     // are the owner's only; managers read the type and its ready price
     // table (no cost, no markup) to price an order line.
+    // Staff (not a manager account) may be given the «Gift box narxi»
+    // permission in Xodimlar: view = read, edit = write.
+    function giftboxPerm(action) {
+      return isStaff() && !isManagerAccount() &&
+        (staffDoc().role == 'admin' || staffDoc().permissions.get('giftbox', {}).get(action, false) == true);
+    }
     match /giftbox_settings/{id} {
-      allow read, write: if isAdmin() && !isManagerAccount();
+      allow read: if giftboxPerm('view');
+      allow write: if giftboxPerm('edit');
     }
     match /giftbox_costs/{id} {
-      allow read, write: if isAdmin() && !isManagerAccount();
+      allow read: if giftboxPerm('view');
+      allow write: if giftboxPerm('edit');
     }
     match /giftbox_types/{id} {
-      allow read: if can('orders', 'view') || can('orders', 'edit');
-      allow write: if isAdmin() && !isManagerAccount();
+      allow read: if can('orders', 'view') || can('orders', 'edit') || giftboxPerm('view');
+      allow write: if giftboxPerm('edit');
     }
 
     // Each order line's cost (Marja page) — same audience as product_costs.

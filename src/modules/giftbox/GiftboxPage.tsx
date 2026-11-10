@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Gift, Loader2, Plus, Printer, Save, Trash2, TrendingUp } from "lucide-react";
 import { getOne, listAll, upsertOne, deleteOne } from "../../lib/firestoreDb";
 import { formatMoney } from "../../lib/format";
+import { useAuth } from "../../lib/AuthContext";
+import { canGiftbox } from "../../lib/rolePermissions";
 import {
   DEFAULT_ROUND,
   priceFor,
@@ -25,6 +27,8 @@ const newId = () => `gb_${Date.now().toString(36)}${Math.random().toString(36).s
 const num = (v: string) => Number(String(v).replace(/\s/g, "")) || 0;
 
 export default function GiftboxPage() {
+  // «Ko'rish» only: the page shows the numbers, Saqlash is hidden.
+  const canEdit = canGiftbox(useAuth(), "edit");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -107,9 +111,13 @@ export default function GiftboxPage() {
           <h1 className="font-display text-2xl font-bold text-ink-900">Gift box narxi</h1>
           <p className="text-sm text-ink-500">Tannarx = bozordagi narx + logo urish. Narx = tannarx + ustama (soniga qarab). Menejer faqat tayyor narxni ko'radi.</p>
         </div>
-        <button type="button" className="btn-primary" disabled={saving} onClick={() => void save()}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Saqlash
-        </button>
+        {canEdit ? (
+          <button type="button" className="btn-primary" disabled={saving} onClick={() => void save()}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Saqlash
+          </button>
+        ) : (
+          <span className="rounded-full bg-ink-100 px-3 py-1.5 text-xs font-semibold text-ink-600">Faqat ko'rish</span>
+        )}
       </div>
       {message && <div className="rounded-xl border border-ink-200 bg-surface px-4 py-2.5 text-sm text-ink-700">{message}</div>}
 

@@ -14,7 +14,8 @@ export type ModuleKey =
   | "attendance"
   | "tasks"
   | "ads"
-  | "kpi";
+  | "kpi"
+  | "giftbox";
 
 export type PermissionAction = "view" | "edit" | "delete";
 
@@ -80,6 +81,9 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   // Off by default: the employee's own KPI score and bonus (Davomat va
   // KPI → KPI, the bot's KPI answer, the monthly bonus report in Telegram).
   { key: "kpi", label: "KPI (o'zinikini ko'rish)" },
+  // Gift box narxi page: view = see box costs, print prices and markup;
+  // edit = change them. Never for a manager account (see rolePermissions).
+  { key: "giftbox", label: "Gift box narxi (tannarx va ustama)" },
 ];
 
 // Whether this account sees its own KPI and bonus. A manager account (even

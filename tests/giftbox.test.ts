@@ -43,3 +43,16 @@ describe("gift box", () => {
     expect(look({})).toBeNull();
   });
 });
+
+import { canGiftbox } from "../src/lib/rolePermissions";
+describe("canGiftbox", () => {
+  const p = (view: boolean, edit: boolean) => ({ permissions: { giftbox: { view, edit } } });
+  it("owner yes; manager account never; staff by the tick", () => {
+    expect(canGiftbox({ isAdmin: true, isManagerAccount: false, staff: null }, "edit")).toBe(true);
+    expect(canGiftbox({ isAdmin: true, isManagerAccount: true, staff: p(true, true) }, "view")).toBe(false);
+    expect(canGiftbox({ isAdmin: false, isManagerAccount: true, staff: p(true, true) }, "view")).toBe(false);
+    expect(canGiftbox({ isAdmin: false, isManagerAccount: false, staff: p(true, false) }, "view")).toBe(true);
+    expect(canGiftbox({ isAdmin: false, isManagerAccount: false, staff: p(true, false) }, "edit")).toBe(false);
+    expect(canGiftbox({ isAdmin: false, isManagerAccount: false, staff: { permissions: {} } }, "view")).toBe(false);
+  });
+});

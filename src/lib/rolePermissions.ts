@@ -19,5 +19,12 @@ export const canEditCostPrice = (auth: CostAuth): boolean =>
 export const canViewMargin = (auth: CostAuth): boolean =>
   auth.isAdmin && !auth.isManagerAccount;
 
+// «Gift box narxi»: the owner (cost access), or a staff member given the
+// «Gift box narxi» permission — but never a manager account, even with
+// role=admin (an admin's saved permissions are all ticked).
+type GiftAuth = CostAuth & { staff: { permissions?: Partial<Record<string, { view?: boolean; edit?: boolean }>> } | null };
+export const canGiftbox = (auth: GiftAuth, action: "view" | "edit"): boolean =>
+  canViewMargin(auth) || (!auth.isManagerAccount && !auth.isAdmin && !!auth.staff?.permissions?.giftbox?.[action]);
+
 export const canExportCustomerPrice = (auth: Pick<AuthContextValue, "can">): boolean =>
   auth.can("products", "view");

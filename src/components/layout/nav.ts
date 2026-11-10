@@ -1,5 +1,5 @@
 import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Bot, Percent, Megaphone, Clapperboard, Coins, BookOpen, Gift } from "lucide-react";
-import { canViewMargin } from "../../lib/rolePermissions";
+import { canGiftbox, canViewMargin } from "../../lib/rolePermissions";
 import { canSeeOwnKpi, type ModuleKey } from "../../lib/permissions";
 import type { useAuth as UseAuth } from "../../lib/AuthContext";
 
@@ -21,7 +21,7 @@ export const navItems = [
   { to: "/warehouse", label: "Ombor", icon: Warehouse, module: "warehouse" as ModuleKey },
   { to: "/finance", label: "Moliya", icon: Wallet, module: "finance" as ModuleKey },
   { to: "/margin", label: "Marja", icon: Percent, module: "finance" as ModuleKey, adminOnly: true, costOnly: true },
-  { to: "/giftbox", label: "Gift box narxi", icon: Gift, module: "finance" as ModuleKey, adminOnly: true, costOnly: true },
+  { to: "/giftbox", label: "Gift box narxi", icon: Gift, module: "giftbox" as ModuleKey, giftbox: true },
   { to: "/kpi", label: "KPI", icon: Coins, module: "reports" as ModuleKey, adminOnly: true, costOnly: true },
   { to: "/reports", label: "Hisobot", icon: BarChart3, module: "reports" as ModuleKey },
   { to: "/ai-office", label: "AI Ofis", icon: Bot, module: "reports" as ModuleKey, adminOnly: true },
@@ -34,7 +34,9 @@ export const navItems = [
 export function visibleNav(auth: ReturnType<typeof UseAuth>) {
   const { isAdmin, can, staff } = auth;
   return navItems.filter((item) =>
-    "costOnly" in item && item.costOnly
+    "giftbox" in item && item.giftbox
+      ? canGiftbox(auth, "view")
+      : "costOnly" in item && item.costOnly
       ? canViewMargin(auth)
       : isAdmin ||
         (!("adminOnly" in item && item.adminOnly) &&
