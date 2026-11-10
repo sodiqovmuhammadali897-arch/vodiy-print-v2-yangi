@@ -158,6 +158,9 @@ export type OrderProduct = {
   // until a manager types their own price (price_manual).
   catalog_product_id?: string | null;
   price_manual?: boolean;
+  // A gift box line (lib/giftbox.ts): its type and the items the logo is
+  // printed on; the price follows the admin's markup table.
+  giftbox?: { type_id: string; items: { name: string; qty: number }[] } | null;
 };
 
 // A saved color/size quantity distribution an employee can reuse on a

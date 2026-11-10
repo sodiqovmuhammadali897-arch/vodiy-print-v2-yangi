@@ -156,6 +156,19 @@ service cloud.firestore {
     match /product_costs/{id} {
       allow read, write: if isAdmin() && !isManagerAccount();
     }
+    // Gift box (src/lib/giftbox.ts): market price, print prices and markup
+    // are the owner's only; managers read the type and its ready price
+    // table (no cost, no markup) to price an order line.
+    match /giftbox_settings/{id} {
+      allow read, write: if isAdmin() && !isManagerAccount();
+    }
+    match /giftbox_costs/{id} {
+      allow read, write: if isAdmin() && !isManagerAccount();
+    }
+    match /giftbox_types/{id} {
+      allow read: if can('orders', 'view') || can('orders', 'edit');
+      allow write: if isAdmin() && !isManagerAccount();
+    }
 
     // Each order line's cost (Marja page) — same audience as product_costs.
     match /order_costs/{id} {

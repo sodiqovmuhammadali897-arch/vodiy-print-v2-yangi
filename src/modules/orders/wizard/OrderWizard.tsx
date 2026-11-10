@@ -247,6 +247,12 @@ export default function OrderWizard() {
               assigned_printer_name: p.assigned_printer_name || "",
               production_accepted_at: p.production_accepted_at || null,
               production_completed_at: p.production_completed_at || null,
+              // Kept on edit: the catalog link, a hand-typed price and the
+              // gift box (type and items) — without them the price would be
+              // recalculated or lost when the order is saved again.
+              catalog_product_id: p.catalog_product_id ?? null,
+              price_manual: p.price_manual ?? false,
+              giftbox: p.giftbox ?? null,
             })),
           );
           setPayments(

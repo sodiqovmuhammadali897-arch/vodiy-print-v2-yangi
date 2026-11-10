@@ -7,7 +7,7 @@ import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
 import { pages } from "./pages";
 
-const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, DarslikPage, LessonPage, GuidePage, GuideCard, CallMode, Settings } = pages;
+const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, GiftboxPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, DarslikPage, LessonPage, GuidePage, GuideCard, CallMode, Settings } = pages;
 
 export default function App() {
   return (
@@ -96,6 +96,7 @@ export default function App() {
           <Route element={<AdminRoute />}>
             <Route path="/ai-office" element={<AiOffice />} />
             <Route path="/margin" element={<MarginPage />} />
+            <Route path="/giftbox" element={<GiftboxPage />} />
             <Route path="/kpi" element={<KpiPage />} />
           </Route>
 

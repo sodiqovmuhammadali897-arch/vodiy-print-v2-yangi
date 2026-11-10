@@ -1,4 +1,4 @@
-import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Bot, Percent, Megaphone, Clapperboard, Coins, BookOpen } from "lucide-react";
+import { LayoutDashboard, Target, Package, Users, Boxes, FileText, Shirt, Warehouse, Wallet, ChartBar as BarChart3, Printer, Stamp, Fingerprint, ClipboardList, Bot, Percent, Megaphone, Clapperboard, Coins, BookOpen, Gift } from "lucide-react";
 import { canViewMargin } from "../../lib/rolePermissions";
 import { canSeeOwnKpi, type ModuleKey } from "../../lib/permissions";
 import type { useAuth as UseAuth } from "../../lib/AuthContext";
@@ -21,6 +21,7 @@ export const navItems = [
   { to: "/warehouse", label: "Ombor", icon: Warehouse, module: "warehouse" as ModuleKey },
   { to: "/finance", label: "Moliya", icon: Wallet, module: "finance" as ModuleKey },
   { to: "/margin", label: "Marja", icon: Percent, module: "finance" as ModuleKey, adminOnly: true, costOnly: true },
+  { to: "/giftbox", label: "Gift box narxi", icon: Gift, module: "finance" as ModuleKey, adminOnly: true, costOnly: true },
   { to: "/kpi", label: "KPI", icon: Coins, module: "reports" as ModuleKey, adminOnly: true, costOnly: true },
   { to: "/reports", label: "Hisobot", icon: BarChart3, module: "reports" as ModuleKey },
   { to: "/ai-office", label: "AI Ofis", icon: Bot, module: "reports" as ModuleKey, adminOnly: true },

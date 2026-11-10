@@ -268,6 +268,19 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   breakEnd «abet vaqti tugadi» with «✅ Ishxonadaman» (callback `ln:`,
   `lunch_breaks/{day}_{email}`, admin read); at breakEnd+15 the admins get
   who came back. `LUNCH_REMINDERS=off` turns it off.
+- **Gift box narxi — built 2026-11-10** (menu «Gift box narxi», `/giftbox`,
+  admin with cost access; logic in `src/lib/giftbox.ts`). A box is bought at
+  the market (170–200k) and the logo is UV-printed on the items inside.
+  Cost of one box = market price + Σ items × print price; the price = cost +
+  markup by quantity tier (admin's table), rounded up to 1 000.
+  - `giftbox_settings/main` (prints, tiers, round) and `giftbox_costs/{type}`
+    (box_cost) are admin-only; managers read only `giftbox_types` (name,
+    usual items, `prices` = sale-price parts per tier — no cost, no markup).
+  - Order form: category «Gift Box» shows the picker (type, items); the unit
+    price follows the quantity and is read-only for managers; an admin's
+    typed price sets `price_manual`. Lines keep `giftbox {type_id, items}`.
+  - Marja suggests a gift box line's cost (one click / «hammasini to'ldirish»).
+  - The owner fills in the prints, tiers and types; the defaults are 0.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

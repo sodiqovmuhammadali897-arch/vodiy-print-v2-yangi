@@ -8,6 +8,7 @@ import { DESIGNER_STATUSES, DELIVERY_TYPES, PAYMENT_TYPES } from "../../../lib/o
 import { formatMoney } from "../../../lib/format";
 import { discountShare } from "../../../lib/orderCalculations";
 import ProductLineItem from "./ProductLineItem";
+import type { GiftboxType } from "../../../lib/giftbox";
 
 type Props = {
   payload: OrderPayload;
@@ -63,6 +64,14 @@ export default function ProductionStep({
       .catch(() => setCatalog([]));
   }, []);
 
+  // Gift box types and their price tables (lib/giftbox.ts) for «Gift Box» lines.
+  const [giftboxTypes, setGiftboxTypes] = useState<GiftboxType[]>([]);
+  useEffect(() => {
+    void listAll<GiftboxType>("giftbox_types")
+      .then(setGiftboxTypes)
+      .catch(() => setGiftboxTypes([]));
+  }, []);
+
   const addProduct = () => setProducts((p) => [...p, { ...emptyProduct, position: p.length }]);
   const updateProduct = (i: number, patch: Partial<WizardProduct>) =>
     setProducts((p) => p.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
@@ -85,7 +94,7 @@ export default function ProductionStep({
         )}
         <div className="space-y-3">
           {products.map((p, i) => (
-            <ProductLineItem key={i} index={i} product={p} catalog={catalog} onChange={(patch) => updateProduct(i, patch)} onRemove={() => removeProduct(i)} historyPrice={historyPrices[p.product_name] ?? null} />
+            <ProductLineItem key={i} index={i} product={p} catalog={catalog} giftboxTypes={giftboxTypes} onChange={(patch) => updateProduct(i, patch)} onRemove={() => removeProduct(i)} historyPrice={historyPrices[p.product_name] ?? null} />
           ))}
         </div>
       </div>

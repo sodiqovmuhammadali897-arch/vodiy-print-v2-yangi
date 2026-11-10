@@ -13,11 +13,16 @@ import {
 import { computeProductTotal } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
 import TextileSizeMatrixModal from "./TextileSizeMatrixModal";
+import GiftboxPicker from "./GiftboxPicker";
+import { priceFor, type GiftboxType } from "../../../lib/giftbox";
+import { useAuth } from "../../../lib/AuthContext";
+import { canViewMargin } from "../../../lib/rolePermissions";
 
 type Props = {
   index: number;
   product: WizardProduct;
   catalog: Product[];
+  giftboxTypes?: GiftboxType[];
   onChange: (patch: Partial<WizardProduct>) => void;
   onRemove: () => void;
   historyPrice?: number | null;
@@ -43,10 +48,17 @@ export default function ProductLineItem({
   index,
   product,
   catalog,
+  giftboxTypes = [],
   onChange,
   onRemove,
   historyPrice,
 }: Props) {
+  const auth = useAuth();
+  // A gift box line's price comes from the owner's table; only the owner
+  // (cost access) may type another price.
+  const isGiftbox = product.category === "Gift Box";
+  const gbType = product.giftbox ? giftboxTypes.find((t) => t.id === product.giftbox!.type_id) || null : null;
+  const priceLocked = Boolean(product.giftbox && gbType) && !canViewMargin(auth);
   const total = computeProductTotal(product);
   const lineGross = Number(product.quantity || 0) * Number(product.unit_price || 0);
   const lineDiscountLarge = Number(product.discount || 0) > 0 && Number(product.discount) >= lineGross * 0.3;
@@ -140,6 +152,13 @@ export default function ProductLineItem({
       </div>
 
       <div className="grid grid-cols-12 gap-3">
+        {isGiftbox && (
+          <GiftboxPicker
+            product={product}
+            types={giftboxTypes}
+            onApply={(patch) => patchAndRecalc(patch)}
+          />
+        )}
         <div className="col-span-12 md:col-span-3">
           <label className="label">Kategoriya</label>
           <select
@@ -345,7 +364,8 @@ export default function ProductLineItem({
             disabled={hasBreakdown}
             onChange={(e) => {
               const qty = Number(e.target.value) || 0;
-              patchAndRecalc({ quantity: qty, ...priceForQty(qty) });
+              const gbPrice = gbType && product.giftbox && !product.price_manual ? priceFor(gbType, qty || 1, product.giftbox.items) : null;
+              patchAndRecalc({ quantity: qty, ...priceForQty(qty), ...(gbPrice !== null ? { unit_price: gbPrice } : {}) });
             }}
           />
           {hasBreakdown && (
@@ -356,13 +376,16 @@ export default function ProductLineItem({
           <label className="label">Dona narxi</label>
           <input
             type="number"
-            className="input"
+            className={`input ${priceLocked ? "bg-ink-50" : ""}`}
             value={product.unit_price || ""}
+            readOnly={priceLocked}
+            title={priceLocked ? "Gift box narxi jadvaldan chiqadi" : undefined}
             onChange={(e) => {
+              if (priceLocked) return;
               const v = Number(e.target.value) || 0;
               // Once the manager writes their own price, quantity changes
               // no longer overwrite it.
-              patchAndRecalc({ unit_price: v, ...(linked ? { price_manual: v !== catalogPrice } : {}) });
+              patchAndRecalc({ unit_price: v, ...(linked ? { price_manual: v !== catalogPrice } : product.giftbox ? { price_manual: true } : {}) });
             }}
           />
           {linked && info.sorted.length > 0 && (
