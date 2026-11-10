@@ -326,6 +326,18 @@ export type Proposal = {
   valid_until: string | null;
   note: string;
   created_at: string;
+  // A gift box offer (GiftboxOfferEditor): the box, its items, how many
+  // and when it is ready (typed by the manager, e.g. "5 kunda").
+  giftbox?: ProposalGiftbox | null;
+};
+
+export type ProposalGiftbox = {
+  type_id: string;
+  type_name: string;
+  items: { name: string; qty: number }[];
+  quantity: number;
+  unit_price: number;
+  ready_in: string;
 };
 
 export type CompanySettings = {

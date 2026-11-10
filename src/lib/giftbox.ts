@@ -71,6 +71,17 @@ export const printableItems = (type: Pick<GiftboxType, "prices">) => Object.keys
 // "ruchka ×1, koja bloknot ×1" — for the line's variant field.
 export const itemsLabel = (items: GiftboxItem[]) => items.filter((i) => i.qty > 0).map((i) => (i.qty === 1 ? i.name : `${i.name} ×${i.qty}`)).join(", ");
 
+// The gift box offer's note, written for the manager (they may edit it).
+export const offerNote = (items: GiftboxItem[]) => {
+  const list = itemsLabel(items);
+  return [
+    "Gift box ichidagi barcha narsalarga logotipingiz UV printer orqali tushiriladi — o'chib ketmaydi.",
+    list ? `To'plam: ${list}.` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
 // The Marja page's suggestion for a gift box line: one box's cost.
 export function giftboxCostLookup(costs: GiftboxCost[], settings: GiftboxSettings | null) {
   const box = new Map(costs.map((c) => [c.id, Number(c.box_cost) || 0]));

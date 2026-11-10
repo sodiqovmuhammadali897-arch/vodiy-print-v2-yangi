@@ -86,6 +86,10 @@ export default function ProposalEditor() {
 
         if (!isNew && id) {
           const data = await getOne<Proposal>("proposals", id);
+          if (data?.giftbox) {
+            navigate(`/proposals/giftbox/${id}`, { replace: true });
+            return;
+          }
           if (data) {
             const items = Array.isArray(data.items)
               ? (data.items as ProposalItem[])

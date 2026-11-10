@@ -285,6 +285,12 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     (permission `giftbox`: view = see costs, edit = save; `canGiftbox` in
     `rolePermissions.ts`, `giftboxPerm` in the rules). Never a manager
     account, even with role=admin.
+  - Gift box taklifi (Tijorat taklifi → «Gift box taklifi»,
+    `/proposals/giftbox/:id`, `GiftboxOfferEditor.tsx` + `GiftboxOfferPreview.tsx`):
+    customer name, type, items, quantity, «Tayyor bo'ladi» typed by hand
+    (e.g. «5 kunda»), optional valid-until date; the note writes itself
+    (`offerNote`: UV logo, won't wear off, the items). Saved in `proposals`
+    with `giftbox`; PNG/PDF like the proposal. No photo (owner: not needed).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

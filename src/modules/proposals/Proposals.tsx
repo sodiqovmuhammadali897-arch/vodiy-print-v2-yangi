@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, FileText, Trash2, ExternalLink } from "lucide-react";
+import { Plus, FileText, Trash2, ExternalLink, Gift } from "lucide-react";
 import { deleteOne, listAll } from "../../lib/firestoreDb";
 import type { Customer, Proposal } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
@@ -53,9 +53,14 @@ export default function Proposals() {
           </p>
         </div>
         {canEdit && (
-          <button className="btn-primary" onClick={() => navigate("/proposals/new")}>
-            <Plus className="h-4 w-4" /> Yangi taklif
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-secondary" onClick={() => navigate("/proposals/giftbox/new")}>
+              <Gift className="h-4 w-4 text-violet-600" /> Gift box taklifi
+            </button>
+            <button className="btn-primary" onClick={() => navigate("/proposals/new")}>
+              <Plus className="h-4 w-4" /> Yangi taklif
+            </button>
+          </div>
         )}
       </div>
 
@@ -80,15 +85,18 @@ export default function Proposals() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
-                {rows.map((p) => (
+                {rows.map((p) => {
+                  const href = p.giftbox ? `/proposals/giftbox/${p.id}` : `/proposals/${p.id}`;
+                  return (
                   <tr key={p.id} className="hover:bg-ink-50/50">
                     <td className="table-td font-semibold">{p.number}</td>
                     <td className="table-td">
                       <Link
-                        to={`/proposals/${p.id}`}
-                        className="font-medium text-ink-800 hover:text-brand-700"
+                        to={href}
+                        className="inline-flex items-center gap-1.5 font-medium text-ink-800 hover:text-brand-700"
                       >
-                        {p.title || "-"}
+                        {p.giftbox && <Gift className="h-4 w-4 text-violet-600" />}
+                        {p.giftbox?.type_name ? `Gift box · ${p.giftbox.type_name}` : p.title || "-"}
                       </Link>
                     </td>
                     <td className="table-td">
@@ -103,7 +111,7 @@ export default function Proposals() {
                     </td>
                     <td className="table-td">
                       <div className="flex items-center justify-end gap-1">
-                        <Link className="btn-ghost" to={`/proposals/${p.id}`}>
+                        <Link className="btn-ghost" to={href}>
                           <ExternalLink className="h-4 w-4" /> Ochish
                         </Link>
                         {canDelete && (
@@ -117,7 +125,8 @@ export default function Proposals() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -10,7 +10,7 @@ const DIRECTOR_SIGNATURE = "/brand/s-414d83ded787e7de.png";
 
 // A plain "YYYY-MM-DD" date, matching the reference design exactly —
 // formatDate()'s localized "20-avg, 2026" style doesn't match it.
-const isoDate = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : "-");
+export const isoDate = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : "-");
 
 // The note, line by line. "1) …" / "1. …" lines are numbered points; when
 // the number matches a row of the table, that product's name heads the
@@ -184,6 +184,17 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
           </div>
         )}
 
+        <ProposalFooter company={company} />
+      </div>
+    );
+  },
+);
+
+// The thank-you line, signature, stamp and contacts — shared with the gift
+// box offer (GiftboxOfferPreview).
+export function ProposalFooter({ company }: { company: CompanySettings | null }) {
+  return (
+    <>
         <div className="mt-8 h-[2px] w-full bg-emerald-600" />
 
         <div className="mt-4 flex items-end justify-between">
@@ -225,10 +236,9 @@ const ProposalPreview = forwardRef<HTMLDivElement, Props>(
             </span>
           )}
         </div>
-      </div>
-    );
-  },
-);
+    </>
+  );
+}
 
 ProposalPreview.displayName = "ProposalPreview";
 

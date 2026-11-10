@@ -174,7 +174,7 @@ service cloud.firestore {
       allow write: if giftboxPerm('edit');
     }
     match /giftbox_types/{id} {
-      allow read: if can('orders', 'view') || can('orders', 'edit') || giftboxPerm('view');
+      allow read: if can('orders', 'view') || can('orders', 'edit') || can('proposals', 'edit') || giftboxPerm('view');
       allow write: if giftboxPerm('edit');
     }
 

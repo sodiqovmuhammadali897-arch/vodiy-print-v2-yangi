@@ -56,3 +56,13 @@ describe("canGiftbox", () => {
     expect(canGiftbox({ isAdmin: false, isManagerAccount: false, staff: { permissions: {} } }, "view")).toBe(false);
   });
 });
+
+import { offerNote } from "../src/lib/giftbox";
+describe("offerNote", () => {
+  it("UV line and the items", () => {
+    expect(offerNote([{ name: "Koja bloknot", qty: 1 }, { name: "Ruchka", qty: 2 }])).toBe(
+      "Gift box ichidagi barcha narsalarga logotipingiz UV printer orqali tushiriladi — o'chib ketmaydi.\nTo'plam: Koja bloknot, Ruchka ×2.",
+    );
+    expect(offerNote([])).not.toContain("To'plam");
+  });
+});

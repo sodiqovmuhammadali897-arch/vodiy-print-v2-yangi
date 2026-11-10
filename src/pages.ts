@@ -16,6 +16,7 @@ const loaders = {
   Products: () => import("./modules/products/ProductsPage"),
   Proposals: () => import("./modules/proposals/Proposals"),
   ProposalEditor: () => import("./modules/proposals/ProposalEditor"),
+  GiftboxOfferEditor: () => import("./modules/proposals/GiftboxOfferEditor"),
   Textile: () => import("./modules/textile/Textile"),
   Warehouse: () => import("./modules/warehouse/Warehouse"),
   Finance: () => import("./modules/finance/Finance"),

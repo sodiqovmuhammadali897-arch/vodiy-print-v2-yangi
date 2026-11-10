@@ -8,7 +8,7 @@ import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
 import { pages } from "./pages";
 
-const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, Textile, Warehouse, Finance, Reports, MarginPage, GiftboxPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, DarslikPage, LessonPage, GuidePage, GuideCard, CallMode, Settings } = pages;
+const { SalesPipeline, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, GiftboxOfferEditor, Textile, Warehouse, Finance, Reports, MarginPage, GiftboxPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, DarslikPage, LessonPage, GuidePage, GuideCard, CallMode, Settings } = pages;
 
 export default function App() {
   return (
@@ -56,6 +56,8 @@ export default function App() {
           <Route element={<PermissionRoute module="proposals" />}>
             <Route path="/proposals" element={<Proposals />} />
             <Route path="/proposals/new" element={<ProposalEditor />} />
+            <Route path="/proposals/giftbox/new" element={<GiftboxOfferEditor />} />
+            <Route path="/proposals/giftbox/:id" element={<GiftboxOfferEditor />} />
             <Route path="/proposals/:id" element={<ProposalEditor />} />
           </Route>
 
