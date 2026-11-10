@@ -260,6 +260,14 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     sales are recognised **when the order is taken** (order date — as now;
     «Topshirilgan» is information only); **KPI stays** as it is
     (7.5% of sales + 2% of collected), no progressive scale.
+- **Tushlik eslatmasi — built 2026-11-10** (`meta-webhook/lunch.js`, run by
+  the HR agent in `hr.js`): at the general schedule's breakStart (the owner
+  sets 12:00–13:00 on the Davomat page; the code default is 13:00–14:00)
+  each person at work (checked in, not out, Telegram linked, not on leave
+  or day off, not a holiday) gets «Ism, tushlik (abet) vaqti bo'ldi…»; at
+  breakEnd «abet vaqti tugadi» with «✅ Ishxonadaman» (callback `ln:`,
+  `lunch_breaks/{day}_{email}`, admin read); at breakEnd+15 the admins get
+  who came back. `LUNCH_REMINDERS=off` turns it off.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

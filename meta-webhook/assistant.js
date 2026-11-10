@@ -523,6 +523,8 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
         else if (/^rem:/.test(data)) await reminders.handleCallback(req.body.callback_query);
         else if (/^pp:/.test(data)) await postpones.handleCallback(req.body.callback_query);
         // Eski mijozlarga qo'ng'iroq: the manager's result buttons (recall.js).
+        // Tushlikdan qaytdim: «✅ Ishxonadaman» (hr.js / lunch.js).
+        else if (hr && /^ln:/.test(data)) await hr.handleCallback(req.body.callback_query);
         else if (recall && /^rc:/.test(data)) await recall.handleCallback(req.body.callback_query);
         // Qarz undirish: va'da / javob bermadi / to'ladi (debts.js).
         else if (debts && /^db:/.test(data)) await debts.handleCallback(req.body.callback_query);

@@ -200,6 +200,11 @@ service cloud.firestore {
       allow delete: if can('proposals', 'delete');
     }
 
+    // Tushlikdan qaytish (meta-webhook/lunch.js): written by the server only.
+    match /lunch_breaks/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     // Doimiy xarajatlar (ijara, maosh …): set up once, entered each month
     // with one click on the Moliya page.
     match /expense_templates/{id} {

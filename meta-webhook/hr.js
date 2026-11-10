@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const { emitEvent } = require("./shared");
 const { telegram } = require("./telegram");
 const { staffFromRequest } = require("./auth");
+const L = require("./lunch");
 
 const ESKIZ_EMAIL = process.env.ESKIZ_EMAIL || "";
 const ESKIZ_PASSWORD = process.env.ESKIZ_PASSWORD || "";
@@ -23,6 +24,10 @@ const REMINDER_AFTER_MIN = 5;
 const REMINDER_WINDOW_MIN = 90;
 const LATE_NOTICE_MAX_AGE_MS = 30 * 60 * 1000;
 const LINK_CODE_TTL_MS = 24 * 60 * 60 * 1000;
+// Lunch reminders (lunch.js): sent within this many minutes of the break
+// start / end, so a restart mid-break doesn't send them late.
+const LUNCH_WINDOW_MIN = 30;
+const LUNCH_ON = process.env.LUNCH_REMINDERS !== "off";
 const DEFAULT_SCHEDULE = { workStart: "09:00", workEnd: "18:00", weeklyOffDay: 0 };
 const toMin = (hm) => {
   const [h, m] = String(hm || "09:00").split(":").map(Number);
@@ -242,6 +247,91 @@ const create = (db, { route }) => {
     console.log(`HR reminder ${code} ${workStart}: ${missing.length} missing`);
   };
 
+  // ── tushlik (abet) eslatmasi — lunch.js ────────────────────
+  // The break of the general schedule (Davomat sozlamalari); each step is
+  // claimed once a day in hr_runs/{day}_lunch_*.
+  const claim = async (id, data = {}) => {
+    try {
+      await db.collection("hr_runs").doc(id).create({ started_at: new Date().toISOString(), ...data });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const lunchPeople = async (code, weekday) => {
+    const [staffAll, att, leave] = await Promise.all([staffList(), db.collection("attendance").where("dateCode", "==", code).get(), onLeave(code)]);
+    return L.recipients({ staff: staffAll, attendance: att.docs.map((d) => d.data()), onLeave: leave, weekday, offDaysOf: (email) => scheduleOf(email).offDays });
+  };
+  const maybeLunch = async () => {
+    if (!LUNCH_ON) return;
+    const now = tashkent();
+    const code = dayCode(now);
+    await loadSchedule();
+    const from = schedule.breakStart || "13:00";
+    const to = schedule.breakEnd || "14:00";
+    const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const a = toMin(from);
+    const b = toMin(to);
+    const startDue = nowMin >= a && nowMin < Math.min(a + LUNCH_WINDOW_MIN, b);
+    const endDue = nowMin >= b && nowMin < b + LUNCH_WINDOW_MIN;
+    const sumDue = nowMin >= b + L.SUMMARY_AFTER_MIN && nowMin < b + 60;
+    if (!startDue && !endDue && !sumDue) return;
+    const weekday = new Date(`${code}T00:00:00Z`).getUTCDay();
+    // Days off are per person (recipients → scheduleOf); holidays for all.
+    if (await isHoliday(code)) return;
+    const col = db.collection("lunch_breaks");
+
+    if (startDue && (await claim(`${code}_lunch_start`, { from, to }))) {
+      const people = await lunchPeople(code, weekday);
+      let sent = 0;
+      for (const s of people) {
+        const r = await telegram("sendMessage", { chat_id: s.telegram_chat_id, text: L.startText(s, from, to) });
+        if (!r.ok) continue;
+        sent++;
+        await col.doc(L.docId(code, s.email)).set({ email: s.email, name: s.full_name || s.email, day: code, chat_id: s.telegram_chat_id, start_message_id: r.result ? r.result.message_id : null, sent_at: new Date().toISOString(), from, to }, { merge: true });
+      }
+      console.log(`HR lunch start ${code} ${from}: ${sent}/${people.length}`);
+    }
+
+    if (endDue && (await claim(`${code}_lunch_end`, { to }))) {
+      const people = await lunchPeople(code, weekday);
+      let sent = 0;
+      for (const s of people) {
+        const id = L.docId(code, s.email);
+        const r = await telegram("sendMessage", { chat_id: s.telegram_chat_id, text: L.endText(s), reply_markup: L.button(id) });
+        if (!r.ok) continue;
+        sent++;
+        await col.doc(id).set({ email: s.email, name: s.full_name || s.email, day: code, chat_id: s.telegram_chat_id, end_message_id: r.result ? r.result.message_id : null, ended_at: new Date().toISOString(), to }, { merge: true });
+      }
+      console.log(`HR lunch end ${code} ${to}: ${sent}/${people.length}`);
+    }
+
+    if (sumDue && (await claim(`${code}_lunch_sum`))) {
+      const rows = (await col.where("day", "==", code).get()).docs.map((d) => d.data()).filter((r) => r.end_message_id);
+      const text = L.summaryText(code, rows.map((r) => ({ name: L.firstName({ full_name: r.name, email: r.email }), back_at_hm: r.back_at_hm || null })));
+      if (!text) return;
+      const staffSnap = await db.collection("staff").get();
+      const admins = staffSnap.docs.map((d) => d.data()).filter((x) => x.role === "admin" && !x.report_manager_id && x.telegram_chat_id && x.active !== false);
+      for (const ad of admins) await telegram("sendMessage", { chat_id: ad.telegram_chat_id, text });
+    }
+  };
+
+  // «✅ Ishxonadaman» (ln:{docId}): only the person it was sent to.
+  const handleCallback = async (cq) => {
+    const answer = (text) => telegram("answerCallbackQuery", { callback_query_id: cq.id, ...(text ? { text } : {}) });
+    const id = String(cq.data || "").slice(3);
+    const ref = db.collection("lunch_breaks").doc(id);
+    const doc = (await ref.get()).data();
+    if (!doc) return answer("Bu eslatma eskirgan");
+    if (String(doc.chat_id) !== String(cq.message && cq.message.chat && cq.message.chat.id)) return answer("Bu tugma sizga emas");
+    if (doc.back_at) return answer(`Allaqachon belgilangan: ${doc.back_at_hm}`);
+    const at = new Date().toISOString();
+    const hm = hhmm(at);
+    await ref.set({ back_at: at, back_at_hm: hm }, { merge: true });
+    await telegram("editMessageText", { chat_id: cq.message.chat.id, message_id: cq.message.message_id, text: L.backText({ full_name: doc.name, email: doc.email }, hm) });
+    return answer("✅ Belgilandi");
+  };
+
   // ── late check-in notices ──────────────────────────────────
   const handleLate = async (docSnap) => {
     const r = docSnap.data();
@@ -291,6 +381,7 @@ const create = (db, { route }) => {
     try {
       watchToday();
       await maybeRemind();
+      await maybeLunch().catch((err) => console.error("HR lunch reminder failed", err));
     } catch (err) {
       console.error("HR tick failed", err);
     }
@@ -345,7 +436,7 @@ const create = (db, { route }) => {
     watchedDay = null;
   };
 
-  return { register, start, stop, handlePrivateMessage, tick, _test: { reminderText, lateText, normalizePhone, maybeRemind, loadSchedule, scheduleOf } };
+  return { register, start, stop, handlePrivateMessage, handleCallback, tick, _test: { maybeLunch, reminderText, lateText, normalizePhone, maybeRemind, loadSchedule, scheduleOf } };
 };
 
 module.exports = { create, normalizePhone, reminderText, lateText };
