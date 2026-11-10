@@ -1,0 +1,66 @@
+name: Set lunch break
+
+# Run by hand, with the owner's approval: sets the lunch break of the
+# general work schedule (work_schedules/default — the same fields the
+# Davomat → Ish vaqti settings save): breakStart, breakEnd, breakMinutes.
+# With apply=no it only prints the current and the new times; with
+# apply=yes it writes them and keeps the old ones in data_fixes so the
+# change can be undone. Prints times only — no personal data.
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "Lunch start, HH:MM"
+        default: "12:00"
+        required: true
+      end:
+        description: "Lunch end, HH:MM"
+        default: "13:00"
+        required: true
+      apply:
+        description: "yes = write, no = only show"
+        default: "no"
+        required: false
+
+jobs:
+  set:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set the lunch break
+        uses: appleboy/ssh-action@v1
+        env:
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+          APPLY: ${{ inputs.apply }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: START,END,APPLY
+          script: |
+            cat > /tmp/vp-lunch.js <<'JS'
+            const admin = require("firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const hm = (v) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : null);
+            const min = (v) => Number(v.slice(0, 2)) * 60 + Number(v.slice(3));
+            (async () => {
+              const start = hm(process.env.START || "");
+              const end = hm(process.env.END || "");
+              if (!start || !end || min(end) <= min(start)) throw new Error("Vaqt noto'g'ri: HH:MM, tugashi boshlanishidan keyin");
+              const ref = db.collection("work_schedules").doc("default");
+              const cur = (await ref.get()).data() || {};
+              const before = { breakStart: cur.breakStart || null, breakEnd: cur.breakEnd || null, breakMinutes: cur.breakMinutes ?? null };
+              const after = { breakStart: start, breakEnd: end, breakMinutes: min(end) - min(start) };
+              console.log("now:", JSON.stringify(before));
+              console.log("new:", JSON.stringify(after));
+              if (process.env.APPLY !== "yes") return console.log("apply=no — nothing written");
+              const now = new Date().toISOString();
+              await ref.set({ ...after, updatedAt: now }, { merge: true });
+              await db.collection("data_fixes").add({ kind: "lunch_break", doc: "work_schedules/default", before, after, created_at: now });
+              console.log("written");
+            })().then(() => process.exit(0)).catch((e) => { console.error(String(e.message || e)); process.exit(1); });
+            JS
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-lunch.js
+            rm -f /tmp/vp-lunch.js
