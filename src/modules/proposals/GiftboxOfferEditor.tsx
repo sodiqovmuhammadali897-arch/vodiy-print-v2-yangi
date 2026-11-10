@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileDown, Gift, Image as ImageIcon, Save } from "lucide-react";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, FileDown, Gift, Image as ImageIcon, Save, Settings2 } from "lucide-react";
 import { getOne, insertOne, listAll, updateOne } from "../../lib/firestoreDb";
 import type { CompanySettings, Customer, Proposal, ProposalGiftbox } from "../../lib/types";
 import { formatMoney } from "../../lib/format";
@@ -177,6 +177,14 @@ export default function GiftboxOfferEditor() {
               <Gift className="h-5 w-5 text-violet-600" /> Gift box taklifi
             </h2>
             <p className="mt-1 text-sm text-ink-500">Mijozga PNG qilib yuboriladi. Narx «Gift box narxi» jadvalidan soniga qarab chiqadi.</p>
+            {canGiftbox(auth, "view") && (
+              // The owner: the way to the print prices and markup (managers never see this).
+              <Link to="/giftbox" className="mt-3 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                <Settings2 className="h-4 w-4" />
+                {prices?.rows?.length ? "Pechat narxlari va ustamani o'zgartirish →" : "Avval pechat narxlari va ustamani kiriting →"}
+                <span className="ml-auto text-xs font-normal opacity-75">faqat sizga ko'rinadi</span>
+              </Link>
+            )}
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
