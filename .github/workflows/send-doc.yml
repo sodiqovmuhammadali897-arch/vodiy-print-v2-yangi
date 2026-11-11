@@ -22,6 +22,10 @@ on:
         description: "Extra first names, comma-separated"
         default: "Muhammadiyor,Nuriddin,Muhammadali,Maryam,Moxlaroy"
         required: false
+      exclude:
+        description: "First names to leave out, comma-separated"
+        default: "Dilmurodjon"
+        required: false
       apply:
         description: "yes = send, no = only list"
         default: "no"
@@ -48,12 +52,13 @@ jobs:
           FILE: ${{ inputs.file }}
           CAPTION: ${{ inputs.caption }}
           NAMES: ${{ inputs.names }}
+          EXCLUDE: ${{ inputs.exclude }}
           APPLY: ${{ inputs.apply }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          envs: FILE,CAPTION,NAMES,APPLY
+          envs: FILE,CAPTION,NAMES,EXCLUDE,APPLY
           script: |
             export TELEGRAM_BOT_TOKEN="$(grep '^TELEGRAM_BOT_TOKEN=' /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"
             export SRC="/tmp/vp-send/$FILE"
@@ -71,7 +76,9 @@ jobs:
               const buffer = fs.readFileSync(process.env.SRC);
               const names = new Set((process.env.NAMES || "").split(",").map(norm).filter(Boolean));
               const staff = (await db.collection("staff").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
-              const to = staff.filter((s) => s.telegram_chat_id && (s.report_manager_id || names.has(norm(String(s.full_name || "").split(/\s+/)[0]))));
+              const skip = new Set((process.env.EXCLUDE || "").split(",").map(norm).filter(Boolean));
+              const fn = (s) => norm(String(s.full_name || "").split(/\s+/)[0]);
+              const to = staff.filter((s) => s.telegram_chat_id && !skip.has(fn(s)) && (s.report_manager_id || names.has(fn(s))));
               const first = (s) => String(s.full_name || "?").split(/\s+/)[0];
               console.log(`recipients (${to.length}):`, to.map(first).join(", "));
               const missing = staff.filter((s) => !s.telegram_chat_id && (s.report_manager_id || names.has(norm(String(s.full_name || "").split(/\s+/)[0]))));
