@@ -152,7 +152,7 @@ export default function GiftboxOfferEditor() {
     if (!previewRef.current) return;
     setExporting(true);
     try {
-      const fileBase = `${proposal.number}-${proposal.recipient_name || "giftbox"}`.replace(/\s+/g, "-");
+      const fileBase = `${proposal.number}-${proposal.recipient_name || "giftbox"}`.replace(/[^\p{L}\p{N}-]+/gu, "-").replace(/-+$/, "");
       if (format === "pdf") await exportProposalPdf(previewRef.current, fileBase);
       else await exportProposalPng(previewRef.current, fileBase);
     } finally {

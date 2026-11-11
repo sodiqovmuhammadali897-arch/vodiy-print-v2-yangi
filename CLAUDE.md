@@ -296,7 +296,13 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     (`souvenir_tiers` → `giftbox_prices/main.souvenir`, `souvenirPrice`);
     lines keep `souvenir {name, logo}`; Marja cost = buy (+ print). Menu and
     page: «Gift box va suvenir narxi». Gift box items show as a numbered list
-    (`giftbox/ItemsList.tsx`). No souvenir PNG offer yet (asked, no answer).
+    (`giftbox/ItemsList.tsx`).
+  - Suvenir taklifi (2026-11-11; menu «Suvenir taklifi» `/suvenir-taklif`,
+    Tijorat taklifi → «Suvenir taklifi», `/proposals/suvenir/:id`;
+    `SouvenirOfferEditor.tsx` + `SouvenirOfferPreview.tsx`): customer, rows
+    (souvenir, logo, qty → price from the souvenir table; the owner may type
+    a price), «Tayyor bo'ladi», valid-until, note (`souvenirNote`). Saved in
+    `proposals` with `souvenir {rows, ready_in}`; PNG/PDF.
   - Gift box taklifi (menu «Gift box taklifi» `/gift-box`, or Tijorat
     taklifi → «Gift box taklifi»; `GiftboxOfferEditor.tsx` +
     `GiftboxOfferPreview.tsx`): customer, box name, market price, items,

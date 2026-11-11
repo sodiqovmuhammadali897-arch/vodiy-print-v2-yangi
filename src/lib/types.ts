@@ -332,6 +332,13 @@ export type Proposal = {
   // A gift box offer (GiftboxOfferEditor): the box, its items, how many
   // and when it is ready (typed by the manager, e.g. "5 kunda").
   giftbox?: ProposalGiftbox | null;
+  // A souvenir offer (SouvenirOfferEditor): rows priced from the owner's table.
+  souvenir?: ProposalSouvenir | null;
+};
+
+export type ProposalSouvenir = {
+  rows: { name: string; logo: boolean; qty: number; unit_price: number; manual?: boolean }[];
+  ready_in: string;
 };
 
 export type ProposalGiftbox = {

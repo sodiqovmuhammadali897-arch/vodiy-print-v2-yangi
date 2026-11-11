@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, FileText, Trash2, ExternalLink, Gift } from "lucide-react";
+import { Plus, FileText, Trash2, ExternalLink, Gift, Stamp } from "lucide-react";
 import { deleteOne, listAll } from "../../lib/firestoreDb";
 import type { Customer, Proposal } from "../../lib/types";
 import AsyncState from "../../components/ui/AsyncState";
@@ -57,6 +57,9 @@ export default function Proposals() {
             <button className="btn-secondary" onClick={() => navigate("/proposals/giftbox/new")}>
               <Gift className="h-4 w-4 text-violet-600" /> Gift box taklifi
             </button>
+            <button className="btn-secondary" onClick={() => navigate("/proposals/suvenir/new")}>
+              <Stamp className="h-4 w-4 text-teal-700" /> Suvenir taklifi
+            </button>
             <button className="btn-primary" onClick={() => navigate("/proposals/new")}>
               <Plus className="h-4 w-4" /> Yangi taklif
             </button>
@@ -86,7 +89,7 @@ export default function Proposals() {
               </thead>
               <tbody className="divide-y divide-ink-100">
                 {rows.map((p) => {
-                  const href = p.giftbox ? `/proposals/giftbox/${p.id}` : `/proposals/${p.id}`;
+                  const href = p.giftbox ? `/proposals/giftbox/${p.id}` : p.souvenir ? `/proposals/suvenir/${p.id}` : `/proposals/${p.id}`;
                   return (
                   <tr key={p.id} className="hover:bg-ink-50/50">
                     <td className="table-td font-semibold">{p.number}</td>
@@ -96,7 +99,12 @@ export default function Proposals() {
                         className="inline-flex items-center gap-1.5 font-medium text-ink-800 hover:text-brand-700"
                       >
                         {p.giftbox && <Gift className="h-4 w-4 text-violet-600" />}
-                        {p.giftbox ? `Gift box · ${p.giftbox.name || p.giftbox.type_name || ""}` : p.title || "-"}
+                        {p.souvenir && <Stamp className="h-4 w-4 text-teal-700" />}
+                        {p.giftbox
+                          ? `Gift box · ${p.giftbox.name || p.giftbox.type_name || ""}`
+                          : p.souvenir
+                            ? `Suvenir · ${(p.souvenir.rows || []).map((r) => r.name).filter(Boolean).join(", ")}`
+                            : p.title || "-"}
                       </Link>
                     </td>
                     <td className="table-td">

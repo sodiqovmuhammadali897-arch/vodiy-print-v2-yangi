@@ -95,3 +95,13 @@ describe("item price and souvenirs", () => {
     expect(look({ souvenir: { name: "Nimadir", logo: true } })).toBeNull();
   });
 });
+
+import { souvenirNote } from "../src/lib/giftbox";
+describe("souvenirNote", () => {
+  it("names the items with the logo", () => {
+    expect(souvenirNote([{ name: "Koja bloknot", logo: true }, { name: "Ruchka", logo: false }, { name: "Termos", logo: true }])).toBe(
+      "Koja bloknot, Termos — logotipingiz UV printer orqali tushiriladi, o'chib ketmaydi.",
+    );
+    expect(souvenirNote([{ name: "Ruchka", logo: false }])).toBe("");
+  });
+});

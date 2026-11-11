@@ -86,8 +86,8 @@ export default function ProposalEditor() {
 
         if (!isNew && id) {
           const data = await getOne<Proposal>("proposals", id);
-          if (data?.giftbox) {
-            navigate(`/proposals/giftbox/${id}`, { replace: true });
+          if (data?.giftbox || data?.souvenir) {
+            navigate(`/proposals/${data.giftbox ? "giftbox" : "suvenir"}/${id}`, { replace: true });
             return;
           }
           if (data) {

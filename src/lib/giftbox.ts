@@ -106,6 +106,12 @@ export const offerNote = (items: GiftboxItem[]) => {
     .join("\n");
 };
 
+// The souvenir offer's note.
+export const souvenirNote = (rows: { name: string; logo: boolean }[]) => {
+  const withLogo = rows.filter((r) => r.name && r.logo).map((r) => r.name);
+  return withLogo.length ? `${withLogo.join(", ")} — logotipingiz UV printer orqali tushiriladi, o'chib ketmaydi.` : "";
+};
+
 // The Marja page's suggestion for a gift box line: one box's cost, from the
 // market price the manager typed and the admin's print prices.
 export function giftboxCostLookup(settings: GiftboxSettings | null) {
