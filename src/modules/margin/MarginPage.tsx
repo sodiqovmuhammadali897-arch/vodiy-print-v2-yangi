@@ -96,7 +96,7 @@ export default function MarginPage() {
   }, [allowed]);
 
   // Gift box lines: one box's cost = the market price the manager typed +
-  // the print prices from «Gift box narxi».
+  // the print prices from «Gift box va suvenir narxi».
   const lookup = useMemo(() => {
     const catalog = catalogCostLookup(products, productCosts);
     const gift = giftboxCostLookup(gbSettings);

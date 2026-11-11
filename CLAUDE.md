@@ -289,6 +289,14 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     (permission `giftbox`: view = see costs, edit = save; `canGiftbox` in
     `rolePermissions.ts`, `giftboxPerm` in the rules). Never a manager
     account, even with role=admin.
+  - **Souvenirs (2026-11-11):** each item has `buy` (what it costs us) and
+    `cost` (logo print); a gift box adds buy + print per item (buy 0 when the
+    item comes inside the box). Order category «Suvenir» → `SouvenirPicker`
+    (item + «Logo bilan») priced by its own markup table
+    (`souvenir_tiers` → `giftbox_prices/main.souvenir`, `souvenirPrice`);
+    lines keep `souvenir {name, logo}`; Marja cost = buy (+ print). Menu and
+    page: «Gift box va suvenir narxi». Gift box items show as a numbered list
+    (`giftbox/ItemsList.tsx`). No souvenir PNG offer yet (asked, no answer).
   - Gift box taklifi (menu «Gift box taklifi» `/gift-box`, or Tijorat
     taklifi → «Gift box taklifi»; `GiftboxOfferEditor.tsx` +
     `GiftboxOfferPreview.tsx`): customer, box name, market price, items,

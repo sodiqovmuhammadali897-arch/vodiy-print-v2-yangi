@@ -3,7 +3,7 @@ import { Loader } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
 import { canGiftbox } from "../../lib/rolePermissions";
 
-// «Gift box narxi»: the owner, or staff with the «Gift box narxi» permission.
+// «Gift box va suvenir narxi»: the owner, or staff with the «Gift box va suvenir narxi» permission.
 export default function GiftboxRoute() {
   const auth = useAuth();
   if (auth.staffLoading) {

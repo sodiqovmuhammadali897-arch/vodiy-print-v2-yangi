@@ -253,6 +253,7 @@ export default function OrderWizard() {
               catalog_product_id: p.catalog_product_id ?? null,
               price_manual: p.price_manual ?? false,
               giftbox: p.giftbox ?? null,
+              souvenir: p.souvenir ?? null,
             })),
           );
           setPayments(

@@ -162,6 +162,8 @@ export type OrderProduct = {
   // manager typed and the items the logo is printed on (type_id: the
   // first version, 2026-11-10, with admin-made types).
   giftbox?: { name?: string; box_cost?: number; type_id?: string; items: { name: string; qty: number }[] } | null;
+  // A souvenir line priced from the owner's table (lib/giftbox.ts).
+  souvenir?: { name: string; logo: boolean } | null;
 };
 
 // A saved color/size quantity distribution an employee can reuse on a

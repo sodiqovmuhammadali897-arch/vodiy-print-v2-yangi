@@ -14,7 +14,8 @@ import { computeProductTotal } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
 import TextileSizeMatrixModal from "./TextileSizeMatrixModal";
 import GiftboxPicker from "./GiftboxPicker";
-import { priceFor, type GiftboxPrices } from "../../../lib/giftbox";
+import SouvenirPicker from "./SouvenirPicker";
+import { priceFor, souvenirPrice, type GiftboxPrices } from "../../../lib/giftbox";
 import { useAuth } from "../../../lib/AuthContext";
 import { canGiftbox } from "../../../lib/rolePermissions";
 
@@ -58,7 +59,11 @@ export default function ProductLineItem({
   // (cost access) may type another price.
   const isGiftbox = product.category === "Gift Box";
   // Locked once the owner's table exists: the manager can't type a price.
-  const priceLocked = isGiftbox && Boolean(product.giftbox && giftboxPrices?.rows?.length) && !canGiftbox(auth, "edit");
+  const isSouvenir = product.category === "Suvenir";
+  const priceLocked =
+    ((isGiftbox && Boolean(product.giftbox && giftboxPrices?.rows?.length)) ||
+      (isSouvenir && Boolean(product.souvenir && giftboxPrices?.souvenir?.length))) &&
+    !canGiftbox(auth, "edit");
   const total = computeProductTotal(product);
   const lineGross = Number(product.quantity || 0) * Number(product.unit_price || 0);
   const lineDiscountLarge = Number(product.discount || 0) > 0 && Number(product.discount) >= lineGross * 0.3;
@@ -159,12 +164,22 @@ export default function ProductLineItem({
             onApply={(patch) => patchAndRecalc(patch)}
           />
         )}
+        {isSouvenir && Boolean(giftboxPrices?.names?.length) && (
+          <SouvenirPicker product={product} prices={giftboxPrices} onApply={(patch) => patchAndRecalc(patch)} />
+        )}
         <div className="col-span-12 md:col-span-3">
           <label className="label">Kategoriya</label>
           <select
             className="input"
             value={product.category}
-            onChange={(e) => patchAndRecalc({ category: e.target.value })}
+            onChange={(e) =>
+              patchAndRecalc({
+                category: e.target.value,
+                // Leaving «Gift Box» / «Suvenir» drops that table's pricing.
+                ...(e.target.value !== "Gift Box" && product.giftbox ? { giftbox: null, price_manual: false } : {}),
+                ...(e.target.value !== "Suvenir" && product.souvenir ? { souvenir: null, price_manual: false } : {}),
+              })
+            }
           >
             <option value="">-- tanlang --</option>
             {PRODUCT_CATEGORIES.map((c) => (
@@ -366,7 +381,10 @@ export default function ProductLineItem({
               const qty = Number(e.target.value) || 0;
               const gb = product.giftbox;
               const gbPrice = isGiftbox && gb && Number(gb.box_cost) > 0 && !product.price_manual ? priceFor(giftboxPrices, qty || 1, Number(gb.box_cost), gb.items) : null;
-              patchAndRecalc({ quantity: qty, ...priceForQty(qty), ...(gbPrice !== null ? { unit_price: gbPrice } : {}) });
+              const sv = product.souvenir;
+              const svPrice = isSouvenir && sv && !product.price_manual ? souvenirPrice(giftboxPrices, qty || 1, sv) : null;
+              const tablePrice = gbPrice ?? svPrice;
+              patchAndRecalc({ quantity: qty, ...priceForQty(qty), ...(tablePrice !== null ? { unit_price: tablePrice } : {}) });
             }}
           />
           {hasBreakdown && (
@@ -380,13 +398,13 @@ export default function ProductLineItem({
             className={`input ${priceLocked ? "bg-ink-50" : ""}`}
             value={product.unit_price || ""}
             readOnly={priceLocked}
-            title={priceLocked ? "Gift box narxi jadvaldan chiqadi" : undefined}
+            title={priceLocked ? "Narx rahbar jadvalidan chiqadi" : undefined}
             onChange={(e) => {
               if (priceLocked) return;
               const v = Number(e.target.value) || 0;
               // Once the manager writes their own price, quantity changes
               // no longer overwrite it.
-              patchAndRecalc({ unit_price: v, ...(linked ? { price_manual: v !== catalogPrice } : product.giftbox ? { price_manual: true } : {}) });
+              patchAndRecalc({ unit_price: v, ...(linked ? { price_manual: v !== catalogPrice } : product.giftbox || product.souvenir ? { price_manual: true } : {}) });
             }}
           />
           {linked && info.sorted.length > 0 && (

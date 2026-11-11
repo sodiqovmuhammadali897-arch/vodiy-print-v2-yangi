@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Calculator, Loader2, Printer, Save, Trash2, TrendingUp } from "lucide-react";
+import { Calculator, Loader2, Package, Save, Stamp, Trash2, TrendingUp } from "lucide-react";
 import { getOne, upsertOne } from "../../lib/firestoreDb";
 import { formatMoney } from "../../lib/format";
 import { useAuth } from "../../lib/AuthContext";
 import { canGiftbox } from "../../lib/rolePermissions";
-import { DEFAULT_ROUND, priceFor, publicPrices, sortTiers, unitCost, type GiftboxPrint, type GiftboxSettings, type MarkupTier } from "../../lib/giftbox";
+import { DEFAULT_ROUND, priceFor, publicPrices, sortTiers, souvenirPrice, unitCost, type GiftboxPrint, type GiftboxSettings, type MarkupTier } from "../../lib/giftbox";
 
-// Gift box narxi: the owner's print prices and markup by quantity
+// Gift box va suvenir narxi: per item what it costs us and its logo print,
+// the gift box markup and the souvenir markup by quantity
 // (giftbox_settings/main). Saving also writes the managers' price table
 // (giftbox_prices/main, lib/giftbox.ts). The manager types each box's name
-// and market price on the order or the offer — there are no types here.
+// and market price on the order or the offer, or picks a souvenir.
 const num = (v: string) => Number(String(v).replace(/\s/g, "")) || 0;
 
 export default function GiftboxPage() {
@@ -20,6 +21,7 @@ export default function GiftboxPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [prints, setPrints] = useState<GiftboxPrint[]>([]);
   const [tiers, setTiers] = useState<MarkupTier[]>([]);
+  const [svTiers, setSvTiers] = useState<MarkupTier[]>([]);
   const [round, setRound] = useState(DEFAULT_ROUND);
   const [example, setExample] = useState(170000);
   useEffect(() => {
@@ -28,6 +30,7 @@ export default function GiftboxPage() {
         const settings = await getOne<GiftboxSettings>("giftbox_settings", "main");
         setPrints(settings?.prints?.length ? settings.prints : [{ name: "Ruchka", cost: 0 }, { name: "Koja bloknot", cost: 0 }, { name: "Bakal", cost: 0 }]);
         setTiers(settings?.tiers?.length ? settings.tiers : [{ min: 1, markup: 0 }, { min: 10, markup: 0 }, { min: 21, markup: 0 }, { min: 51, markup: 0 }]);
+        setSvTiers(settings?.souvenir_tiers?.length ? settings.souvenir_tiers : [{ min: 1, markup: 0 }, { min: 50, markup: 0 }, { min: 200, markup: 0 }]);
         setRound(settings?.round ?? DEFAULT_ROUND);
       } catch (e) {
         setMessage(e instanceof Error ? e.message : "Yuklab bo'lmadi");
@@ -39,15 +42,16 @@ export default function GiftboxPage() {
 
   const cleanPrints = useMemo(() => prints.filter((p) => p.name.trim()), [prints]);
   const cleanTiers = useMemo(() => sortTiers(tiers), [tiers]);
-  const markupSet = cleanTiers.some((t) => t.markup > 0);
+  const cleanSv = useMemo(() => sortTiers(svTiers), [svTiers]);
 
   const save = async () => {
     setSaving(true);
     setMessage(null);
     try {
       const now = new Date().toISOString();
-      await upsertOne("giftbox_settings", "main", { prints: cleanPrints, tiers: cleanTiers, round, updated_at: now });
-      await upsertOne("giftbox_prices", "main", { ...publicPrices(cleanPrints, cleanTiers, round), updated_at: now });
+      const items = cleanPrints.map((p) => ({ name: p.name.trim(), cost: Number(p.cost) || 0, buy: Number(p.buy) || 0 }));
+      await upsertOne("giftbox_settings", "main", { prints: items, tiers: cleanTiers, souvenir_tiers: cleanSv, round, updated_at: now });
+      await upsertOne("giftbox_prices", "main", { ...publicPrices(items, cleanTiers, round, cleanSv), updated_at: now });
       setMessage("Saqlandi — menejerlar yangi narxlarni darhol ko'radi");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Saqlab bo'lmadi");
@@ -67,8 +71,8 @@ export default function GiftboxPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">Gift box narxi</h1>
-          <p className="text-sm text-ink-500">Menejer gift box nomini, bozordagi narxini va ichidagi narsalarni yozadi. Tizim: tannarx = bozordagi narx + logo urish, narx = tannarx + ustama (soniga qarab). Menejer faqat tayyor narxni ko'radi.</p>
+          <h1 className="font-display text-2xl font-bold text-ink-900">Gift box va suvenir narxi</h1>
+          <p className="text-sm text-ink-500">Har bir narsa: tannarxi + logo urish. Gift box: bozordagi narx + ichidagi narsalar, ustiga gift box ustamasi. Alohida suvenir: narsa (+ logo), ustiga suvenir ustamasi. Menejer faqat tayyor narxni ko'radi.</p>
         </div>
         {canEdit ? (
           <button type="button" className="btn-primary" disabled={saving} onClick={() => void save()}>
@@ -80,68 +84,58 @@ export default function GiftboxPage() {
       </div>
       {message && <div className="rounded-xl border border-ink-200 bg-surface px-4 py-2.5 text-sm text-ink-700">{message}</div>}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="card p-5">
-          <h2 className="mb-1 flex items-center gap-2 font-display text-base font-bold text-ink-900">
-            <Printer className="h-4 w-4" /> Logo urish narxlari
-          </h2>
-          <p className="mb-3 text-xs text-ink-500">Bitta narsaga logo urish (UV) qancha turadi.</p>
-          <div className="space-y-2">
-            {prints.map((p, i) => (
-              <div key={i} className="grid grid-cols-[1fr_130px_auto] items-center gap-2">
-                <input className="input" placeholder="Narsa (ruchka, bakal …)" value={p.name} onChange={(e) => setPrints(prints.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-                <input className="input text-right" inputMode="numeric" placeholder="so'm" value={p.cost || ""} onChange={(e) => setPrints(prints.map((x, j) => (j === i ? { ...x, cost: num(e.target.value) } : x)))} />
-                <button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-rose-600" onClick={() => setPrints(prints.filter((_, j) => j !== i))} aria-label="O'chirish">
+      <section className="card p-5">
+        <h2 className="mb-1 flex items-center gap-2 font-display text-base font-bold text-ink-900">
+          <Package className="h-4 w-4" /> Narsalar — tannarx va pechat
+        </h2>
+        <p className="mb-3 text-xs text-ink-500">Tannarxi — narsani o'zi necha pul turadi (biz sotib olamiz). Pechat — logo urish (UV). Gift box ichida o'zi bilan kelsa, tannarxiga 0 yozing.</p>
+        <div className="hidden grid-cols-[28px_1fr_130px_130px_110px_36px] gap-2 px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500 sm:grid">
+          <span />
+          <span>Narsa</span>
+          <span className="text-right">Tannarxi</span>
+          <span className="text-right">Pechat</span>
+          <span className="text-right">Jami</span>
+          <span />
+        </div>
+        <div className="space-y-2">
+          {prints.map((p, i) => {
+            const set = (patch: Partial<GiftboxPrint>) => setPrints(prints.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+            return (
+              <div key={i} className="grid grid-cols-[28px_1fr_36px] items-center gap-2 sm:grid-cols-[28px_1fr_130px_130px_110px_36px]">
+                <span className="text-right text-xs text-ink-400">{i + 1}.</span>
+                <input className="input" placeholder="Narsa (koja bloknot, termos …)" value={p.name} onChange={(e) => set({ name: e.target.value })} />
+                <button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-rose-600 sm:order-last" onClick={() => setPrints(prints.filter((_, j) => j !== i))} aria-label="O'chirish">
                   <Trash2 className="h-4 w-4" />
                 </button>
+                <input className="input col-start-2 text-right sm:col-start-auto" inputMode="numeric" placeholder="tannarxi" aria-label="Tannarxi" value={p.buy || ""} onChange={(e) => set({ buy: num(e.target.value) })} />
+                <input className="input col-start-2 text-right sm:col-start-auto" inputMode="numeric" placeholder="pechat" aria-label="Pechat" value={p.cost || ""} onChange={(e) => set({ cost: num(e.target.value) })} />
+                <span className="col-start-2 text-right text-sm font-semibold tabular-nums text-ink-900 sm:col-start-auto">{formatMoney((Number(p.buy) || 0) + (Number(p.cost) || 0))}</span>
               </div>
-            ))}
-          </div>
-          <button type="button" className="mt-3 text-sm font-semibold text-brand-600" onClick={() => setPrints([...prints, { name: "", cost: 0 }])}>
-            + Narsa qo'shish
-          </button>
-        </section>
+            );
+          })}
+        </div>
+        <button type="button" className="mt-3 text-sm font-semibold text-brand-600" onClick={() => setPrints([...prints, { name: "", cost: 0, buy: 0 }])}>
+          + Narsa qo'shish
+        </button>
+      </section>
 
-        <section className="card p-5">
-          <h2 className="mb-1 flex items-center gap-2 font-display text-base font-bold text-ink-900">
-            <TrendingUp className="h-4 w-4" /> Ustama — soniga qarab
-          </h2>
-          <p className="mb-3 text-xs text-ink-500">«Nechtadan boshlab» — shu sondan keyingi qatorgacha shu foiz qo'shiladi.</p>
-          <div className="space-y-2">
-            {tiers.map((t, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
-                <label className="flex items-center gap-2 text-sm text-ink-600">
-                  <input className="input text-right" inputMode="numeric" value={t.min || ""} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, min: num(e.target.value) } : x)))} />
-                  donadan
-                </label>
-                <label className="flex items-center gap-2 text-sm text-ink-600">
-                  +<input className="input text-right" inputMode="numeric" value={t.markup || ""} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, markup: num(e.target.value) } : x)))} />%
-                </label>
-                <button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-rose-600" onClick={() => setTiers(tiers.filter((_, j) => j !== i))} aria-label="O'chirish">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <button type="button" className="text-sm font-semibold text-brand-600" onClick={() => setTiers([...tiers, { min: 0, markup: 0 }])}>
-              + Qator qo'shish
-            </button>
-            <label className="flex items-center gap-2 text-sm text-ink-600">
-              Yaxlitlash
-              <select className="input w-auto py-1.5" value={round} onChange={(e) => setRound(Number(e.target.value))}>
-                <option value={1000}>1 000 so'm</option>
-                <option value={500}>500 so'm</option>
-                <option value={100}>100 so'm</option>
-                <option value={0}>yo'q</option>
-              </select>
-            </label>
-          </div>
-          {!markupSet && <p className="mt-2 text-xs font-semibold text-amber-700">Foizlar hali 0 — menejerda narx tannarxga teng chiqadi. Foizlarni yozing.</p>}
-        </section>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TiersCard title="Ustama — gift box" tiers={tiers} setTiers={setTiers}>
+          <label className="flex items-center gap-2 text-sm text-ink-600">
+            Yaxlitlash
+            <select className="input w-auto py-1.5" value={round} onChange={(e) => setRound(Number(e.target.value))}>
+              <option value={1000}>1 000 so'm</option>
+              <option value={500}>500 so'm</option>
+              <option value={100}>100 so'm</option>
+              <option value={0}>yo'q</option>
+            </select>
+          </label>
+        </TiersCard>
+        <TiersCard title="Ustama — alohida suvenir" tiers={svTiers} setTiers={setSvTiers} />
       </div>
 
       <ExampleCard prints={cleanPrints} tiers={cleanTiers} round={round} example={example} setExample={setExample} />
+      <SouvenirTable prints={cleanPrints} tiers={cleanSv} round={round} />
       <p className="text-xs text-ink-500">O'zgarishlar «Saqlash» bosilganda kuchga kiradi. Oldin olingan buyurtmalarning narxi o'zgarmaydi.</p>
     </div>
   );
@@ -186,6 +180,92 @@ function ExampleCard({ prints, tiers, round, example, setExample }: { prints: Gi
         })}
         {!table.rows.length && <div className="text-amber-700">Ustama qatorlari yo'q — narx chiqmaydi.</div>}
       </div>
+    </section>
+  );
+}
+
+// One markup table: «from N pieces +X%».
+function TiersCard({ title, tiers, setTiers, children }: { title: string; tiers: MarkupTier[]; setTiers: (t: MarkupTier[]) => void; children?: React.ReactNode }) {
+  const set = sortTiers(tiers).some((t) => t.markup > 0);
+  return (
+    <section className="card p-5">
+      <h2 className="mb-1 flex items-center gap-2 font-display text-base font-bold text-ink-900">
+        <TrendingUp className="h-4 w-4" /> {title}
+      </h2>
+      <p className="mb-3 text-xs text-ink-500">«Nechtadan boshlab» — shu sondan keyingi qatorgacha shu foiz qo'shiladi.</p>
+      <div className="space-y-2">
+        {tiers.map((t, i) => (
+          <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-ink-600">
+              <input className="input text-right" inputMode="numeric" value={t.min || ""} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, min: num(e.target.value) } : x)))} />
+              donadan
+            </label>
+            <label className="flex items-center gap-2 text-sm text-ink-600">
+              +<input className="input text-right" inputMode="numeric" value={t.markup || ""} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, markup: num(e.target.value) } : x)))} />%
+            </label>
+            <button type="button" className="rounded-lg p-2 text-ink-400 hover:bg-ink-100 hover:text-rose-600" onClick={() => setTiers(tiers.filter((_, j) => j !== i))} aria-label="O'chirish">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <button type="button" className="text-sm font-semibold text-brand-600" onClick={() => setTiers([...tiers, { min: 0, markup: 0 }])}>
+          + Qator qo'shish
+        </button>
+        {children}
+      </div>
+      {!set && <p className="mt-2 text-xs font-semibold text-amber-700">Foizlar hali 0 — menejerda narx tannarxga teng chiqadi. Foizlarni yozing.</p>}
+    </section>
+  );
+}
+
+// What a manager gets for each souvenir on its own, per quantity tier.
+function SouvenirTable({ prints, tiers, round }: { prints: GiftboxPrint[]; tiers: MarkupTier[]; round: number }) {
+  const table = publicPrices(prints, [], round, tiers);
+  const rows = table.souvenir || [];
+  return (
+    <section className="card p-5">
+      <h2 className="mb-1 flex items-center gap-2 font-display text-base font-bold text-ink-900">
+        <Stamp className="h-4 w-4" /> Alohida suvenir — menejerga chiqadigan narx (logo bilan)
+      </h2>
+      <p className="mb-3 text-xs text-ink-500">Buyurtmada kategoriya «Suvenir» → narsa → soni. Logosiz tanlansa — pechatsiz hisoblanadi.</p>
+      {!rows.length ? (
+        <div className="text-sm text-amber-700">Suvenir ustamasi qatorlari yo'q — narx chiqmaydi.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-ink-500">
+                <th className="py-1.5 pr-3">Narsa</th>
+                <th className="py-1.5 pr-3 text-right">Tannarx</th>
+                {rows.map((r, i) => (
+                  <th key={r.min} className="py-1.5 pr-3 text-right">
+                    {r.min}
+                    {rows[i + 1] ? `–${rows[i + 1].min - 1}` : "+"} dona
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-100">
+              {prints.map((p) => (
+                <tr key={p.name}>
+                  <td className="py-1.5 pr-3 text-ink-800">{p.name}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-ink-500">{formatMoney((Number(p.buy) || 0) + (Number(p.cost) || 0))}</td>
+                  {rows.map((r) => {
+                    const v = souvenirPrice(table, r.min, { name: p.name, logo: true });
+                    return (
+                      <td key={r.min} className="py-1.5 pr-3 text-right font-semibold tabular-nums text-ink-900">
+                        {v === null ? <span className="font-normal text-ink-400">—</span> : formatMoney(v)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

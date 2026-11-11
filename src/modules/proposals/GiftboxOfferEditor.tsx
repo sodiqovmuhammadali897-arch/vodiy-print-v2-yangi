@@ -8,12 +8,13 @@ import { useAuth } from "../../lib/AuthContext";
 import { canGiftbox } from "../../lib/rolePermissions";
 import { offerNote, priceFor, type GiftboxItem, type GiftboxPrices } from "../../lib/giftbox";
 import GiftboxOfferPreview from "./GiftboxOfferPreview";
+import ItemsList from "../giftbox/ItemsList";
 import { exportProposalPdf, exportProposalPng } from "./exportProposal";
 
 // A gift box offer for a customer (the owner's request, 2026-11-10): the
 // manager types the box's name and market price, ticks the items, types the
 // quantity and when it is ready; the price comes from the owner's table
-// («Gift box narxi») and the note writes itself.
+// («Gift box va suvenir narxi») and the note writes itself.
 // Saved as a proposal with `giftbox`, so it sits in the Tijorat taklifi list.
 
 const genNumber = () => {
@@ -22,7 +23,6 @@ const genNumber = () => {
   return `GB-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 };
 const num = (v: string) => Number(String(v).replace(/\D/g, "")) || 0;
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export default function GiftboxOfferEditor() {
   const { id } = useParams();
@@ -110,7 +110,6 @@ export default function GiftboxOfferEditor() {
       };
     });
 
-  const has = (n: string) => g.items.find((i) => same(i.name, n));
   const setItems = (items: GiftboxItem[]) => apply({ items });
 
   const save = async () => {
@@ -176,7 +175,7 @@ export default function GiftboxOfferEditor() {
             <h2 className="flex items-center gap-2 font-display text-base font-bold text-ink-900">
               <Gift className="h-5 w-5 text-violet-600" /> Gift box taklifi
             </h2>
-            <p className="mt-1 text-sm text-ink-500">Mijozga PNG qilib yuboriladi. Narx «Gift box narxi» jadvalidan soniga qarab chiqadi.</p>
+            <p className="mt-1 text-sm text-ink-500">Mijozga PNG qilib yuboriladi. Narx «Gift box va suvenir narxi» jadvalidan soniga qarab chiqadi.</p>
             {canGiftbox(auth, "view") && (
               // The owner: the way to the print prices and markup (managers never see this).
               <Link to="/giftbox" className="mt-3 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
@@ -218,28 +217,11 @@ export default function GiftboxOfferEditor() {
 
               <div className="sm:col-span-2">
                 <label className="label">Ichida nimalar bor (1 box'da)</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {options.map((n) => {
-                    const it = has(n);
-                    return (
-                      <span key={n} className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-sm ${it ? "border-violet-500 bg-surface text-ink-900" : "border-ink-200 text-ink-500"}`}>
-                        <button type="button" onClick={() => setItems(it ? g.items.filter((x) => x !== it) : [...g.items, { name: n, qty: 1 }])}>
-                          {it ? "☑" : "☐"} {n}
-                        </button>
-                        {it && (
-                          <input
-                            className="w-10 rounded border border-ink-200 bg-surface px-1 text-center text-xs"
-                            inputMode="numeric"
-                            aria-label={`${n} soni`}
-                            value={it.qty}
-                            onChange={(e) => setItems(g.items.map((x) => (x === it ? { ...x, qty: Math.max(1, num(e.target.value) || 1) } : x)))}
-                          />
-                        )}
-                      </span>
-                    );
-                  })}
-                  {!options.length && <span className="text-xs text-amber-700">Narsalar ro'yxati bo'sh — rahbar «Gift box narxi»da pechat narxlarini kiritsin.</span>}
-                </div>
+                {options.length ? (
+                  <ItemsList options={options} items={g.items} onChange={setItems} />
+                ) : (
+                  <span className="text-xs text-amber-700">Narsalar ro'yxati bo'sh — rahbar «Gift box va suvenir narxi»da narsalarni kiritsin.</span>
+                )}
               </div>
 
               <div>
@@ -253,11 +235,11 @@ export default function GiftboxOfferEditor() {
 
               <div className="sm:col-span-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-200">
                 {!prices?.rows?.length && !priceManual ? (
-                  <span className="font-semibold text-amber-700">Narx hali sozlanmagan — rahbar «Gift box narxi»da ustamani kiritsin.</span>
+                  <span className="font-semibold text-amber-700">Narx hali sozlanmagan — rahbar «Gift box va suvenir narxi»da ustamani kiritsin.</span>
                 ) : !g.box_cost && !priceManual ? (
                   "Bozordagi narxini yozing — narx o'zi chiqadi."
                 ) : tablePrice === null && !priceManual ? (
-                  <span className="font-semibold text-amber-700">Narx hali sozlanmagan — rahbar «Gift box narxi»da ustamani kiritsin.</span>
+                  <span className="font-semibold text-amber-700">Narx hali sozlanmagan — rahbar «Gift box va suvenir narxi»da ustamani kiritsin.</span>
                 ) : (
                   <>
                     Narx: <b className="text-base">{formatMoney(g.unit_price)}</b> / dona

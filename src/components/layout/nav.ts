@@ -24,7 +24,7 @@ export const navItems = [
   { to: "/warehouse", label: "Ombor", icon: Warehouse, module: "warehouse" as ModuleKey },
   { to: "/finance", label: "Moliya", icon: Wallet, module: "finance" as ModuleKey },
   { to: "/margin", label: "Marja", icon: Percent, module: "finance" as ModuleKey, adminOnly: true, costOnly: true },
-  { to: "/giftbox", label: "Gift box narxi", icon: Gift, module: "giftbox" as ModuleKey, giftbox: true },
+  { to: "/giftbox", label: "Gift box va suvenir narxi", icon: Gift, module: "giftbox" as ModuleKey, giftbox: true },
   { to: "/kpi", label: "KPI", icon: Coins, module: "reports" as ModuleKey, adminOnly: true, costOnly: true },
   { to: "/reports", label: "Hisobot", icon: BarChart3, module: "reports" as ModuleKey },
   { to: "/ai-office", label: "AI Ofis", icon: Bot, module: "reports" as ModuleKey, adminOnly: true },

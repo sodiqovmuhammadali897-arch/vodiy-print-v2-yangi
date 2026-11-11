@@ -69,3 +69,29 @@ describe("offerNote", () => {
     expect(offerNote([])).not.toContain("To'plam");
   });
 });
+
+import { souvenirPrice } from "../src/lib/giftbox";
+describe("item price and souvenirs", () => {
+  const pr = [{ name: "Koja bloknot", cost: 6000, buy: 35000 }, { name: "Ruchka", cost: 800, buy: 3000 }, { name: "Bakal", cost: 10000, buy: 15000 }];
+  const its = [{ name: "Koja bloknot", qty: 1 }, { name: "Ruchka", qty: 1 }, { name: "Bakal", qty: 1 }];
+  const st = [{ min: 1, markup: 50 }, { min: 50, markup: 35 }, { min: 200, markup: 25 }];
+  it("gift box adds what the items cost", () => {
+    expect(unitCost(170000, its, pr)).toBe(239800);
+    const t = publicPrices(pr, [{ min: 10, markup: 30 }], 1000, st);
+    expect(priceFor(t, 15, 170000, its)).toBe(312000); // 239 800 + 30% = 311 740
+  });
+  it("prices a souvenir by its own markup, with or without the logo", () => {
+    const t = publicPrices(pr, [], 1000, st);
+    expect(souvenirPrice(t, 100, { name: "koja bloknot", logo: true })).toBe(56000); // 41 000 + 35% = 55 350
+    expect(souvenirPrice(t, 10, { name: "Koja bloknot", logo: false })).toBe(53000); // 35 000 + 50% = 52 500
+    expect(souvenirPrice(t, 300, { name: "Ruchka", logo: true })).toBe(5000); // 3 800 + 25% = 4 750
+    expect(souvenirPrice(t, 10, { name: "Fleshka", logo: true })).toBeNull();
+    expect(souvenirPrice(publicPrices(pr, [], 1000), 10, { name: "Ruchka", logo: true })).toBeNull();
+  });
+  it("Marja: a souvenir's cost", () => {
+    const look = giftboxCostLookup({ prints: pr, tiers: [], round: 1000 });
+    expect(look({ souvenir: { name: "Koja bloknot", logo: true } })).toEqual([{ min_qty: 1, cost_price: 41000 }]);
+    expect(look({ souvenir: { name: "Koja bloknot", logo: false } })).toEqual([{ min_qty: 1, cost_price: 35000 }]);
+    expect(look({ souvenir: { name: "Nimadir", logo: true } })).toBeNull();
+  });
+});
