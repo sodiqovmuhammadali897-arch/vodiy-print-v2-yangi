@@ -1,0 +1,89 @@
+name: Send a PDF to managers (bot)
+
+# Run by hand, with the owner's approval: sends a file from docs/decks/
+# to the sales managers through the Telegram bot (the same bot staff are
+# linked to). Managers = staff linked to a Managerlar record, plus staff
+# whose first name is in `names`; only those with Telegram linked.
+# apply=no only lists who would get it (first names and a count);
+# apply=yes sends. Prints no token, no chat ids.
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "File in the repo"
+        default: "docs/decks/Vodiy-Print-Yangi-buyurtma.pdf"
+        required: true
+      caption:
+        description: "Message with the file"
+        default: "📘 Yangi buyurtma kiritish — qo'llanma. Iltimos, o'qib chiqing: ERP'da buyurtmani to'g'ri kiritish, gift box, chegirma va to'lov. Savol bo'lsa — rahbarga."
+        required: true
+      names:
+        description: "Extra first names, comma-separated"
+        default: "Muhammadiyor,Nuriddin,Muhammadali,Maryam,Moxlaroy"
+        required: false
+      apply:
+        description: "yes = send, no = only list"
+        default: "no"
+        required: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the file
+        run: test -f "${{ inputs.file }}" && ls -la "${{ inputs.file }}"
+      - name: Copy the file to the server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: ${{ inputs.file }}
+          target: "/tmp/vp-send"
+      - name: Send
+        uses: appleboy/ssh-action@v1
+        env:
+          FILE: ${{ inputs.file }}
+          CAPTION: ${{ inputs.caption }}
+          NAMES: ${{ inputs.names }}
+          APPLY: ${{ inputs.apply }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: FILE,CAPTION,NAMES,APPLY
+          script: |
+            export TELEGRAM_BOT_TOKEN="$(grep '^TELEGRAM_BOT_TOKEN=' /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"
+            export SRC="/tmp/vp-send/$FILE"
+            cat > /tmp/vp-send.js <<'JS'
+            const fs = require("fs");
+            const path = require("path");
+            const admin = require("firebase-admin");
+            const { sendDocument } = require("/opt/meta-webhook/telegram.js");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            // "Muhammaddiyor" and "Muhammadiyor" are the same person.
+            const norm = (s) => String(s || "").toLowerCase().replace(/[^a-zа-яё]/g, "").replace(/(.)\1+/g, "$1");
+            (async () => {
+              if (!process.env.TELEGRAM_BOT_TOKEN) throw new Error("bot token not found in .env");
+              const buffer = fs.readFileSync(process.env.SRC);
+              const names = new Set((process.env.NAMES || "").split(",").map(norm).filter(Boolean));
+              const staff = (await db.collection("staff").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+              const to = staff.filter((s) => s.telegram_chat_id && (s.report_manager_id || names.has(norm(String(s.full_name || "").split(/\s+/)[0]))));
+              const first = (s) => String(s.full_name || "?").split(/\s+/)[0];
+              console.log(`recipients (${to.length}):`, to.map(first).join(", "));
+              const missing = staff.filter((s) => !s.telegram_chat_id && (s.report_manager_id || names.has(norm(String(s.full_name || "").split(/\s+/)[0]))));
+              if (missing.length) console.log(`no Telegram linked (${missing.length}):`, missing.map(first).join(", "));
+              if (process.env.APPLY !== "yes") return console.log("apply=no — nothing sent");
+              let ok = 0;
+              for (const s of to) {
+                const r = await sendDocument({ chatId: s.telegram_chat_id, buffer, filename: path.basename(process.env.SRC), caption: process.env.CAPTION || "" });
+                if (r && r.ok) ok++; else console.log("failed:", first(s));
+              }
+              console.log(`sent ${ok} / ${to.length}`);
+            })().then(() => process.exit(0)).catch((e) => { console.error(e.message); process.exit(1); });
+            JS
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-send.js
+            rm -rf /tmp/vp-send /tmp/vp-send.js
