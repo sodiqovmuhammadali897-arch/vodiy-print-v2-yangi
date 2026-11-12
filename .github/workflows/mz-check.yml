@@ -54,7 +54,10 @@ jobs:
                 const s = staff.find((x) => x.id === a || String(x.moizvonki_email || "").toLowerCase() === a);
                 console.log(`${mask(a)} | ${n} | ${s ? s.full_name || "(no name)" : "— not linked"}`);
               }
-              // From the webhook (calls.mz_account) — works without the API key.
+              console.log("== ERP staff with a Mois Zvonki account");
+              for (const x of staff.filter((x) => x.moizvonki_email)) console.log(`${x.full_name || "(no name)"} → ${mask(x.moizvonki_email)}${x.moizvonki_email.toLowerCase() === x.id ? " (same as login)" : ""}${x.report_manager_id ? "" : " · not linked to Managerlar"}`);
+              if (!staff.some((x) => x.moizvonki_email)) console.log("— none");
+                            // From the webhook (calls.mz_account) — works without the API key.
               const since = new Date(Date.now() - days * 86400e3).toISOString();
               const calls = (await db.collection("calls").where("created_at", ">=", since).get()).docs.map((d) => d.data());
               const acc = {};
