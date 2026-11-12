@@ -1,0 +1,56 @@
+name: Calls check (read only)
+
+# Run by hand: is Mois Zvonki sending calls to the server, and how many of
+# them match an ERP lead or customer. Counts only — no phone numbers, no
+# names. Also says which settings are set (yes/no), never their values.
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Days back"
+        default: "7"
+        required: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Count calls
+        uses: appleboy/ssh-action@v1
+        env:
+          DAYS: ${{ inputs.days }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: DAYS
+          command_timeout: 5m
+          script: |
+            for k in MOIZVONKI_DOMAIN MOIZVONKI_USER_EMAIL MOIZVONKI_API_KEY MOIZVONKI_WEBHOOK_TOKEN ERP_LEADS; do
+              if grep -q "^$k=." /opt/meta-webhook/.env; then echo "$k: set"; else echo "$k: not set"; fi
+            done
+            echo "server log, last 3 days:"
+            echo "  webhook subscribed lines: $(journalctl -u meta-webhook --since '3 days ago' --no-pager 2>/dev/null | grep -c 'call.finish webhook subscribed')"
+            echo "  subscribe failed lines: $(journalctl -u meta-webhook --since '3 days ago' --no-pager 2>/dev/null | grep -c 'webhook subscribe failed')"
+            echo "  call logged lines: $(journalctl -u meta-webhook --since '3 days ago' --no-pager 2>/dev/null | grep -c 'Call logged')"
+            cat > /tmp/vp-calls.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            (async () => {
+              const days = Number(process.env.DAYS) || 7;
+              const since = new Date(Date.now() - days * 86400e3).toISOString();
+              const all = (await db.collection("calls").get()).docs.map((d) => d.data());
+              const rows = all.filter((c) => String(c.created_at) >= since);
+              const last = all.map((c) => c.created_at).sort().pop();
+              const n = (f) => rows.filter(f).length;
+              console.log(`calls total: ${all.length}; last: ${last || "—"}`);
+              console.log(`last ${days} days: ${rows.length} (in ${n((c) => c.direction === "in")}, out ${n((c) => c.direction === "out")}, answered ${n((c) => c.answered)}, with recording ${n((c) => c.recording_url)})`);
+              console.log(`matched: lead ${n((c) => c.lead_id)}, customer ${n((c) => c.customer_id)}, none ${n((c) => !c.lead_id && !c.customer_id)}`);
+              const leads = (await db.collection("leads").get()).docs.map((d) => d.data());
+              console.log(`leads in ERP: ${leads.length}; by status: ${JSON.stringify(leads.reduce((m, l) => ((m[l.status] = (m[l.status] || 0) + 1), m), {}))}`);
+              process.exit(0);
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+            JS
+            node /tmp/vp-calls.js; rm -f /tmp/vp-calls.js
