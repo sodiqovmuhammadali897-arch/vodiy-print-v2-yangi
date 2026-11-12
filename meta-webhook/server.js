@@ -93,7 +93,7 @@ const recall = process.env.TELEGRAM_BOT_TOKEN ? require("./recall").create(db) :
 // Qarz undirish: each sales manager's debts, daily (debts.js).
 const debts = recall ? require("./debts").create(db, { team: recall.managers, admins: recall.admins }) : null;
 const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm);
-const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
+const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead, startLead } = require("./leads");
 const { pickOpenLead, callStaffEmail, dueIn, needsCallback, normalizePhone: normalizeCallPhone } = require("./callLeads");
 // Calls open ERP leads (the ERP's CRM, phase 2) on their own switch, so the
 // Meta form and Instagram leads keep going to the managers as before.
@@ -160,7 +160,7 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
   ]);
 
   const source = lead.platform === "ig" ? "Instagram Target" : "Facebook Lead Ads";
-  const { lead_number } = await createLead(db, {
+  const created = await createLead(db, {
     full_name: fullName,
     phone,
     telegram,
@@ -174,6 +174,8 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
     form_name: formName,
     form_id: formId || "",
   });
+  const { lead_number } = created;
+  await startLead(db, { id: created.id, full_name: fullName }, { text: `Lid ochildi — ${source}${formName ? ` («${formName}»)` : ""}`, actor: "Meta forma" });
 
   if (campaignName) {
     await db
@@ -317,6 +319,7 @@ const handleCallFinish = async (event) => {
     const created = await createLead(db, fields, "telefon");
     lead = { ...fields, ...created, status: "new" };
     await db.collection("lead_activities").add({ lead_id: lead.id, text: `Lid ochildi — kiruvchi qo'ng'iroqdan${customer ? " (avvalgi mijoz)" : ""}`, actor_email: actor.email, actor_name: actor.name, created_at: now });
+    if (answered) await startLead(db, lead, { text: "Zadacha qo'yildi: qayta aloqa — ertaga", minutes: 24 * 60, type: "follow_up", note: "Qo'ng'iroqdan keyingi qadam: narx/maket yuborish yoki qayta qo'ng'iroq", actor: "Mois Zvonki" });
     console.log(`Call created new lead: ${created.lead_number}`);
   }
 

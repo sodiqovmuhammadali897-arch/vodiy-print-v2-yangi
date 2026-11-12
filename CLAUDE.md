@@ -354,8 +354,17 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     `calls-check.yml` and `mz-check.yml` print them (masked). The Mois
     Zvonki API key on the server is rejected («Username or password is
     invalid», 2026-11-12) — the webhook still arrives, only API calls fail.
+  - **Inbound leads (2026-11-12, «lidlarni tushadigan qilish»):**
+    `ERP_LEADS` now defaults to on (`ERP_LEADS=off` stops it): the Meta form
+    webhook, the Instagram agent and the site form (`siteLeads.js`
+    `toErpLead`, touches the open lead or opens a new one, source «Sayt»)
+    open ERP leads; managers' Telegram messages are unchanged. Every new
+    lead gets a first task via `leads.js startLead` (call in 15 min; a lead
+    from an answered call gets «Qayta aloqa» tomorrow, a missed one the
+    30-min call-back). New leads are unassigned unless a call's Mois Zvonki
+    account is linked — the owner assigns them on the lead page.
   - Not yet: SMS, bot reminders for tasks, task KPI from ERP, importing
-    amoCRM leads, outgoing calls opening leads.
+    amoCRM leads, outgoing calls opening leads, auto-distribution.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

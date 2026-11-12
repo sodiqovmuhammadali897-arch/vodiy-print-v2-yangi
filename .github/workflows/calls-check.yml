@@ -55,7 +55,9 @@ jobs:
               console.log(`lead tasks: open ${tasks.filter((t) => t.status === "open").length}, from missed calls ${tasks.filter((t) => String(t.note || "").startsWith("Javobsiz")).length}`);
               const leads = (await db.collection("leads").get()).docs.map((d) => d.data());
               console.log(`leads in ERP: ${leads.length}; by status: ${JSON.stringify(leads.reduce((m, l) => ((m[l.status] = (m[l.status] || 0) + 1), m), {}))}; since 2026-11-12: ${leads.filter((l) => String(l.created_at) >= "2026-11-12").length} (from calls ${leads.filter((l) => String(l.created_at) >= "2026-11-12" && l.source === "Telefon").length}, unassigned ${leads.filter((l) => String(l.created_at) >= "2026-11-12" && !l.assigned_to_email).length})`);
-              process.exit(0);
+              const fresh = leads.filter((l) => String(l.created_at) >= "2026-11-12");
+              console.log(`new ERP leads by source: ${JSON.stringify(fresh.reduce((m, l) => ((m[l.source || "—"] = (m[l.source || "—"] || 0) + 1), m), {}))}`);
+                            process.exit(0);
             })().catch((e) => { console.error(e.message); process.exit(1); });
             JS
             node /tmp/vp-calls.js; rm -f /tmp/vp-calls.js

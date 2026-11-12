@@ -17,7 +17,7 @@
 const { telegram } = require("./telegram");
 const { staffFromRequest } = require("./auth");
 const { emitEvent, clip } = require("./shared");
-const { ERP_LEADS_ON, findByPhone, createLead } = require("./leads");
+const { ERP_LEADS_ON, findByPhone, createLead, startLead } = require("./leads");
 
 const DEFAULT_TEXTS = {
   greeting:
@@ -192,13 +192,7 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
         instagram_id: String(igsid),
       });
       isNew = true;
-      await db.collection("lead_activities").add({
-        lead_id: lead.id,
-        text: `📸 ${source} orqali murojaat — Instagram agent lid yaratdi`,
-        actor_email: "system",
-        actor_name: "Instagram agent",
-        created_at: now,
-      });
+      await startLead(db, { id: lead.id, full_name: display }, { text: `📸 ${source} orqali murojaat — Instagram agent lid yaratdi`, actor: "Instagram agent" });
     }
 
     const reply = render(cfg.texts.thanks, { name: name || convo.name || "", phone });

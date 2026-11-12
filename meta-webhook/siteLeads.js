@@ -6,6 +6,33 @@
 const crypto = require("crypto");
 const { telegram } = require("./telegram");
 const push = require("./push");
+const { ERP_LEADS_ON, createLead, startLead } = require("./leads");
+const { pickOpenLead } = require("./callLeads");
+
+// The site form also opens an ERP lead (the ERP's CRM), or touches the
+// caller's open one; the Telegram message stays as it was.
+const toErpLead = async (db, l, siteId) => {
+  const leads = (await db.collection("leads").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const open = pickOpenLead(leads, l.phone);
+  const now = new Date().toISOString();
+  const what = `${l.product}${l.qty ? ` · ${l.qty}` : ""}${l.note ? ` — ${l.note}` : ""}`;
+  if (open) {
+    await db.collection("lead_activities").add({ lead_id: open.id, text: `🌐 Saytdan yana ariza: ${what}`, actor_email: "system", actor_name: "Sayt", created_at: now });
+    await db.collection("leads").doc(open.id).update({ updated_at: now });
+    return;
+  }
+  const created = await createLead(db, {
+    full_name: l.name,
+    phone: l.phone,
+    source: "Sayt",
+    interested_product_name: l.product,
+    product_types: l.product && l.product !== "Boshqa" ? [l.product] : [],
+    note: [l.qty ? `Soni: ${l.qty}` : "", l.note || "", `Sayt arizasi: ${siteId}`].filter(Boolean).join("\n"),
+    customer_type: "",
+    tags: [],
+  });
+  await startLead(db, { id: created.id, full_name: l.name }, { text: `🌐 Saytdan ariza — ${what}`, actor: "Sayt" });
+};
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const MAX_FILE = 8 * 1024 * 1024;
@@ -92,6 +119,7 @@ const create = (db, { route = null } = {}) => {
         const ref = db.collection("site_leads").doc();
         await ref.set({ ...out.lead, has_file: Boolean(out.file), file_name: out.file ? out.file.name : null, status: "new", created_at: new Date().toISOString() });
         res.json({ ok: true });
+        if (ERP_LEADS_ON) await toErpLead(db, out.lead, ref.id).catch((e) => console.error("Site lead → ERP lead failed", e.message));
         await push.toAdmins("admin", leadText(out.lead, ref.id), "/");
         // Telegram after answering: the visitor doesn't wait on it.
         if (!BOT_TOKEN || !route) return;

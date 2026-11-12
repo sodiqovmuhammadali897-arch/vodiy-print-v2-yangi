@@ -66,10 +66,36 @@ const blankLead = (now) => ({
   updated_at: now,
 });
 
-// ERP leads are off while sales run in amoCRM (Sotuv bo'limi shows the
-// amoCRM analysis only): the Meta form webhook, the Instagram agent and
-// Mois Zvonki calls create no ERP leads. ERP_LEADS=on brings them back.
-const ERP_LEADS_ON = process.env.ERP_LEADS === "on";
+// The ERP's CRM (2026-11-12): the Meta form webhook, the Instagram agent
+// and the site form open ERP leads again (managers still get their
+// Telegram messages as before). ERP_LEADS=off stops it.
+const ERP_LEADS_ON = process.env.ERP_LEADS !== "off";
+
+// Tashkent date and HH:MM `minutes` from now.
+const dueIn = (minutes, now = Date.now()) => {
+  const t = new Date(now + minutes * 60e3 + 5 * 3600e3).toISOString();
+  return { due_date: t.slice(0, 10), due_time: t.slice(11, 16) };
+};
+
+// Every new lead gets its first task — a call within `minutes` — and a
+// timeline line saying where it came from («har bir lid javobsiz qolmasin»).
+const startLead = async (db, lead, { text, minutes = 15, type = "call", note = "Yangi lid — qo'ng'iroq qiling", actor = "Tizim" }) => {
+  const now = new Date().toISOString();
+  await db.collection("lead_activities").add({ lead_id: lead.id, text, actor_email: "system", actor_name: actor, created_at: now });
+  const due = dueIn(minutes);
+  await db.collection("lead_tasks").add({
+    lead_id: lead.id,
+    lead_name: lead.full_name || "",
+    type,
+    ...due,
+    assigned_to_email: lead.assigned_to_email || "",
+    assigned_to_name: lead.assigned_to_name || "",
+    note,
+    status: "open",
+    completed_at: null,
+    created_at: now,
+  });
+};
 
 // Creates a lead with the next LID number and registers its source so it
 // shows up in the Sotuv bo'limi filters. Returns { id, lead_number }.
@@ -83,4 +109,4 @@ const createLead = async (db, fields, sourceId = fields.source ? slugify(fields.
   return { id: ref.id, lead_number };
 };
 
-module.exports = { ERP_LEADS_ON, slugify, normalizePhone, nextLeadNumber, findByPhone, blankLead, createLead };
+module.exports = { ERP_LEADS_ON, slugify, normalizePhone, nextLeadNumber, findByPhone, blankLead, createLead, startLead, dueIn };
