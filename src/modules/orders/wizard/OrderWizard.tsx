@@ -15,6 +15,8 @@ import type { Brand, Customer, Manager, Order, OrderFile, OrderProduct, OrderPay
 import { ORDER_STATUSES } from "../../../lib/orderConstants";
 import { saveOrder } from "../../../lib/orderService";
 import { splitOrder } from "../../../lib/orderSplit";
+import { nextOrderNumber } from "../../../lib/numbering";
+import { orderNumberRange, rangeLabel } from "../../../lib/orderNumbers";
 import type { OrderPayload, WizardPayment, WizardProduct } from "../../../lib/orderService";
 import { computeOrderTotals, discountShare } from "../../../lib/orderCalculations";
 import { formatDateTime, formatMoney } from "../../../lib/format";
@@ -85,6 +87,8 @@ export default function OrderWizard() {
   const { can, user, staff } = useAuth();
 
   const [step, setStep] = useState(0);
+  // The next free VP number, fetched on «Tekshirish» for a new order.
+  const [nextNumber, setNextNumber] = useState("");
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -409,6 +413,19 @@ export default function OrderWizard() {
     navigate(`/orders/${res.id}`, { replace: true });
   };
 
+  useEffect(() => {
+    if (!isNew || step !== STEPS.length - 1) return;
+    let live = true;
+    void nextOrderNumber()
+      .then((n) => live && setNextNumber(n))
+      .catch(() => live && setNextNumber(""));
+    return () => {
+      live = false;
+    };
+  }, [isNew, step]);
+  const activeCount = products.filter((p) => p.product_name.trim() || p.quantity > 0).length;
+  const upcoming = isNew ? orderNumberRange(nextNumber, Math.max(1, activeCount)) : [];
+
   const goNext = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
   const goPrev = () => setStep((s) => Math.max(0, s - 1));
 
@@ -524,6 +541,7 @@ export default function OrderWizard() {
       {step === 2 && (
         <ReviewStep
           orderNumber={payload.order_number || ""}
+          upcoming={upcoming}
           payload={payload}
           customer={linkedCustomer}
           brand={linkedBrand}
@@ -568,7 +586,10 @@ export default function OrderWizard() {
       {isNew && products.filter((p) => p.product_name.trim() || p.quantity > 0).length > 1 && (
         <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm text-brand-800">
           Har bir mahsulot alohida buyurtma bo'lib saqlanadi —{" "}
-          <b>{products.filter((p) => p.product_name.trim() || p.quantity > 0).length} ta buyurtma</b>, har biri o'z raqami bilan, mijoz bitta.
+          <b>
+            {activeCount} ta buyurtma{upcoming.length > 1 ? `: ${rangeLabel(upcoming)}` : ""}
+          </b>
+          , har biri o'z raqami bilan, mijoz bitta.
           Chegirma va to'lov summalarga qarab bo'linadi, yetkazish birinchisiga yoziladi.
         </div>
       )}

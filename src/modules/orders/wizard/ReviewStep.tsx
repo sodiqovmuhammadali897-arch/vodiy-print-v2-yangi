@@ -6,6 +6,7 @@ import type {
 } from "../../../lib/orderService";
 import type { OrderTotals } from "../../../lib/orderCalculations";
 import { formatMoney } from "../../../lib/format";
+import { rangeLabel } from "../../../lib/orderNumbers";
 import ProductionCompanyBadges from "../../../components/ui/ProductionCompanyBadges";
 import CustomerTypeBadge from "../../../components/ui/CustomerTypeBadge";
 import StatusBadge from "../../../components/ui/StatusBadge";
@@ -13,6 +14,8 @@ import type { OrderStatus } from "../../../lib/types";
 
 type Props = {
   orderNumber: string;
+  // A new order: the VP numbers it will get, one per product (lib/orderNumbers).
+  upcoming?: string[];
   payload: OrderPayload;
   customer: Customer | null;
   brand: Brand | null;
@@ -23,6 +26,7 @@ type Props = {
 
 export default function ReviewStep({
   orderNumber,
+  upcoming = [],
   payload,
   customer,
   brand,
@@ -41,10 +45,13 @@ export default function ReviewStep({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-xs font-semibold uppercase text-ink-500">
-              Buyurtma
+              {orderNumber ? "Buyurtma" : activeProducts.length > 1 ? "Buyurtmalar (saqlanganda shu raqamlar beriladi)" : "Buyurtma (saqlanganda shu raqam beriladi)"}
             </div>
             <div className="font-display text-2xl font-extrabold text-brand-700">
-              {orderNumber || "…"}
+              {orderNumber || rangeLabel(upcoming) || "…"}
+              {!orderNumber && upcoming.length > 1 && (
+                <span className="ml-2 align-middle text-sm font-semibold text-ink-500">{upcoming.length} ta buyurtma · mijoz bitta</span>
+              )}
             </div>
             <div className="mt-1 text-sm text-ink-700">
               {payload.title || "-"}
@@ -122,6 +129,7 @@ export default function ReviewStep({
               <thead className="bg-ink-50 text-xs font-semibold uppercase text-ink-500">
                 <tr>
                   <th className="px-3 py-2 text-left">#</th>
+                  {upcoming.length > 0 && <th className="px-3 py-2 text-left">Buyurtma ID</th>}
                   <th className="px-3 py-2 text-left">Mahsulot</th>
                   <th className="px-3 py-2 text-left">Fayllar</th>
                   <th className="px-3 py-2 text-right">Miqdor</th>
@@ -136,6 +144,13 @@ export default function ReviewStep({
                   return (
                     <tr key={i} className="border-t border-ink-100">
                       <td className="px-3 py-2 text-ink-500">{i + 1}</td>
+                      {upcoming.length > 0 && (
+                        <td className="px-3 py-2">
+                          <span className="inline-block whitespace-nowrap rounded-lg border border-brand-300 bg-brand-50 px-2 py-0.5 text-xs font-extrabold text-brand-700 dark:border-brand-700 dark:bg-brand-900/30 dark:text-brand-200">
+                            {upcoming[i] || "…"}
+                          </span>
+                        </td>
+                      )}
                       <td className="px-3 py-2">
                         <div className="font-medium text-ink-900">
                           {p.product_name || "-"}
