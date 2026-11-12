@@ -68,8 +68,11 @@ jobs:
               console.log("== pipelines");
               for (const p of (pipes && pipes._embedded && pipes._embedded.pipelines) || []) console.log(`${p.name}: ${((p._embedded && p._embedded.statuses) || []).map((s) => s.name).join(" → ")}`);
               console.log("== lead fields");
-              const lf = []; await all("/api/v4/leads/custom_fields", "custom_fields", (f) => lf.push(`${f.name} (${f.type})`));
+              const lf = []; const en = [];
+              await all("/api/v4/leads/custom_fields", "custom_fields", (f) => { lf.push(`${f.name} (${f.type})`); if (f.enums && f.enums.length) en.push(`${f.name} [${f.id}]: ${f.enums.map((e) => e.value).join(" / ")}`); });
               console.log(lf.join(" | ") || "—");
+              console.log("== lead field options");
+              for (const l of en) console.log(l);
               console.log("== contact fields");
               const cf = []; await all("/api/v4/contacts/custom_fields", "custom_fields", (f) => cf.push(`${f.name} (${f.type})`));
               console.log(cf.join(" | ") || "—");
