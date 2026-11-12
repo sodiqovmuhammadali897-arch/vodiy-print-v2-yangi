@@ -41,7 +41,8 @@ jobs:
               const days = Number(process.env.DAYS) || 2;
               const to = Math.floor(Date.now() / 1000), from = to - days * 86400;
               const res = await api("calls.list", { from_date: from, to_date: to, supervised: 1, max_results: 500 });
-              const list = res.results || res.calls || [];
+              console.log(`response keys: ${Object.keys(res).join(", ")}`);
+              const list = Array.isArray(res) ? res : res.results || res.calls || res.data || [];
               console.log(`calls.list: ${list.length} calls${res.error ? " error: " + JSON.stringify(res.error) : ""}`);
               if (list[0]) console.log(`call field names: ${Object.keys(list[0]).sort().join(", ")}`);
               const staff = (await db.collection("staff").get()).docs.map((d) => ({ id: d.id.toLowerCase(), ...d.data() }));
