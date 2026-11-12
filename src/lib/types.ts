@@ -725,7 +725,9 @@ export type WarehouseTransaction = {
 // writes straight to the linked Order instead.
 export type LeadStatus =
   | "new"
+  | "accepted" // «Qabul qilindi» (CRM, 2026-11-12)
   | "info_given"
+  | "offer" // «Taklif yuborildi» (CRM, 2026-11-12)
   | "telegram"
   | "advance"
   | "design"
@@ -780,6 +782,14 @@ export type Lead = {
   converted_order_id: string | null;
   created_at: string;
   updated_at: string;
+  // amoCRM's lead fields (lib/crm.ts), added with the ERP's own CRM.
+  customer_type?: string;
+  order_volume?: string;
+  payment_type?: string;
+  product_types?: string[];
+  ready_date?: string | null;
+  address?: string;
+  tags?: string[];
 };
 
 export type LeadTaskType =
@@ -811,6 +821,8 @@ export type LeadTask = {
   status: LeadTaskStatus;
   completed_at: string | null;
   created_at: string;
+  // What came of it — required when a task is done (CRM, 2026-11-12).
+  result?: string;
 };
 
 // Auto-written, never edited by hand — the lead's "Faoliyat" timeline.

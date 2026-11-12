@@ -4,6 +4,7 @@ import AmoAnalyticsView from "./AmoAnalyticsView";
 import LostDeals from "./LostDeals";
 import SalesControl from "./SalesControl";
 import SalesFunnel from "./SalesFunnel";
+import LeadsBoard from "./crm/LeadsBoard";
 
 // Sotuv bo'limi: leads are worked in amoCRM, the ERP shows the numbers.
 // Admins open on «Nazorat» — every manager's day on one page
@@ -13,15 +14,39 @@ export default function SalesPipeline() {
   const { isAdmin, user } = useAuth();
   const [params, setParams] = useSearchParams();
   const amo = <AmoAnalyticsView isAdmin={isAdmin} email={user?.email?.toLowerCase() || ""} />;
-  if (!isAdmin) return amo;
   const v = params.get("v");
-  const view = v === "amo" || v === "voronka" || v === "yutqazilgan" ? v : "control";
+  // «Lidlar» — the ERP's own CRM (crm/*), next to amoCRM while both run.
+  if (!isAdmin)
+    return (
+      <div className="space-y-5">
+        <div className="inline-flex rounded-xl border border-ink-200 bg-surface p-1">
+          {(
+            [
+              ["amo", "amoCRM"],
+              ["lidlar", "Lidlar (ERP)"],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setParams(k === "amo" ? {} : { v: k }, { replace: true })}
+              className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${(v === "lidlar" ? "lidlar" : "amo") === k ? "bg-brand-600 text-white shadow-sm" : "text-ink-500 hover:text-ink-900"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {v === "lidlar" ? <LeadsBoard /> : amo}
+      </div>
+    );
+  const view = v === "amo" || v === "voronka" || v === "yutqazilgan" || v === "lidlar" ? v : "control";
   return (
     <div className="space-y-5">
       <div className="inline-flex rounded-xl border border-ink-200 bg-surface p-1">
         {(
           [
             ["control", "Nazorat"],
+            ["lidlar", "Lidlar (ERP)"],
             ["voronka", "Voronka"],
             ["yutqazilgan", "Yutqazilganlar"],
             ["amo", "amoCRM tahlil"],
@@ -37,7 +62,7 @@ export default function SalesPipeline() {
           </button>
         ))}
       </div>
-      {view === "control" ? <SalesControl /> : view === "voronka" ? <SalesFunnel /> : view === "yutqazilgan" ? <LostDeals /> : amo}
+      {view === "control" ? <SalesControl /> : view === "lidlar" ? <LeadsBoard /> : view === "voronka" ? <SalesFunnel /> : view === "yutqazilgan" ? <LostDeals /> : amo}
     </div>
   );
 }

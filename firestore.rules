@@ -542,8 +542,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Everyone in sales sees every lead (the board, duplicate phones,
+    // LID numbers — like amoCRM); a manager changes only their own.
     match /leads/{id} {
-      allow read: if isAdmin() || (can('leads', 'view') && resource.data.assigned_to_email == email());
+      allow read: if isAdmin() || can('leads', 'view');
       allow create: if can('leads', 'edit');
       allow update: if isAdmin() || (can('leads', 'edit') && resource.data.assigned_to_email == email());
       allow delete: if isAdmin();

@@ -6,6 +6,7 @@ import { lazy } from "react";
 // does not wait for code.
 const loaders = {
   SalesPipeline: () => import("./modules/leads/SalesPipeline"),
+  LeadPage: () => import("./modules/leads/crm/LeadPage"),
   AdsPage: () => import("./modules/ads/AdsPage"),
   ContentPage: () => import("./modules/content/ContentPage"),
   Orders: () => import("./modules/orders/Orders"),

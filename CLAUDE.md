@@ -320,6 +320,23 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     quantity, «Tayyor bo'ladi» typed by hand, optional valid-until; the
     note writes itself (`offerNote`). Saved in `proposals` with `giftbox`;
     PNG/PDF like the proposal. No photo (owner: not needed).
+- **ERP CRM, phase 1 — built 2026-11-12** (Sotuv bo'limi → «Lidlar (ERP)»,
+  `?v=lidlar`; lead page `/leads/:id`; `src/modules/leads/crm/*`, rules in
+  `src/lib/crm.ts`, writes in `src/lib/crmService.ts`). Runs **next to
+  amoCRM** until the owner switches. Uses the first version's collections
+  `leads` (+ new fields customer_type, order_volume, payment_type,
+  product_types, ready_date, address, tags; statuses `accepted`, `offer`),
+  `lead_tasks` (+ `result`, required when done) and `lead_activities`.
+  - Board columns = amoCRM stages; up to «Taklif yuborildi» the lead's own
+    status, from «Dizayn / avans» the converted order's status
+    (`leadConversion` makes customer + draft order). Lost needs a reason
+    (amoCRM's «Ёпилиш сабаби» list, `CRM_LOST_REASONS`).
+  - Field options are amoCRM's (amo-audit.yml «lead field options»).
+  - Every staff with leads view sees all leads (rules changed); a manager
+    edits only their own; tasks: own, admins all.
+  - Not yet: Mois Zvonki calls/SMS into the timeline and auto-leads
+    (server code exists behind `ERP_LEADS=on`), bot reminders for tasks,
+    task KPI from ERP, importing amoCRM leads.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
