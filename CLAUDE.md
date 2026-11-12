@@ -347,8 +347,13 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     call adds a «call back» task 30 min on. Switch: `ERP_CALL_LEADS=off`
     (separate from `ERP_LEADS`, which still keeps Meta/Instagram leads out
     of the ERP). Who took the call: read from the event if it carries an
-    e-mail (`callStaffEmail`) — unknown yet; `calls.event_keys` records the
-    field names; `calls-check.yml` prints them.
+    e-mail (`callStaffEmail`), matched to the staff login or the staff's
+    «Mois Zvonki akkaunti» (`staff.moizvonki_email`, Xodimlar form). The
+    owner says 3 manager numbers are on Mois Zvonki with 3 gmail accounts.
+    `calls.event_keys` / `calls.mz_account` record what arrives;
+    `calls-check.yml` and `mz-check.yml` print them (masked). The Mois
+    Zvonki API key on the server is rejected («Username or password is
+    invalid», 2026-11-12) — the webhook still arrives, only API calls fail.
   - Not yet: SMS, bot reminders for tasks, task KPI from ERP, importing
     amoCRM leads, outgoing calls opening leads.
 - **Still to build for sales control:** weekly ranking.

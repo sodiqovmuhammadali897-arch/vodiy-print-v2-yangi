@@ -289,9 +289,15 @@ const handleCallFinish = async (event) => {
 
   // Who took or made the call, when Mois Zvonki says so.
   const staffEmail = callStaffEmail(event);
-  const staffDoc = staffEmail ? await db.collection("staff").doc(staffEmail).get() : null;
-  const staffName = staffDoc && staffDoc.exists ? staffDoc.data().full_name || staffEmail : "";
-  const actor = { email: staffName ? staffEmail : "system", name: staffName || "Mois Zvonki" };
+  // The account is the ERP login, or the staff's «Mois Zvonki akkaunti».
+  let staffDoc = staffEmail ? await db.collection("staff").doc(staffEmail).get() : null;
+  if (staffEmail && !(staffDoc && staffDoc.exists)) {
+    const q = await db.collection("staff").where("moizvonki_email", "==", staffEmail).limit(1).get();
+    staffDoc = q.empty ? null : q.docs[0];
+  }
+  const staffLogin = staffDoc && staffDoc.exists ? staffDoc.id : "";
+  const staffName = staffLogin ? staffDoc.data().full_name || staffLogin : "";
+  const actor = { email: staffName ? staffLogin : "system", name: staffName || "Mois Zvonki" };
 
   // An incoming call with no open lead is a new enquiry — a new lead
   // (a repeat customer too), given to whoever took the call.
@@ -303,7 +309,7 @@ const handleCallFinish = async (event) => {
       phone: clientNumber || "",
       source: "Telefon",
       customer_type: customer ? "Doimiy mijoz" : "Yangi mijoz",
-      assigned_to_email: staffName ? staffEmail : "",
+      assigned_to_email: staffLogin,
       assigned_to_name: staffName,
       product_types: [],
       tags: [],
@@ -326,7 +332,9 @@ const handleCallFinish = async (event) => {
     start_time: startTime ? new Date(startTime * 1000).toISOString() : null,
     answer_time: answerTime ? new Date(answerTime * 1000).toISOString() : null,
     end_time: endTime ? new Date(endTime * 1000).toISOString() : null,
-    staff_email: staffName ? staffEmail : "",
+    staff_email: staffLogin,
+    // Which Mois Zvonki account it was, matched or not — to link the rest.
+    mz_account: staffEmail,
     // The event's field names (no values) — to see which one names the employee.
     event_keys: Object.keys(event || {}).sort(),
     created_at: now,
@@ -347,7 +355,7 @@ const handleCallFinish = async (event) => {
     });
     const patch = { last_contact_at: now, updated_at: now };
     // Nobody's lead yet: it goes to whoever took the call.
-    if (!lead.assigned_to_email && staffName) Object.assign(patch, { assigned_to_email: staffEmail, assigned_to_name: staffName });
+    if (!lead.assigned_to_email && staffLogin) Object.assign(patch, { assigned_to_email: staffLogin, assigned_to_name: staffName });
     await db.collection("leads").doc(lead.id).update(patch);
 
     // A missed incoming call: a call-back task in 30 minutes.

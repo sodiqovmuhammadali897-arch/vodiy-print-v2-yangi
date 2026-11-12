@@ -195,6 +195,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
   const [notify, setNotify] = useState(true);
   const [botAsk, setBotAsk] = useState(false);
   const [amoUserId, setAmoUserId] = useState("");
+  const [mzEmail, setMzEmail] = useState("");
   const [amoUsers, setAmoUsers] = useState<{ id: number; name: string }[]>([]);
   useEffect(() => {
     if (!open) return;
@@ -220,6 +221,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       setNotify(staff.attendance_notify !== false);
       setBotAsk(staff.bot_ask === true);
       setAmoUserId(staff.amo_user_id ? String(staff.amo_user_id) : "");
+      setMzEmail(staff.moizvonki_email || "");
     } else {
       setEmail("");
       setFullName("");
@@ -231,6 +233,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       setNotify(true);
       setBotAsk(false);
       setAmoUserId("");
+      setMzEmail("");
     }
     setError(null);
   }, [staff, open]);
@@ -268,6 +271,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
         attendance_notify: notify,
         bot_ask: botAsk,
         amo_user_id: amoUserId ? Number(amoUserId) : null,
+        moizvonki_email: mzEmail.trim().toLowerCase(),
       });
       setSaving(false);
       onSaved();
@@ -370,6 +374,11 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
             <p className="mt-1 text-xs text-ink-500">Sotuv bo'limi → amoCRM tahlil oynasida shu xodimga faqat o'z raqamlari ko'rinadi.</p>
           </div>
         )}
+        <div>
+          <label className="label">Mois Zvonki akkaunti (e-pochta)</label>
+          <input className="input" type="email" placeholder="menejer@gmail.com" value={mzEmail} onChange={(e) => setMzEmail(e.target.value)} />
+          <p className="mt-1 text-xs text-ink-500">Shu raqamga kelgan qo'ng'iroqdan ochilgan lid shu xodimga biriktiriladi. ERP'ga kiradigan e-pochta bilan bir xil bo'lsa — bo'sh qoldiring.</p>
+        </div>
         <div>
           <label className="label">Rol</label>
           <select

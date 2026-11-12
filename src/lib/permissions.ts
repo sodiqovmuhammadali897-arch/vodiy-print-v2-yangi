@@ -56,6 +56,9 @@ export type Staff = {
   // amoCRM user this employee is (meta-webhook/amocrm.js). Without it the
   // server matches by email; the "amoCRM tahlil" tab shows them their own.
   amo_user_id?: number | null;
+  // The employee's Mois Zvonki account, when it isn't their ERP login
+  // (meta-webhook/server.js gives a call's new lead to this person).
+  moizvonki_email?: string;
   telegram_chat_id?: number | null;
   telegram_linked_at?: string | null;
 };

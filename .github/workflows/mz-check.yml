@@ -54,6 +54,16 @@ jobs:
                 const s = staff.find((x) => x.id === a || String(x.moizvonki_email || "").toLowerCase() === a);
                 console.log(`${mask(a)} | ${n} | ${s ? s.full_name || "(no name)" : "— not linked"}`);
               }
+              // From the webhook (calls.mz_account) — works without the API key.
+              const since = new Date(Date.now() - days * 86400e3).toISOString();
+              const calls = (await db.collection("calls").where("created_at", ">=", since).get()).docs.map((d) => d.data());
+              const acc = {};
+              for (const c of calls) { const a = c.mz_account || "(no account in event)"; acc[a] = acc[a] || { n: 0, staff: c.staff_email }; acc[a].n++; }
+              console.log("== webhook account | calls | ERP staff");
+              for (const [a, v] of Object.entries(acc).sort((x, y) => y[1].n - x[1].n)) {
+                const s = staff.find((x) => x.id === v.staff);
+                console.log(`${a.includes("@") ? mask(a) : a} | ${v.n} | ${s ? s.full_name : "— not linked"}`);
+              }
               const keys = new Set(); (await db.collection("calls").orderBy("created_at", "desc").limit(50).get()).docs.forEach((d) => (d.data().event_keys || []).forEach((k) => keys.add(k)));
               console.log(`webhook event field names (latest): ${[...keys].sort().join(", ") || "— none yet"}`);
               process.exit(0);
