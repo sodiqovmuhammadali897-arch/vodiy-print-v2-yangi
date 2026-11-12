@@ -35,7 +35,8 @@ jobs:
             const mask = (e) => { const [u, d] = String(e).split("@"); return d ? `${u.slice(0, 2)}***@${d}` : String(e).slice(0, 2) + "***"; };
             const api = async (action, params = {}) => {
               const r = await fetch(`https://${process.env.MOIZVONKI_DOMAIN}/api/v1`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_name: process.env.MOIZVONKI_USER_EMAIL, api_key: process.env.MOIZVONKI_API_KEY, action, ...params }) });
-              return r.json().catch(() => ({}));
+              const text = await r.text();
+              try { return JSON.parse(text); } catch { console.log(`HTTP ${r.status} ${r.headers.get("content-type")} (${text.length} chars): ${text.slice(0, 120).replace(/\d{6,}/g, "#")}`); return {}; }
             };
             (async () => {
               const days = Number(process.env.DAYS) || 2;
