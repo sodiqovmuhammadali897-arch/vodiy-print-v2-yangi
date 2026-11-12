@@ -1,0 +1,98 @@
+name: amoCRM audit (read only)
+
+# Run by hand: which amoCRM features the team really uses, to plan an own
+# CRM in the ERP. Reads the amoCRM API with the server's token and prints
+# names of settings (pipelines, fields, sources, widgets, task types) and
+# counts only — no lead, contact or customer data. Writes nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "How many days back to count activity"
+        default: "30"
+        required: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Audit amoCRM
+        uses: appleboy/ssh-action@v1
+        env:
+          DAYS: ${{ inputs.days }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: DAYS
+          command_timeout: 10m
+          script: |
+            export AMO_SUBDOMAIN="$(grep '^AMO_SUBDOMAIN=' /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"
+            export AMO_TOKEN="$(grep '^AMO_TOKEN=' /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"
+            cat > /tmp/vp-amo-audit.js <<'JS'
+            const sub = String(process.env.AMO_SUBDOMAIN || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+            const host = sub.includes(".") ? sub : `${sub}.amocrm.ru`;
+            const days = Number(process.env.DAYS) || 30;
+            const from = Math.floor(Date.now() / 1000) - days * 86400;
+            const get = async (path) => {
+              const r = await fetch(`https://${host}${path}`, { headers: { Authorization: `Bearer ${process.env.AMO_TOKEN}`, Accept: "application/json" } });
+              if (r.status === 204) return null;
+              if (!r.ok) return { __error: r.status };
+              return r.json();
+            };
+            // Every page of a list (limit 250), counting with `each`.
+            const all = async (path, key, each, maxPages = 80) => {
+              let n = 0;
+              for (let page = 1; page <= maxPages; page++) {
+                const j = await get(`${path}${path.includes("?") ? "&" : "?"}limit=250&page=${page}`);
+                if (!j || j.__error) { if (j && j.__error) console.log(`  (${path}: HTTP ${j.__error})`); break; }
+                const rows = (j._embedded && j._embedded[key]) || [];
+                rows.forEach(each); n += rows.length;
+                if (rows.length < 250) break;
+              }
+              return n;
+            };
+            const tally = (o, k) => (o[k] = (o[k] || 0) + 1);
+            const top = (o, n = 25) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `${k}: ${v}`).join(" | ") || "—";
+            (async () => {
+              if (!process.env.AMO_TOKEN) throw new Error("AMO_TOKEN not in .env");
+              const acc = await get("/api/v4/account?with=users_groups,task_types,amojo_rights,datetime_settings");
+              console.log("== account");
+              console.log(`plan/currency: ${acc.currency || "?"} · amojo (chats) rights: ${JSON.stringify(acc._embedded && acc._embedded.amojo_rights || {})}`);
+              const tt = (acc._embedded && acc._embedded.task_types) || [];
+              console.log(`task types: ${tt.map((t) => `${t.id}=${t.name}`).join(", ") || "standard only"}`);
+              const users = []; await all("/api/v4/users", "users", (u) => users.push(u));
+              console.log(`users: ${users.length} (active: ${users.filter((u) => u.rights && u.rights.is_active !== false).length})`);
+              const pipes = await get("/api/v4/leads/pipelines");
+              console.log("== pipelines");
+              for (const p of (pipes && pipes._embedded && pipes._embedded.pipelines) || []) console.log(`${p.name}: ${((p._embedded && p._embedded.statuses) || []).map((s) => s.name).join(" → ")}`);
+              console.log("== lead fields");
+              const lf = []; await all("/api/v4/leads/custom_fields", "custom_fields", (f) => lf.push(`${f.name} (${f.type})`));
+              console.log(lf.join(" | ") || "—");
+              console.log("== contact fields");
+              const cf = []; await all("/api/v4/contacts/custom_fields", "custom_fields", (f) => cf.push(`${f.name} (${f.type})`));
+              console.log(cf.join(" | ") || "—");
+              console.log("== sources (integrations that create leads)");
+              const src = await get("/api/v4/sources");
+              console.log(((src && src._embedded && src._embedded.sources) || []).map((s) => `${s.name}${s.services && s.services.length ? " [" + s.services.map((x) => x.type).join(",") + "]" : ""}`).join(" | ") || "—");
+              console.log("== widgets installed");
+              const wl = []; await all("/api/v4/widgets", "widgets", (w) => { if (w.is_active_in_account || w.settings_template !== undefined && w.is_active_in_account) wl.push(w.code); });
+              console.log(wl.join(", ") || "— (or not visible to this token)");
+              console.log(`== activity, last ${days} days`);
+              const leadsBy = {}; const nLeads = await all(`/api/v4/leads?filter[created_at][from]=${from}`, "leads", (l) => tally(leadsBy, l.source_id ? `source ${l.source_id}` : "no source"));
+              console.log(`leads created: ${nLeads} · ${top(leadsBy, 10)}`);
+              const taskBy = {}; const taskDone = { done: 0, open: 0 };
+              const nTasks = await all(`/api/v4/tasks?filter[updated_at][from]=${from}`, "tasks", (t) => { tally(taskBy, (tt.find((x) => x.id === t.task_type_id) || {}).name || `type ${t.task_type_id}`); taskDone[t.is_completed ? "done" : "open"]++; });
+              console.log(`tasks touched: ${nTasks} (done ${taskDone.done}, open ${taskDone.open}) · ${top(taskBy)}`);
+              const noteBy = {};
+              const nNotes = await all(`/api/v4/leads/notes?filter[updated_at][from]=${from}`, "notes", (n) => tally(noteBy, n.note_type));
+              await all(`/api/v4/contacts/notes?filter[updated_at][from]=${from}`, "notes", (n) => tally(noteBy, `contact:${n.note_type}`));
+              console.log(`lead notes: ${nNotes} · ${top(noteBy)}`);
+              const evBy = {};
+              const nEv = await all(`/api/v4/events?filter[created_at][from]=${from}`, "events", (e) => tally(evBy, e.type), 120);
+              console.log(`events: ${nEv} · ${top(evBy, 30)}`);
+              process.exit(0);
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+            JS
+            node /tmp/vp-amo-audit.js; rm -f /tmp/vp-amo-audit.js
