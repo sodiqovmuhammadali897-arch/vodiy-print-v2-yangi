@@ -6,6 +6,7 @@ import {
   CRM_COLUMNS,
   boardStats,
   columnOf,
+  isOldLead,
   dueLabel,
   matchesLead,
   needsTask,
@@ -37,6 +38,7 @@ export default function LeadsBoard() {
   const [q, setQ] = useState("");
   const [owner, setOwner] = useState<string>(isAdmin ? "" : email);
   const [problems, setProblems] = useState(false);
+  const [showOld, setShowOld] = useState(false);
   const [adding, setAdding] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<CrmColumn | null>(null);
@@ -44,7 +46,11 @@ export default function LeadsBoard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const mine = useMemo(() => (leads || []).filter((l) => (!owner || l.assigned_to_email === owner) && matchesLead(l, q)), [leads, owner, q]);
+  const oldCount = useMemo(() => (leads || []).filter(isOldLead).length, [leads]);
+  const mine = useMemo(
+    () => (leads || []).filter((l) => (showOld || !isOldLead(l)) && (!owner || l.assigned_to_email === owner) && matchesLead(l, q)),
+    [leads, owner, q, showOld],
+  );
   const myTasks = useMemo(() => tasks.filter((t) => !owner || t.assigned_to_email === owner), [tasks, owner]);
   const stats = useMemo(() => boardStats(mine, myTasks, orders), [mine, myTasks, orders]);
   const byCol = useMemo(() => {
@@ -145,6 +151,11 @@ export default function LeadsBoard() {
         >
           <AlertTriangle className="h-4 w-4" /> Faqat muammolilar
         </button>
+        {oldCount > 0 && (
+          <label className="flex items-center gap-1.5 text-sm text-ink-500">
+            <input type="checkbox" checked={showOld} onChange={(e) => setShowOld(e.target.checked)} /> Eski lidlar ({oldCount})
+          </label>
+        )}
       </div>
       {msg && <div className="rounded-xl border border-ink-200 bg-surface px-4 py-2.5 text-sm text-ink-700">{msg}</div>}
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Loader2, Phone, Plus, RotateCcw, Save, XCircle } from "lucide-react";
 import { subscribeOne, subscribeWhere } from "../../../lib/firestoreDb";
 import { formatDateTime, formatMoney } from "../../../lib/format";
@@ -55,6 +55,8 @@ export default function LeadPage() {
   const done = useMemo(() => myTasks.filter((t) => t.status === "done").sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at))).slice(0, 5), [myTasks]);
   const timeline = useMemo(() => [...acts].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))), [acts]);
 
+  // Only the owner uses the ERP CRM for now.
+  if (!isAdmin) return <Navigate to="/leads" replace />;
   if (lead === undefined)
     return (
       <div className="flex justify-center py-16 text-ink-500">

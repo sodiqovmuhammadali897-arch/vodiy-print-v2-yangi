@@ -48,8 +48,13 @@ jobs:
               console.log(`calls total: ${all.length}; last: ${last || "—"}`);
               console.log(`last ${days} days: ${rows.length} (in ${n((c) => c.direction === "in")}, out ${n((c) => c.direction === "out")}, answered ${n((c) => c.answered)}, with recording ${n((c) => c.recording_url)})`);
               console.log(`matched: lead ${n((c) => c.lead_id)}, customer ${n((c) => c.customer_id)}, none ${n((c) => !c.lead_id && !c.customer_id)}`);
+              const keys = new Set(); rows.forEach((c) => (c.event_keys || []).forEach((k) => keys.add(k)));
+              console.log(`event field names: ${[...keys].sort().join(", ") || "— (no call since the update)"}`);
+              console.log(`calls with the employee known: ${n((c) => c.staff_email)}`);
+              const tasks = (await db.collection("lead_tasks").get()).docs.map((d) => d.data());
+              console.log(`lead tasks: open ${tasks.filter((t) => t.status === "open").length}, from missed calls ${tasks.filter((t) => String(t.note || "").startsWith("Javobsiz")).length}`);
               const leads = (await db.collection("leads").get()).docs.map((d) => d.data());
-              console.log(`leads in ERP: ${leads.length}; by status: ${JSON.stringify(leads.reduce((m, l) => ((m[l.status] = (m[l.status] || 0) + 1), m), {}))}`);
+              console.log(`leads in ERP: ${leads.length}; by status: ${JSON.stringify(leads.reduce((m, l) => ((m[l.status] = (m[l.status] || 0) + 1), m), {}))}; since 2026-11-12: ${leads.filter((l) => String(l.created_at) >= "2026-11-12").length} (from calls ${leads.filter((l) => String(l.created_at) >= "2026-11-12" && l.source === "Telefon").length}, unassigned ${leads.filter((l) => String(l.created_at) >= "2026-11-12" && !l.assigned_to_email).length})`);
               process.exit(0);
             })().catch((e) => { console.error(e.message); process.exit(1); });
             JS

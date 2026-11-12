@@ -15,30 +15,9 @@ export default function SalesPipeline() {
   const [params, setParams] = useSearchParams();
   const amo = <AmoAnalyticsView isAdmin={isAdmin} email={user?.email?.toLowerCase() || ""} />;
   const v = params.get("v");
-  // «Lidlar» — the ERP's own CRM (crm/*), next to amoCRM while both run.
-  if (!isAdmin)
-    return (
-      <div className="space-y-5">
-        <div className="inline-flex rounded-xl border border-ink-200 bg-surface p-1">
-          {(
-            [
-              ["amo", "amoCRM"],
-              ["lidlar", "Lidlar (ERP)"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setParams(k === "amo" ? {} : { v: k }, { replace: true })}
-              className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${(v === "lidlar" ? "lidlar" : "amo") === k ? "bg-brand-600 text-white shadow-sm" : "text-ink-500 hover:text-ink-900"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {v === "lidlar" ? <LeadsBoard /> : amo}
-      </div>
-    );
+  // «Lidlar (ERP)» — the ERP's own CRM (crm/*) — only the owner sees it
+  // for now (the owner, 2026-11-12: «managerlarga ko'rinmay tursin»).
+  if (!isAdmin) return amo;
   const view = v === "amo" || v === "voronka" || v === "yutqazilgan" || v === "lidlar" ? v : "control";
   return (
     <div className="space-y-5">

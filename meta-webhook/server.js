@@ -94,6 +94,11 @@ const recall = process.env.TELEGRAM_BOT_TOKEN ? require("./recall").create(db) :
 const debts = recall ? require("./debts").create(db, { team: recall.managers, admins: recall.admins }) : null;
 const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead } = require("./leads");
+const { pickOpenLead, callStaffEmail, dueIn, needsCallback, normalizePhone: normalizeCallPhone } = require("./callLeads");
+// Calls open ERP leads (the ERP's CRM, phase 2) on their own switch, so the
+// Meta form and Instagram leads keep going to the managers as before.
+// ERP_CALL_LEADS=off turns it off.
+const CALL_LEADS_ON = ERP_LEADS_ON || process.env.ERP_CALL_LEADS !== "off";
 // Instagram Direct agent — see instagram.js. Its webhooks arrive on the
 // same Meta callback below (object "instagram").
 const instagram = require("./instagram").create(db, {
@@ -270,19 +275,43 @@ const handleCallFinish = async (event) => {
   const answeredLabel = answered ? "javob berildi" : "javob berilmadi";
   const durationLabel = formatCallDuration(duration);
 
-  let lead = await findByPhone("leads", clientNumber);
-  const customer = lead ? null : await findByPhone("customers", clientNumber);
+  // The caller's open lead (callLeads.js); a customer by phone for the name.
+  const leadsAll = (await db.collection("leads").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const target = normalizeCallPhone(clientNumber);
+  const orderStatus = {};
+  for (const l of leadsAll) {
+    if (!l.converted_order_id || normalizeCallPhone(l.phone) !== target) continue;
+    const o = await db.collection("orders").doc(l.converted_order_id).get();
+    if (o.exists) orderStatus[l.converted_order_id] = o.data().status;
+  }
+  let lead = pickOpenLead(leadsAll, clientNumber, orderStatus);
+  const customer = await findByPhone("customers", clientNumber);
 
-  // No existing lead/customer on an incoming call — this is a fresh
-  // enquiry over the phone, so it becomes a lead like any other channel
-  // (a call should never go untracked, same rule as the Meta leads).
-  if (ERP_LEADS_ON && !lead && !customer && isIncoming) {
-    lead = await createLead(
-      db,
-      { full_name: clientName || "Noma'lum (qo'ng'iroq)", phone: clientNumber || "", source: "Telefon qo'ng'irog'i" },
-      "telefon-qongirogi",
-    );
-    console.log(`Call created new lead: ${lead.lead_number} (${clientNumber})`);
+  // Who took or made the call, when Mois Zvonki says so.
+  const staffEmail = callStaffEmail(event);
+  const staffDoc = staffEmail ? await db.collection("staff").doc(staffEmail).get() : null;
+  const staffName = staffDoc && staffDoc.exists ? staffDoc.data().full_name || staffEmail : "";
+  const actor = { email: staffName ? staffEmail : "system", name: staffName || "Mois Zvonki" };
+
+  // An incoming call with no open lead is a new enquiry — a new lead
+  // (a repeat customer too), given to whoever took the call.
+  if (CALL_LEADS_ON && !lead && isIncoming && target.length === 9) {
+    const name = customer ? [customer.first_name, customer.last_name].filter(Boolean).join(" ") || customer.company || "" : clientName || "";
+    const fields = {
+      full_name: name || "Noma'lum (qo'ng'iroq)",
+      brand: customer?.company || "",
+      phone: clientNumber || "",
+      source: "Telefon",
+      customer_type: customer ? "Doimiy mijoz" : "Yangi mijoz",
+      assigned_to_email: staffName ? staffEmail : "",
+      assigned_to_name: staffName,
+      product_types: [],
+      tags: [],
+    };
+    const created = await createLead(db, fields, "telefon");
+    lead = { ...fields, ...created, status: "new" };
+    await db.collection("lead_activities").add({ lead_id: lead.id, text: `Lid ochildi — kiruvchi qo'ng'iroqdan${customer ? " (avvalgi mijoz)" : ""}`, actor_email: actor.email, actor_name: actor.name, created_at: now });
+    console.log(`Call created new lead: ${created.lead_number}`);
   }
 
   await db.collection("calls").add({
@@ -297,6 +326,9 @@ const handleCallFinish = async (event) => {
     start_time: startTime ? new Date(startTime * 1000).toISOString() : null,
     answer_time: answerTime ? new Date(answerTime * 1000).toISOString() : null,
     end_time: endTime ? new Date(endTime * 1000).toISOString() : null,
+    staff_email: staffName ? staffEmail : "",
+    // The event's field names (no values) — to see which one names the employee.
+    event_keys: Object.keys(event || {}).sort(),
     created_at: now,
   });
 
@@ -304,8 +336,8 @@ const handleCallFinish = async (event) => {
     await db.collection("lead_activities").add({
       lead_id: lead.id,
       text: `📞 ${directionLabel} qo'ng'iroq — ${durationLabel}, ${answeredLabel}`,
-      actor_email: "system",
-      actor_name: "Mois Zvonki",
+      actor_email: actor.email,
+      actor_name: actor.name,
       created_at: now,
       kind: "call",
       call_direction: isIncoming ? "in" : "out",
@@ -313,7 +345,32 @@ const handleCallFinish = async (event) => {
       call_duration_seconds: Number(duration) || 0,
       call_recording_url: recording || "",
     });
-    await db.collection("leads").doc(lead.id).update({ last_contact_at: now, updated_at: now });
+    const patch = { last_contact_at: now, updated_at: now };
+    // Nobody's lead yet: it goes to whoever took the call.
+    if (!lead.assigned_to_email && staffName) Object.assign(patch, { assigned_to_email: staffEmail, assigned_to_name: staffName });
+    await db.collection("leads").doc(lead.id).update(patch);
+
+    // A missed incoming call: a call-back task in 30 minutes.
+    if (CALL_LEADS_ON && isIncoming && !answered) {
+      const tasksSnap = await db.collection("lead_tasks").where("lead_id", "==", lead.id).get();
+      if (needsCallback(tasksSnap.docs.map((d) => d.data()))) {
+        const owner = { email: patch.assigned_to_email || lead.assigned_to_email || "", name: patch.assigned_to_name || lead.assigned_to_name || "" };
+        const due = dueIn(30);
+        await db.collection("lead_tasks").add({
+          lead_id: lead.id,
+          lead_name: lead.full_name || "",
+          type: "call",
+          ...due,
+          assigned_to_email: owner.email,
+          assigned_to_name: owner.name,
+          note: "Javobsiz qo'ng'iroq — qayta qo'ng'iroq qiling",
+          status: "open",
+          completed_at: null,
+          created_at: now,
+        });
+        await db.collection("lead_activities").add({ lead_id: lead.id, text: `Zadacha qo'yildi: Qo'ng'iroq qilish — ${due.due_date} ${due.due_time} (javobsiz qo'ng'iroq)`, actor_email: "system", actor_name: "Mois Zvonki", created_at: now });
+      }
+    }
   }
 
   console.log(

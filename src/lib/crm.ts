@@ -5,6 +5,11 @@
 // Pure helpers here; the pages are src/modules/leads/crm/*.
 import type { Lead, LeadStatus, LeadTask, Order, OrderStatus } from "./types";
 
+// The day the ERP's CRM started. The 133 leads from the first version
+// (all still «new», untouched since) stay hidden unless asked for.
+export const CRM_START = "2026-11-12";
+export const isOldLead = (l: { created_at: string }) => String(l.created_at || "") < CRM_START;
+
 export type CrmColumn = "new" | "accepted" | "info_given" | "offer" | "advance" | "production" | "delivered";
 
 // amoCRM: Неразобранное → Қабул Қилинди → маълумот берилди → Таклиф Юборилди

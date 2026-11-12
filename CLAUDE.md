@@ -334,9 +334,23 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   - Field options are amoCRM's (amo-audit.yml «lead field options»).
   - Every staff with leads view sees all leads (rules changed); a manager
     edits only their own; tasks: own, admins all.
-  - Not yet: Mois Zvonki calls/SMS into the timeline and auto-leads
-    (server code exists behind `ERP_LEADS=on`), bot reminders for tasks,
-    task KPI from ERP, importing amoCRM leads.
+  - **Only the owner sees it for now** (2026-11-12: «managerlarga ko'rinmay
+    tursin») — the tab and `/leads/:id` are admin-only. The 133 leads from
+    the first version (all «new», before `CRM_START`) are hidden unless
+    «Eski lidlar» is ticked.
+  - **Phase 2 (2026-11-12): calls.** Mois Zvonki already posts every
+    call.finish to the server (`calls`: ~1 244 in 7 days). `handleCallFinish`
+    (+ `meta-webhook/callLeads.js`) now puts a call on the caller's OPEN
+    ERP lead (not lost, not old, order not delivered/closed/cancelled), with
+    the recording in the timeline; an incoming call with no open lead opens
+    a new lead (source «Telefon», repeat customers too); a missed incoming
+    call adds a «call back» task 30 min on. Switch: `ERP_CALL_LEADS=off`
+    (separate from `ERP_LEADS`, which still keeps Meta/Instagram leads out
+    of the ERP). Who took the call: read from the event if it carries an
+    e-mail (`callStaffEmail`) — unknown yet; `calls.event_keys` records the
+    field names; `calls-check.yml` prints them.
+  - Not yet: SMS, bot reminders for tasks, task KPI from ERP, importing
+    amoCRM leads, outgoing calls opening leads.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
