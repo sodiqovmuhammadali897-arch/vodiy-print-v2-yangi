@@ -127,6 +127,17 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     Буюртма бекор бўлди 398, Нарх қиммат 343, Рақобатчи танланди 142,
     Қадриятимизга тушмади 77, Тахи 54. `lossOf` in `amocrm.js` reads both;
     `amo-loss.yml` counts them.
+- **amoCRM usage audit (`amo-audit.yml`, 30 days to 2026-11-12):** 3 users,
+  1 pipeline; 945 leads (no source integration — typed or from calls);
+  2 974 tasks touched (2 443 done, 531 open), almost all «Связаться»;
+  4 301 outgoing / 966 incoming calls and ~155 SMS each way through the
+  only widget, Mois Zvonki; ~720 changes each on the lead fields (Буюртма
+  хажми, Мижоз тури/манбаси, Вилоят, Бизнес тури, Тўлов тури, Махсулот тури,
+  Brend nomi, Тайёр бўлиш санаси …); 1 679 tags; no customer chats (231
+  internal messages). The owner is weighing an own CRM in the ERP (asked
+  2026-11-12, advice given, nothing built). The ERP once had its own leads
+  (`leads`, LID-numbers; `ERP_LEADS=on` turns the server's lead creation
+  from Meta, Instagram and Mois Zvonki back on).
 - **KPI:**
   - payout = sales × `sales_rate` (7.5%, always paid) + collected ×
     `collect_rate` (2%). The second part is paid only if attendance and
