@@ -1,0 +1,60 @@
+name: Mois Zvonki accounts (read only)
+
+# Run by hand: which Mois Zvonki employee accounts made the last calls and
+# whether each one matches an ERP staff member (by login e-mail or the
+# staff's «Mois Zvonki e-pochtasi»). E-mails are masked; no phone numbers.
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Days back"
+        default: "2"
+        required: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Accounts
+        uses: appleboy/ssh-action@v1
+        env:
+          DAYS: ${{ inputs.days }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: DAYS
+          command_timeout: 5m
+          script: |
+            for k in MOIZVONKI_DOMAIN MOIZVONKI_USER_EMAIL MOIZVONKI_API_KEY; do export $k="$(grep "^$k=" /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"; done
+            cat > /tmp/vp-mz.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const mask = (e) => { const [u, d] = String(e).split("@"); return d ? `${u.slice(0, 2)}***@${d}` : String(e).slice(0, 2) + "***"; };
+            const api = async (action, params = {}) => {
+              const r = await fetch(`https://${process.env.MOIZVONKI_DOMAIN}/api/v1`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_name: process.env.MOIZVONKI_USER_EMAIL, api_key: process.env.MOIZVONKI_API_KEY, action, ...params }) });
+              return r.json().catch(() => ({}));
+            };
+            (async () => {
+              const days = Number(process.env.DAYS) || 2;
+              const to = Math.floor(Date.now() / 1000), from = to - days * 86400;
+              const res = await api("calls.list", { from_date: from, to_date: to, supervised: 1, max_results: 500 });
+              const list = res.results || res.calls || [];
+              console.log(`calls.list: ${list.length} calls${res.error ? " error: " + JSON.stringify(res.error) : ""}`);
+              if (list[0]) console.log(`call field names: ${Object.keys(list[0]).sort().join(", ")}`);
+              const staff = (await db.collection("staff").get()).docs.map((d) => ({ id: d.id.toLowerCase(), ...d.data() }));
+              const by = {};
+              for (const c of list) { const a = String(c.user_account || c.user_email || c.user_name || c.user_id || "?").toLowerCase(); by[a] = (by[a] || 0) + 1; }
+              console.log("== account | calls | ERP staff");
+              for (const [a, n] of Object.entries(by).sort((x, y) => y[1] - x[1])) {
+                const s = staff.find((x) => x.id === a || String(x.moizvonki_email || "").toLowerCase() === a);
+                console.log(`${mask(a)} | ${n} | ${s ? s.full_name || "(no name)" : "— not linked"}`);
+              }
+              const keys = new Set(); (await db.collection("calls").orderBy("created_at", "desc").limit(50).get()).docs.forEach((d) => (d.data().event_keys || []).forEach((k) => keys.add(k)));
+              console.log(`webhook event field names (latest): ${[...keys].sort().join(", ") || "— none yet"}`);
+              process.exit(0);
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+            JS
+            node /tmp/vp-mz.js; rm -f /tmp/vp-mz.js
