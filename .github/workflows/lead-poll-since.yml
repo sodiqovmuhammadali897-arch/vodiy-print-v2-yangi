@@ -1,0 +1,67 @@
+name: Facebook form leads — bring in from a date (writes, owner-approved)
+
+# The form poll (meta-webhook/leadPoll.js) takes leads created after
+# crm_meta/meta_poll.since. This moves `since` back, so the next poll (within
+# 3 minutes) brings in the leads from that moment as new ERP leads with
+# «✅ Qabul qildim». Leads already taken are skipped (meta_leads/{id}).
+# apply=no only counts them per form. Logs counts only, no customer data.
+# Owner approved on 2026-11-13 for that day's leads («Ha»).
+
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "From (Tashkent date, YYYY-MM-DD, from 00:00)"
+        required: true
+      apply:
+        description: "yes = move the start back; no = only count"
+        default: "no"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run
+        uses: appleboy/ssh-action@v1
+        env:
+          SINCE: ${{ inputs.since }}
+          APPLY: ${{ inputs.apply }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: SINCE,APPLY
+          command_timeout: 5m
+          script: |
+            for k in META_PAGE_ACCESS_TOKEN META_GRAPH_VERSION; do export $k="$(grep "^$k=" /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"; done
+            cat > /tmp/vp-lps.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const P = require("/opt/meta-webhook/leadPoll.js");
+            const V = process.env.META_GRAPH_VERSION || "v19.0";
+            const T = process.env.META_PAGE_ACCESS_TOKEN;
+            const g = async (p) => (await fetch(`https://graph.facebook.com/${V}/${p}${p.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(T)}`)).json();
+            (async () => {
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(process.env.SINCE || "")) throw new Error("since: YYYY-MM-DD");
+              const since = Math.floor(Date.parse(`${process.env.SINCE}T00:00:00+05:00`) / 1000);
+              const forms = ((await g("me/leadgen_forms?fields=id,name,status&limit=100")).data || []).filter((f) => f.status === "ACTIVE");
+              let total = 0, already = 0;
+              for (const f of forms) {
+                const leads = (await g(P.leadsPath(f.id, since))).data || [];
+                let taken = 0;
+                for (const l of leads) if ((await db.collection("meta_leads").doc(String(l.id)).get()).exists) taken++;
+                total += leads.length; already += taken;
+                if (leads.length) console.log(`«${f.name}»: ${leads.length} lead(s) since ${process.env.SINCE}${leads.length >= 100 ? " (100+ — only the first 100 per run)" : ""}; already in ERP: ${taken}`);
+              }
+              console.log(`total: ${total}; new for the ERP: ${total - already}`);
+              const ref = db.collection("crm_meta").doc("meta_poll");
+              const cur = (await ref.get()).data() || {};
+              console.log(`poll start now: ${cur.since ? new Date(cur.since * 1000).toISOString() : "—"}`);
+              if (process.env.APPLY !== "yes") return console.log("apply=no — nothing changed");
+              await ref.set({ since }, { merge: true });
+              await db.collection("data_fixes").add({ kind: "lead_poll_since", from: cur.since || null, to: since, expected: total - already, at: new Date().toISOString(), by: "workflow lead-poll-since" });
+              console.log(`poll start moved to ${new Date(since * 1000).toISOString()} — the next poll (≤3 min) brings them in`);
+            })().then(() => process.exit(0)).catch((e) => { console.log("failed:", e.message); process.exit(1); });
+            JS
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-lps.js; rm -f /tmp/vp-lps.js
