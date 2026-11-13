@@ -32,6 +32,7 @@ import {
 import {
   addLeadNote,
   addLeadTask,
+  claimLead,
   moveToColumn,
   reopenLead,
   updateCrmLead,
@@ -208,6 +209,26 @@ export default function LeadPage() {
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          {!lead.assigned_to_email && lead.status !== "lost" && (
+            <button
+              type="button"
+              className="btn-primary bg-emerald-600 hover:bg-emerald-700"
+              disabled={busy}
+              onClick={() =>
+                void run(
+                  () =>
+                    claimLead(
+                      lead,
+                      tasks.filter((t) => t.lead_id === lead.id && t.status === "open"),
+                      actor,
+                    ),
+                  "Lid sizniki — «Qabul qilindi» bosqichida",
+                )
+              }
+            >
+              <CheckCircle2 className="h-4 w-4" /> Qabul qildim
+            </button>
+          )}
           {lead.phone && (
             <a
               className="btn-secondary"

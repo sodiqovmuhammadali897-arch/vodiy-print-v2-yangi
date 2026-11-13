@@ -63,8 +63,10 @@ app.use((req, res, next) => (req.path === "/webhooks/site-lead" ? next() : jsonB
 const reportChannel = (process.env.ASSISTANT_CHAT_IDS || "").split(",")[0].trim();
 const groups = process.env.TELEGRAM_BOT_TOKEN ? require("./groups").create(db, { fallbackChatId: reportChannel }) : null;
 if (groups) groups.register(app);
+// «✅ Qabul qildim» on new internet leads — see leadClaim.js.
+const claims = require("./leadClaim").create(db, { route: groups ? groups.route : null });
 // Kompaniya sayti (website/) → ariza → Sotuv topic — see siteLeads.js.
-require("./siteLeads").create(db, { route: groups ? groups.route : null }).register(app);
+require("./siteLeads").create(db, { route: groups ? groups.route : null, claims }).register(app);
 const hr = groups ? require("./hr").create(db, { route: groups.route }) : null;
 if (hr) hr.register(app);
 // Marketolog agent — see marketing.js; answers in the Marketing topic.
@@ -92,7 +94,7 @@ content.register(app);
 const recall = process.env.TELEGRAM_BOT_TOKEN ? require("./recall").create(db) : null;
 // Qarz undirish: each sales manager's debts, daily (debts.js).
 const debts = recall ? require("./debts").create(db, { team: recall.managers, admins: recall.admins }) : null;
-const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm);
+const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm, claims);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead, startLead } = require("./leads");
 const { pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone: normalizeCallPhone } = require("./callLeads");
 // Calls open ERP leads (the ERP's CRM, phase 2) on their own switch, so the
@@ -108,6 +110,7 @@ const instagram = require("./instagram").create(db, {
   verifyToken: VERIFY_TOKEN,
   callbackBase: process.env.META_CALLBACK_BASE || "https://printvodiy.uz",
   route: groups ? groups.route : null,
+  claims,
 });
 instagram.register(app);
 
@@ -176,6 +179,14 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
   });
   const { lead_number } = created;
   const owner = await startLead(db, { id: created.id, full_name: fullName }, { text: `Lid ochildi — ${source}${formName ? ` («${formName}»)` : ""}`, actor: "Meta forma", assign: true });
+  // Unassigned: the managers see it with «✅ Qabul qildim» (leadClaim.js).
+  if (!owner)
+    await claims.announce(
+      created.id,
+      [`🆕 Yangi lid ${created.lead_number} — ${source}`, `👤 ${fullName}`, phone ? `📞 ${phone}` : "", formName ? `📝 Forma: ${formName}` : "", campaignName ? `📣 Reklama: ${campaignName}` : "", "https://printvodiy.uz/leads"]
+        .filter(Boolean)
+        .join("\n"),
+    );
 
   if (campaignName) {
     await db

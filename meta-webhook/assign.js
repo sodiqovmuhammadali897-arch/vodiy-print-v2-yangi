@@ -1,9 +1,10 @@
-// New internet leads (Instagram, Facebook, the site form) go to the
-// managers in turn (the owner, 2026-11-13: «navbat bilan»). Whoever checked
-// in today and hasn't checked out is preferred; when nobody is at work
-// (night, a day off) the turn goes on among everyone, so the lead is
-// someone's first thing in the morning. LEAD_ROUND_ROBIN=off turns it off.
-const ON = process.env.LEAD_ROUND_ROBIN !== "off";
+// New internet leads (Instagram, Facebook, the site form) can go to the
+// managers in turn. Whoever checked in today and hasn't checked out is
+// preferred; when nobody is at work the turn goes on among everyone.
+// OFF since 2026-11-13 (the owner: leads stay unassigned in «Yangi» and a
+// manager takes one with «✅ Qabul qildim», leadClaim.js);
+// LEAD_ROUND_ROBIN=on turns it back on.
+const ON = process.env.LEAD_ROUND_ROBIN === "on";
 const TZ = 5 * 3600e3;
 
 // Who takes leads: the names in LEAD_MANAGERS (a GitHub Variable, else

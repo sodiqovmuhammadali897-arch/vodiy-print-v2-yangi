@@ -56,3 +56,29 @@ describe("one Meta key", () => {
     expect(out.endsWith("\n")).toBe(true);
   });
 });
+
+describe("«✅ Qabul qildim»", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const C = require("../meta-webhook/leadClaim");
+  const who = { email: "n@vp.uz", name: "Nuriddin" };
+  const now = "2026-11-13T10:00:00.000Z";
+  it("gives a new lead to whoever presses first", () => {
+    expect(C.claimPatch({ status: "new", assigned_to_email: "" }, who, now).patch).toEqual({
+      assigned_to_email: "n@vp.uz",
+      assigned_to_name: "Nuriddin",
+      status: "accepted",
+      first_contact_at: now,
+      updated_at: now,
+    });
+    expect(C.claimPatch({ status: "info_given", assigned_to_email: "", first_contact_at: "x" }, who, now).patch.status).toBeUndefined();
+  });
+  it("refuses a taken, closed or missing lead", () => {
+    expect(C.claimPatch({ status: "accepted", assigned_to_email: "m@vp.uz", assigned_to_name: "Maryam" }, who, now)).toEqual({ taken: "Maryam" });
+    expect(C.claimPatch({ status: "lost", assigned_to_email: "" }, who, now).error).toBeTruthy();
+    expect(C.claimPatch(null, who, now).error).toBeTruthy();
+  });
+  it("puts the button on the message", () => {
+    expect(C.button("abc").inline_keyboard[0][0]).toEqual({ text: "✅ Qabul qildim", callback_data: "lc:abc" });
+    expect(C.takenLine("Nuriddin", "2026-11-13T10:05:00.000Z")).toBe("✅ Qabul qildi: Nuriddin · 15:05");
+  });
+});

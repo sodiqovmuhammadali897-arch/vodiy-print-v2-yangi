@@ -547,7 +547,9 @@ service cloud.firestore {
     match /leads/{id} {
       allow read: if isAdmin() || can('leads', 'view');
       allow create: if can('leads', 'edit');
-      allow update: if isAdmin() || (can('leads', 'edit') && resource.data.assigned_to_email == email());
+      // «✅ Qabul qildim»: anyone who edits leads may take an unassigned one for themselves.
+      allow update: if isAdmin() || (can('leads', 'edit') && resource.data.assigned_to_email == email())
+        || (can('leads', 'edit') && resource.data.get('assigned_to_email', '') == '' && request.resource.data.assigned_to_email == email());
       allow delete: if isAdmin();
     }
 
@@ -556,7 +558,8 @@ service cloud.firestore {
     match /lead_tasks/{id} {
       allow read: if isAdmin() || (can('leads', 'view') && resource.data.assigned_to_email == email());
       allow create: if can('leads', 'edit');
-      allow update: if isAdmin() || (can('leads', 'edit') && resource.data.assigned_to_email == email());
+      allow update: if isAdmin() || (can('leads', 'edit') && resource.data.assigned_to_email == email())
+        || (can('leads', 'edit') && resource.data.get('assigned_to_email', '') == '' && request.resource.data.assigned_to_email == email());
       allow delete: if isAdmin();
     }
 

@@ -1,6 +1,6 @@
 // Database side of the ERP's CRM (lib/crm.ts has the rules). Every change
 // to a lead also writes a line to its timeline (lead_activities).
-import { insertOne, listAll, updateOne } from "./firestoreDb";
+import { getOne, insertOne, listAll, updateOne } from "./firestoreDb";
 import { logLeadActivity } from "./leadActivity";
 import { convertLeadToCustomer } from "./leadConversion";
 import { changeOrderStatus } from "./orderStatus";
@@ -137,6 +137,24 @@ export async function markCrmLost(lead: Lead, reason: string, comment: string, o
   await updateOne("leads", lead.id, { status: "lost", lost_reason: reason, lost_comment: comment, updated_at: t });
   for (const task of openTasks) await updateOne("lead_tasks", task.id, { status: "done", completed_at: t, result: "Lid yo'qotildi" });
   await logLeadActivity(lead.id, `Yo'qotildi — sabab: ${reason}${comment ? ` (${comment})` : ""}`, actor.email, actor.name);
+}
+
+// «✅ Qabul qildim»: a new unassigned lead becomes the presser's, moves to
+// «Qabul qilindi», and its open unassigned tasks go with it. The same as the
+// Telegram button (meta-webhook/leadClaim.js).
+export async function claimLead(lead: Lead, openTasks: LeadTask[], actor: Actor): Promise<void> {
+  const fresh = await getOne<Lead>("leads", lead.id);
+  if (fresh?.assigned_to_email) throw new Error(`Bu lidni ${fresh.assigned_to_name || fresh.assigned_to_email} allaqachon olgan`);
+  const t = now();
+  await updateOne("leads", lead.id, {
+    assigned_to_email: actor.email,
+    assigned_to_name: actor.name,
+    ...(lead.status === "new" ? { status: "accepted" } : {}),
+    first_contact_at: lead.first_contact_at || t,
+    updated_at: t,
+  });
+  for (const task of openTasks) if (!task.assigned_to_email) await updateOne("lead_tasks", task.id, { assigned_to_email: actor.email, assigned_to_name: actor.name });
+  await logLeadActivity(lead.id, `✅ ${actor.name} qabul qildi`, actor.email, actor.name);
 }
 
 export async function reopenLead(lead: Lead, actor: Actor): Promise<void> {

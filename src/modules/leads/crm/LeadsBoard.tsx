@@ -21,7 +21,7 @@ import {
   taskState,
   type CrmColumn,
 } from "../../../lib/crm";
-import { moveToColumn } from "../../../lib/crmService";
+import { claimLead, moveToColumn } from "../../../lib/crmService";
 import type { Lead } from "../../../lib/types";
 import { useCrm } from "./useCrm";
 import NewLeadModal from "./NewLeadModal";
@@ -96,6 +96,20 @@ export default function LeadsBoard() {
       );
     return m;
   }, [mine, myTasks, orders, problems]);
+
+  // «✅ Qabul qildim» on an unassigned card: the lead becomes mine.
+  const claim = async (lead: Lead) => {
+    setBusy(lead.id);
+    setMsg(null);
+    try {
+      await claimLead(lead, tasks.filter((t) => t.lead_id === lead.id && t.status === "open"), actor);
+      setMsg(`«${lead.brand || lead.full_name || lead.phone}» — sizniki, «Qabul qilindi» bosqichida.`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Bo'lmadi");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const drop = async (col: CrmColumn) => {
     const lead = (leads || []).find((l) => l.id === dragId);
@@ -376,12 +390,27 @@ export default function LeadsBoard() {
                                 ) : (
                                   <span />
                                 )}
-                                <span
-                                  className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-100 px-1 text-[10px] font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
-                                  title={l.assigned_to_name}
-                                >
-                                  {initials(l.assigned_to_name || "")}
-                                </span>
+                                {l.assigned_to_email ? (
+                                  <span
+                                    className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-100 px-1 text-[10px] font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
+                                    title={l.assigned_to_name}
+                                  >
+                                    {initials(l.assigned_to_name || "")}
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    title="Lidni o'zimga olaman"
+                                    disabled={busy === l.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void claim(l);
+                                    }}
+                                    className="rounded-md bg-emerald-600 px-1.5 py-0.5 text-[10.5px] font-bold text-white hover:bg-emerald-700"
+                                  >
+                                    ✅ Qabul qildim
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );

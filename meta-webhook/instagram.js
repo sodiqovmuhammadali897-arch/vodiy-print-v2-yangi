@@ -89,7 +89,7 @@ const render = (template, { name, phone }) =>
   (name ? template.replace(/\{ism\}/g, name) : template.replace(/[,\s]*\{ism\}/g, "")).replace(/\{telefon\}/g, phone || "");
 
 // ── Agent ────────────────────────────────────────────────────────────
-const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackBase, route }) => {
+const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackBase, route, claims = null }) => {
   let cached = null;
   let cachedAt = 0;
   const sentMids = new Set(); // our own replies, to tell them apart from a manager's
@@ -134,10 +134,10 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     return data;
   };
 
-  const notify = async (text) => {
+  const notify = async (text, extra = {}) => {
     if (!route) return;
     try {
-      await telegram("sendMessage", { ...(await route("ig")), text, link_preview_options: { is_disabled: true } });
+      await telegram("sendMessage", { ...(await route("ig")), text, link_preview_options: { is_disabled: true }, ...extra });
     } catch (err) {
       console.error("Instagram → Telegram notify failed", err.message);
     }
@@ -231,6 +231,8 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
       ]
         .filter(Boolean)
         .join("\n"),
+      // A new unassigned lead: the first manager to press takes it (leadClaim.js).
+      isNew && !owner && claims ? { reply_markup: claims.button(lead.id) } : {},
     );
     await emitEvent(db, {
       agent: "ig",

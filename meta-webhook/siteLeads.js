@@ -19,7 +19,7 @@ const toErpLead = async (db, l, siteId) => {
   if (open) {
     await db.collection("lead_activities").add({ lead_id: open.id, text: `🌐 Saytdan yana ariza: ${what}`, actor_email: "system", actor_name: "Sayt", created_at: now });
     await db.collection("leads").doc(open.id).update({ updated_at: now });
-    return;
+    return null;
   }
   const created = await createLead(db, {
     full_name: l.name,
@@ -31,7 +31,9 @@ const toErpLead = async (db, l, siteId) => {
     customer_type: "",
     tags: [],
   });
-  await startLead(db, { id: created.id, full_name: l.name }, { text: `🌐 Saytdan ariza — ${what}`, actor: "Sayt", assign: true });
+  const owner = await startLead(db, { id: created.id, full_name: l.name }, { text: `🌐 Saytdan ariza — ${what}`, actor: "Sayt", assign: true });
+  // A new lead nobody has yet → «✅ Qabul qildim» on the Telegram message.
+  return owner ? null : created.id;
 };
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
@@ -87,7 +89,7 @@ const leadText = (l, id) =>
     .filter((x) => x !== null)
     .join("\n");
 
-const create = (db, { route = null } = {}) => {
+const create = (db, { route = null, claims = null } = {}) => {
   const hits = new Map(); // address hash → timestamps
 
   const limited = (ip) => {
@@ -119,17 +121,18 @@ const create = (db, { route = null } = {}) => {
         const ref = db.collection("site_leads").doc();
         await ref.set({ ...out.lead, has_file: Boolean(out.file), file_name: out.file ? out.file.name : null, status: "new", created_at: new Date().toISOString() });
         res.json({ ok: true });
-        if (ERP_LEADS_ON) await toErpLead(db, out.lead, ref.id).catch((e) => console.error("Site lead → ERP lead failed", e.message));
+        const newLeadId = ERP_LEADS_ON ? await toErpLead(db, out.lead, ref.id).catch((e) => console.error("Site lead → ERP lead failed", e.message)) : null;
+        const markup = newLeadId && claims ? { reply_markup: claims.button(newLeadId) } : {};
         await push.toAdmins("admin", leadText(out.lead, ref.id), "/");
         // Telegram after answering: the visitor doesn't wait on it.
         if (!BOT_TOKEN || !route) return;
         const target = await route("sales");
         const text = leadText(out.lead, ref.id);
-        if (out.file) await sendFile(target, out.file, text).catch(async (err) => {
+        if (out.file) await sendFile({ ...target, ...(markup.reply_markup ? { reply_markup: JSON.stringify(markup.reply_markup) } : {}) }, out.file, text).catch(async (err) => {
           console.error("Site lead file failed", err.message);
-          await telegram("sendMessage", { ...target, text: `${text}\n\n(fayl yuborilmadi)` });
+          await telegram("sendMessage", { ...target, text: `${text}\n\n(fayl yuborilmadi)`, ...markup });
         });
-        else await telegram("sendMessage", { ...target, text });
+        else await telegram("sendMessage", { ...target, text, ...markup });
       } catch (err) {
         console.error("Site lead failed", err);
         if (!res.headersSent) res.status(500).json({ error: "Yuborib bo'lmadi — iltimos, qo'ng'iroq qiling: +998 77 200 88 55" });

@@ -406,9 +406,24 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     first name (a permissions rule took in «test», Jamila and Dilmurodjon —
     fixed the same day); people checked in today first; turn in `crm_meta/assign`;
     `LEAD_ROUND_ROBIN=off` stops it. Calls stay with whoever took them.
-  - On 2026-11-13 the Page token was still invalid («user logged out»),
-    ads secrets unset, 0 Instagram/Facebook/site leads. `meta-check.yml`
-    shows all of it, plus the round-robin pool.
+  - **Round-robin is OFF since 2026-11-13** (owner: «biriktirilishi
+    shartmas, yangi lidga tushsin, manager o'ziga olsin»): `LEAD_ROUND_ROBIN=on`
+    brings it back. Instead **«✅ Qabul qildim»** (`meta-webhook/leadClaim.js`):
+    a new unassigned Facebook-form lead is announced in the work group's
+    Sotuv topic with the button (Instagram's and the site's own messages get
+    the button too); the first staff member who presses (found by
+    `staff.telegram_chat_id`) takes it — assigned, «new» → «accepted», open
+    unassigned tasks follow, timeline line. Same button on the lead page and
+    on unassigned board cards (`crmService.claimLead`); the rules let anyone
+    with leads edit take an unassigned lead for themselves.
+  - **Facebook connected 2026-11-13, step by step with the owner:** the
+    System User «vodiy-erp» (Page, ad account and the app «Vodiy print Crm»
+    with full access) made a never-expiring key; it is in
+    `META_PAGE_ACCESS_TOKEN`; the deploy turned it into the Page key
+    (Page «Vodiy Print», ad account found, ads key = same). The Page is
+    subscribed to `leadgen` (not `messages` — no pages_messaging; the owner
+    dropped Instagram Direct: «isntagramga yozishi shartmas»).
+    `meta-check.yml` shows token, scopes, subscriptions and counts.
 - **Sotuv bo'limi background («Fon») — built 2026-11-13** (owner: amoCRM-like,
   «ko'zga yoqimli»): button «Fon» on Sotuv bo'limi (every tab, everyone) →
   6 pictures (`public/fon/*.svg`, drawn by us; light ones get a dark veil),
