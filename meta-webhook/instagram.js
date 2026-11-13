@@ -459,10 +459,18 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
         ).catch((err) => console.error(`Meta webhook (${object}) subscribe failed:`, err.message));
         console.log(`Meta webhook (${object}) subscribed:`, callback);
       }
-      // The Page must also have the app installed for these fields.
-      await graph("POST", "me/subscribed_apps", { subscribed_fields: "leadgen,messages" }).catch((err) =>
-        console.error("Page subscribed_apps failed:", err.message),
-      );
+      // The Page must also have the app installed for these fields. Messenger
+      // needs pages_messaging; without it Meta refuses the whole call, so
+      // the form leads (leadgen) are subscribed on their own then.
+      try {
+        await graph("POST", "me/subscribed_apps", { subscribed_fields: "leadgen,messages" });
+        console.log("Page subscribed_apps: leadgen,messages");
+      } catch (err) {
+        console.log("Page subscribed_apps (leadgen,messages) refused:", err.message, "— trying leadgen only");
+        await graph("POST", "me/subscribed_apps", { subscribed_fields: "leadgen" })
+          .then(() => console.log("Page subscribed_apps: leadgen"))
+          .catch((e) => console.error("Page subscribed_apps failed:", e.message));
+      }
     } catch (err) {
       console.error("Meta webhook subscribe failed:", err.message);
     }
