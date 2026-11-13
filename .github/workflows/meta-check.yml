@@ -25,7 +25,7 @@ jobs:
               if grep -q "^$k=." /opt/meta-webhook/.env; then echo "$k: set"; else echo "$k: not set"; fi
             done
             echo "AI_AGENTS value: $(grep '^AI_AGENTS=' /opt/meta-webhook/.env | cut -d= -f2- || true) (default: staffbot,bosh,instagram)"
-            for k in META_PAGE_ACCESS_TOKEN META_ADS_TOKEN META_AD_ACCOUNT_ID META_GRAPH_VERSION; do export $k="$(grep "^$k=" /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"; done
+            for k in META_PAGE_ACCESS_TOKEN META_ADS_TOKEN META_AD_ACCOUNT_ID META_GRAPH_VERSION LEAD_MANAGERS RECALL_MANAGERS; do export $k="$(grep "^$k=" /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"; done
             cat > /tmp/vp-meta.js <<'JS'
             const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
             admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
@@ -72,6 +72,13 @@ jobs:
               const staffAll = (await db.collection("staff").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
               const turn = (await db.collection("crm_meta").doc("assign").get()).data() || {};
               console.log(`round-robin: ${RR.ON ? "on" : "off"}; managers: ${RR.pool(staffAll).map((x) => x.name).join(", ") || "— none"}; last given to: ${turn.last_name || "—"}`);
+              // A named manager not found: show similar staff records (name and flags only).
+              const nn = (x) => String(x || "").toLowerCase().replace(/[^a-zа-яё]/g, "").replace(/(.)\1+/g, "$1");
+              for (const want of String(process.env.LEAD_MANAGERS || "").split(",").map((x) => nn(x.trim().split(/\s+/)[0])).filter(Boolean)) {
+                if (RR.pool(staffAll).some((p) => nn(String(p.name).split(/\s+/)[0]) === want)) continue;
+                const near = staffAll.filter((x) => nn(x.full_name).includes(want.slice(0, 4)));
+                console.log(`  «${want}» not matched; similar staff: ${near.map((x) => `«${x.full_name}» active=${x.active} is_active=${x.is_active} manager=${Boolean(x.report_manager_id)}`).join("; ") || "none"}`);
+              }
               process.exit(0);
             })().catch((e) => { console.error(e.message); process.exit(1); });
             JS
