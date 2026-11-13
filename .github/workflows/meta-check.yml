@@ -21,10 +21,10 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           command_timeout: 5m
           script: |
-            for k in META_VERIFY_TOKEN META_APP_SECRET META_PAGE_ACCESS_TOKEN META_ADS_TOKEN META_AD_ACCOUNT_ID AI_AGENTS ERP_LEADS; do
+            for k in META_VERIFY_TOKEN META_APP_SECRET META_PAGE_ACCESS_TOKEN META_ADS_TOKEN META_AD_ACCOUNT_ID META_PAGE_ID AI_AGENTS ERP_LEADS; do
               if grep -q "^$k=." /opt/meta-webhook/.env; then echo "$k: set"; else echo "$k: not set"; fi
             done
-            echo "AI_AGENTS value: $(grep '^AI_AGENTS=' /opt/meta-webhook/.env | cut -d= -f2- || true) (default: staffbot,bosh)"
+            echo "AI_AGENTS value: $(grep '^AI_AGENTS=' /opt/meta-webhook/.env | cut -d= -f2- || true) (default: staffbot,bosh,instagram)"
             for k in META_PAGE_ACCESS_TOKEN META_ADS_TOKEN META_AD_ACCOUNT_ID META_GRAPH_VERSION; do export $k="$(grep "^$k=" /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"; done
             cat > /tmp/vp-meta.js <<'JS'
             const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
@@ -54,11 +54,12 @@ jobs:
               console.log("== What arrived (counts)");
               const ig = (await db.collection("ig_conversations").get()).docs.map((d) => d.data());
               const last = ig.map((c) => c.updated_at).filter(Boolean).sort().pop();
-              console.log(`Instagram Direct conversations: ${ig.length}; with phone: ${ig.filter((c) => c.captured).length}; last: ${last || "—"}`);
+              const fbc = ig.filter((c) => c.channel === "fb");
+              console.log(`Instagram Direct conversations: ${ig.length - fbc.length}; Messenger: ${fbc.length}; with phone: ${ig.filter((c) => c.captured).length}; last: ${last || "—"}`);
               const cfg = (await db.collection("instagram_config").doc("main").get()).data() || {};
               console.log(`Instagram agent setting (Sozlamalar): enabled=${cfg.enabled === true}, reply_comments=${cfg.reply_comments === true}`);
               const leads = (await db.collection("leads").get()).docs.map((d) => d.data());
-              for (const s of ["Instagram Direct", "Instagram izoh", "Instagram Target", "Facebook Lead Ads", "Sayt", "Telefon"]) {
+              for (const s of ["Instagram Direct", "Instagram izoh", "Instagram Target", "Facebook Lead Ads", "Facebook Messenger", "Sayt", "Telefon"]) {
                 const l = leads.filter((x) => x.source === s);
                 console.log(`ERP leads «${s}»: ${l.length}; last: ${l.map((x) => x.created_at).sort().pop() || "—"}`);
               }
@@ -66,6 +67,11 @@ jobs:
               console.log(`site form requests: ${sl.length}; last: ${sl.map((x) => x.created_at).sort().pop() || "—"}`);
               const st = (await db.collection("ads_state").doc("summary").get()).data();
               console.log(`ads sync (Targetolog): ${st ? `last ${st.last_sync || "—"}, campaigns ${st.campaigns ?? st.count ?? "?"}` : "never"}`);
+              // New internet leads go to the managers in turn (assign.js).
+              const A = require("/opt/meta-webhook/assign.js");
+              const staffAll = (await db.collection("staff").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+              const turn = (await db.collection("crm_meta").doc("assign").get()).data() || {};
+              console.log(`round-robin: ${A.ON ? "on" : "off"}; managers: ${A.pool(staffAll).map((x) => x.name).join(", ") || "— none"}; last given to: ${turn.last_name || "—"}`);
               process.exit(0);
             })().catch((e) => { console.error(e.message); process.exit(1); });
             JS

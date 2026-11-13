@@ -19,7 +19,7 @@ const DEFAULT_TEXTS = {
 type TextKey = keyof typeof DEFAULT_TEXTS;
 
 const TEXT_FIELDS: { key: TextKey; label: string; hint: string }[] = [
-  { key: "greeting", label: "Direct'ga birinchi yozganda", hint: "Kimdir Direct'ga birinchi marta yozganda yuboriladi." },
+  { key: "greeting", label: "Direct yoki Messenger'ga birinchi yozganda", hint: "Kimdir Instagram Direct yoki Facebook Messenger'ga birinchi marta yozganda yuboriladi." },
   { key: "comment", label: "Post ostida izoh qoldirganda", hint: "Izoh egasiga Direct orqali yuboriladi (bir marta)." },
   { key: "nudge", label: "Raqam yozmasa (eslatma)", hint: "Javobida telefon bo'lmasa, bir marta eslatadi." },
   { key: "thanks", label: "Raqam qoldirganda", hint: "{ism} va {telefon} o'rniga mijozning ismi va raqami qo'yiladi." },
@@ -166,10 +166,10 @@ export default function InstagramPanel() {
       <div className="card space-y-4 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-base font-bold text-ink-900">Instagram Direct agenti</h2>
+            <h2 className="font-display text-base font-bold text-ink-900">Instagram va Facebook agenti</h2>
             <p className="max-w-2xl text-sm text-ink-500">
-              Direct'ga yozgan yoki post ostida izoh qoldirganlarga avtomatik javob beradi, ism va raqamini so'raydi. Raqam qoldirilsa — Sotuv
-              bo'limida lid ochiladi va Telegram guruhdagi «📸 Instagram Direct» mavzusiga xabar keladi.
+              Instagram Direct, Facebook Messenger'ga yozgan yoki post ostida izoh qoldirganlarga avtomatik javob beradi, ism va raqamini so'raydi. Raqam qoldirilsa — Sotuv
+              bo'limida lid ochiladi, navbatdagi menejerga biriktiriladi va Telegram guruhdagi «📸 Instagram Direct» mavzusiga xabar keladi.
             </p>
           </div>
           {status &&
@@ -234,7 +234,7 @@ export default function InstagramPanel() {
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           <label className="flex items-center gap-2 text-sm font-semibold text-ink-800">
             <input type="checkbox" className="h-4 w-4" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-            Direct'ga avtomatik javob berish
+            Direct va Messenger'ga avtomatik javob berish
           </label>
           <label className="flex items-center gap-2 text-sm font-semibold text-ink-800">
             <input type="checkbox" className="h-4 w-4" checked={replyComments} disabled={!enabled} onChange={(e) => setReplyComments(e.target.checked)} />

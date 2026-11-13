@@ -79,9 +79,22 @@ const dueIn = (minutes, now = Date.now()) => {
 
 // Every new lead gets its first task — a call within `minutes` — and a
 // timeline line saying where it came from («har bir lid javobsiz qolmasin»).
-const startLead = async (db, lead, { text, minutes = 15, type = "call", note = "Yangi lid — qo'ng'iroq qiling", actor = "Tizim" }) => {
+// `assign`: an unassigned lead goes to the next manager in turn (assign.js).
+// Returns who has the lead ({email, name}) or null.
+const startLead = async (db, lead, { text, minutes = 15, type = "call", note = "Yangi lid — qo'ng'iroq qiling", actor = "Tizim", assign = false }) => {
   const now = new Date().toISOString();
   await db.collection("lead_activities").add({ lead_id: lead.id, text, actor_email: "system", actor_name: actor, created_at: now });
+  if (assign && !lead.assigned_to_email) {
+    const next = await require("./assign").assignNext(db).catch((err) => {
+      console.error("Lead round-robin failed", err.message);
+      return null;
+    });
+    if (next) {
+      lead = { ...lead, assigned_to_email: next.email, assigned_to_name: next.name };
+      await db.collection("leads").doc(lead.id).update({ assigned_to_email: next.email, assigned_to_name: next.name });
+      await db.collection("lead_activities").add({ lead_id: lead.id, text: `👤 Navbat bo'yicha biriktirildi: ${next.name}`, actor_email: "system", actor_name: "Tizim", created_at: now });
+    }
+  }
   const due = dueIn(minutes);
   await db.collection("lead_tasks").add({
     lead_id: lead.id,
@@ -95,6 +108,7 @@ const startLead = async (db, lead, { text, minutes = 15, type = "call", note = "
     completed_at: null,
     created_at: now,
   });
+  return lead.assigned_to_email ? { email: lead.assigned_to_email, name: lead.assigned_to_name || lead.assigned_to_email } : null;
 };
 
 // Creates a lead with the next LID number and registers its source so it

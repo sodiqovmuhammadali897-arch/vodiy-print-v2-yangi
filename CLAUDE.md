@@ -385,6 +385,28 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   manager version (own tiles, daily talk target, monthly plan) was mocked,
   not built — waiting for the owner to open the CRM to managers and set the
   talk target.
+- **Integrations, step 1 — built 2026-11-13** («hamma integratsiyalarni
+  boshlalik»; owner chose auto-reply on and round-robin):
+  - **One Meta key:** the owner puts a System User token (never expires)
+    into the `META_PAGE_ACCESS_TOKEN` secret; `meta-webhook/metaToken.js`
+    runs on every deploy and swaps it for the Page token, uses it as the ads
+    key when `META_ADS_TOKEN` is empty, finds the ad account when
+    `META_AD_ACCOUNT_ID` is empty (Variable `META_PAGE_ID` picks the Page).
+  - **Facebook Messenger** → the same fixed-text agent as Instagram
+    (`instagram.js`, channel "fb", `ig_conversations/fb_{psid}`, source
+    «Facebook Messenger»). The agent subscribes the app's page/instagram
+    webhooks and the Page's `subscribed_apps` (leadgen, messages).
+  - The agent is on by default now (`AI_AGENTS` default
+    staffbot,bosh,instagram — it uses no AI); replies still need Sozlamalar
+    → Instagram «Yoqilgan» (`instagram_config.enabled`, false on 2026-11-13).
+  - **Round-robin** (`meta-webhook/assign.js`, `startLead(..., {assign:
+    true})`): Instagram, Messenger, Meta form and site leads go to the next
+    seller (staff linked to Managerlar or with leads edit, not a plain
+    admin); people checked in today first; turn in `crm_meta/assign`;
+    `LEAD_ROUND_ROBIN=off` stops it. Calls stay with whoever took them.
+  - On 2026-11-13 the Page token was still invalid («user logged out»),
+    ads secrets unset, 0 Instagram/Facebook/site leads. `meta-check.yml`
+    shows all of it, plus the round-robin pool.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

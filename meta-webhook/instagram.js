@@ -9,8 +9,11 @@
 // answers from Instagram themselves.
 //
 // Webhooks arrive on the same Meta callback as Lead Ads (server.js hands
-// over every body whose object is "instagram"); replies go through the
-// Messenger Platform Send API with the same Page access token.
+// over every body whose object is "instagram", and the Page's Messenger
+// messages — object "page"); replies go through the Messenger Platform Send
+// API with the same Page access token. Facebook Messenger (2026-11-13) works
+// the same way: its conversations are ig_conversations/fb_{psid}, channel
+// "fb", and its leads have the source «Facebook Messenger».
 //
 // Config: instagram_config/main { enabled, reply_comments, texts: {...} }
 // (Sozlamalar → Instagram). Conversations: ig_conversations/{igsid}.
@@ -28,6 +31,10 @@ const DEFAULT_TEXTS = {
   thanks: "Rahmat, {ism}! ✅ Ma'lumotlaringiz qabul qilindi. Menejerlarimiz ish vaqtida {telefon} raqamiga bog'lanishadi.",
 };
 const REQUIRED_SCOPES = ["instagram_basic", "instagram_manage_messages", "pages_manage_metadata"];
+const MESSENGER_SCOPE = "pages_messaging";
+// Conversation doc id: Instagram's IGSID as it was; Messenger's PSID with "fb_".
+const keyOf = (sid, ch) => (ch === "fb" ? `fb_${sid}` : String(sid));
+const labelOf = (c) => (c && c.channel === "fb" ? "Facebook" : "Instagram");
 const COMMENT_SCOPE = "instagram_manage_comments";
 const CONFIG_TTL_MS = 60 * 1000;
 // A person who comes back after this long is greeted again as new.
@@ -136,7 +143,7 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     }
   };
 
-  const convoRef = (igsid) => db.collection("ig_conversations").doc(String(igsid));
+  const convoRef = (key) => db.collection("ig_conversations").doc(String(key));
 
   const send = async (recipient, text) => {
     const r = await graph("POST", "me/messages", { recipient, messaging_type: "RESPONSE", message: { text } });
@@ -144,32 +151,36 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     return r;
   };
 
-  const profileOf = async (igsid) => {
+  const profileOf = async (igsid, ch = "ig") => {
     try {
-      const p = await graph("GET", String(igsid), { fields: "name,username" });
+      const p = await graph("GET", String(igsid), { fields: ch === "fb" ? "name" : "name,username" });
       return { name: p.name || "", username: p.username || "" };
     } catch {
       return { name: "", username: "" };
     }
   };
 
-  const who = (c) => (c.username ? `@${c.username}` : c.name || "Instagram foydalanuvchisi");
+  const who = (c) => (c.username ? `@${c.username}` : c.name || c.name_profile || `${labelOf(c)} foydalanuvchisi`);
 
   // A phone number arrived: make (or touch) the lead and say thank you.
   // `silent`: a manager is already chatting — record the lead, don't reply.
   const capture = async (igsid, convo, phone, name, cfg, silent = false) => {
     const now = new Date().toISOString();
-    const display = name || convo.name || (convo.username ? `@${convo.username}` : "Instagram mijoz");
-    const source = convo.via === "comment" ? "Instagram izoh" : "Instagram Direct";
+    const fb = convo.channel === "fb";
+    const key = keyOf(igsid, convo.channel);
+    const display = name || convo.name || convo.name_profile || (convo.username ? `@${convo.username}` : `${labelOf(convo)} mijoz`);
+    const source = convo.via === "comment" ? "Instagram izoh" : fb ? "Facebook Messenger" : "Instagram Direct";
+    const icon = fb ? "💬" : "📸";
     const history = (convo.texts || []).map((t) => `— ${t}`).join("\n");
     let lead = ERP_LEADS_ON ? await findByPhone(db, "leads", phone) : null;
     let isNew = false;
+    let owner = null;
     if (!ERP_LEADS_ON) {
       // No ERP lead: the managers get the number in Telegram.
     } else if (lead) {
       await db.collection("lead_activities").add({
         lead_id: lead.id,
-        text: `📸 ${source} orqali yana yozdi (${who(convo)})${history ? `:\n${history}` : ""}`,
+        text: `${icon} ${source} orqali yana yozdi (${who(convo)})${history ? `:\n${history}` : ""}`,
         actor_email: "system",
         actor_name: "Instagram agent",
         created_at: now,
@@ -182,22 +193,21 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
         phone,
         source,
         note: [
-          `Instagram: ${who(convo)}`,
+          `${labelOf(convo)}: ${who(convo)}`,
           customer ? `Mijozlar bazasida bor: ${customer.company || [customer.first_name, customer.last_name].filter(Boolean).join(" ")}` : "",
           history ? `Yozganlari:\n${history}` : "",
         ]
           .filter(Boolean)
           .join("\n"),
-        instagram_username: convo.username || "",
-        instagram_id: String(igsid),
+        ...(fb ? { facebook_id: String(igsid) } : { instagram_username: convo.username || "", instagram_id: String(igsid) }),
       });
       isNew = true;
-      await startLead(db, { id: lead.id, full_name: display }, { text: `📸 ${source} orqali murojaat — Instagram agent lid yaratdi`, actor: "Instagram agent" });
+      owner = await startLead(db, { id: lead.id, full_name: display }, { text: `${icon} ${source} orqali murojaat — agent lid yaratdi`, actor: `${labelOf(convo)} agent`, assign: true });
     }
 
     const reply = render(cfg.texts.thanks, { name: name || convo.name || "", phone });
     if (!silent) await send({ id: igsid }, reply);
-    await convoRef(igsid).set(
+    await convoRef(key).set(
       {
         state: silent ? "human" : "done",
         lead_id: lead ? lead.id : "",
@@ -212,9 +222,10 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     );
     await notify(
       [
-        !lead ? `📸 ${source}: mijoz raqam qoldirdi` : isNew ? `✅ Yangi lid ${lead.lead_number} — ${source}` : `🔁 ${source}: mavjud lid ${lead.lead_number || ""} qayta yozdi`,
+        !lead ? `${icon} ${source}: mijoz raqam qoldirdi` : isNew ? `✅ Yangi lid ${lead.lead_number} — ${source}` : `🔁 ${source}: mavjud lid ${lead.lead_number || ""} qayta yozdi`,
         `👤 ${display}${convo.username ? ` (@${convo.username})` : ""}`,
         `📞 ${phone}`,
+        owner ? `🧑‍💼 Menejer: ${owner.name} (navbat bo'yicha)` : "",
         history ? `💬 ${clip(history.replace(/\n/g, " "), 300)}` : "",
         lead ? LEADS_URL : "",
       ]
@@ -229,21 +240,23 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
       visit: isNew ? "sales" : null,
       source: "instagram",
     });
-    console.log(`Instagram ${!lead ? "phone captured" : isNew ? "lead created" : "lead touched"}: ${lead ? lead.lead_number || lead.id : "-"} (${who(convo)}, ${phone})`);
+    console.log(`${labelOf(convo)} ${!lead ? "phone captured" : isNew ? "lead created" : "lead touched"}: ${lead ? lead.lead_number || lead.id : "-"} (${who(convo)}, ${phone})`);
   };
 
-  const onDirect = async (igsid, text) => {
+  const onDirect = async (igsid, text, ch = "ig") => {
     const cfg = await config();
     const now = new Date().toISOString();
-    const snap = await convoRef(igsid).get();
+    const key = keyOf(igsid, ch);
+    const snap = await convoRef(key).get();
     let convo = snap.exists ? snap.data() : null;
     const fresh = !convo || Date.now() - Date.parse(convo.last_in_at || convo.updated_at || 0) > FRESH_AFTER_MS;
     const texts = [...(fresh ? [] : convo.texts || []), clip(text || "(rasm/fayl)", 300)].slice(-6);
 
     if (fresh) {
-      const profile = convo && convo.username ? { name: convo.name_profile || "", username: convo.username } : await profileOf(igsid);
+      const profile = convo && (convo.username || convo.name_profile) ? { name: convo.name_profile || "", username: convo.username || "" } : await profileOf(igsid, ch);
       convo = {
         igsid: String(igsid),
+        channel: ch,
         username: profile.username,
         name_profile: profile.name,
         name: "",
@@ -255,7 +268,8 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     }
     // Only a comment reply that we just started counts as the same thread.
     if (!fresh && convo.state === "commented") convo.state = "asked";
-    await convoRef(igsid).set({ ...convo, texts, last_in_at: now, updated_at: now }, { merge: true });
+    if (!convo.channel) convo.channel = ch;
+    await convoRef(key).set({ ...convo, texts, last_in_at: now, updated_at: now }, { merge: true });
     convo.texts = texts;
 
     const found = parseContact(text);
@@ -268,29 +282,29 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
       return;
     }
     if (convo.state === "done") {
-      await notify(`💬 ${who(convo)} ${convo.lead_number ? `(${convo.lead_number}) ` : ""}yana yozdi:\n${clip(text || "(rasm/fayl)", 500)}\n\nJavobni Instagram'dan yozing.`);
+      await notify(`💬 ${who(convo)} ${convo.lead_number ? `(${convo.lead_number}) ` : ""}yana yozdi:\n${clip(text || "(rasm/fayl)", 500)}\n\nJavobni ${labelOf(convo)}'dan yozing.`);
       return;
     }
     if (!cfg.enabled) return;
 
     if (found.phone) return capture(igsid, convo, found.phone, nameNow(), cfg);
     const name = nameFrom(text);
-    if (name && !convo.name) await convoRef(igsid).set({ name }, { merge: true });
+    if (name && !convo.name) await convoRef(key).set({ name }, { merge: true });
 
     if (convo.state === "new") {
       await send({ id: igsid }, cfg.texts.greeting);
-      await convoRef(igsid).set({ state: "asked", last_bot_text: cfg.texts.greeting }, { merge: true });
-      await notify(`📩 Direct'ga yangi murojaat — ${who(convo)}:\n${clip(text || "(rasm/fayl)", 500)}\n\nAgent ism va raqam so'radi.`);
+      await convoRef(key).set({ state: "asked", last_bot_text: cfg.texts.greeting }, { merge: true });
+      await notify(`📩 ${ch === "fb" ? "Messenger" : "Direct"}'ga yangi murojaat — ${who(convo)}:\n${clip(text || "(rasm/fayl)", 500)}\n\nAgent ism va raqam so'radi.`);
       await emitEvent(db, { agent: "ig", kind: "report", text: `Direct: ${who(convo)} — ${clip(text || "(rasm/fayl)", 120)}`, bubble: clip(text || "📷", 60), source: "instagram" });
       return;
     }
     if ((convo.nudges || 0) < 1) {
       await send({ id: igsid }, cfg.texts.nudge);
-      await convoRef(igsid).set({ nudges: (convo.nudges || 0) + 1, last_bot_text: cfg.texts.nudge }, { merge: true });
+      await convoRef(key).set({ nudges: (convo.nudges || 0) + 1, last_bot_text: cfg.texts.nudge }, { merge: true });
       return;
     }
     // Asked twice already — stay quiet, but let the managers see it.
-    await notify(`💬 ${who(convo)} raqam qoldirmadi, lekin yozdi:\n${clip(text || "(rasm/fayl)", 500)}\n\nJavobni Instagram'dan yozing.`);
+    await notify(`💬 ${who(convo)} raqam qoldirmadi, lekin yozdi:\n${clip(text || "(rasm/fayl)", 500)}\n\nJavobni ${labelOf(convo)}'dan yozing.`);
   };
 
   // A manager wrote from Instagram (an echo we didn't send): step back.
@@ -349,8 +363,10 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     return next;
   };
 
-  // Called by server.js for a signed webhook body with object "instagram".
+  // Called by server.js for a signed webhook body with object "instagram"
+  // (Direct and comments) or "page" (Facebook Messenger).
   const handleWebhook = (body) => {
+    const ch = body.object === "page" ? "fb" : "ig";
     for (const entry of body.entry || []) {
       const igId = entry.id;
       for (const ev of entry.messaging || []) {
@@ -360,7 +376,7 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
         if (m.is_deleted || m.is_unsupported) continue;
         if (m.is_echo) {
           const igsid = ev.recipient && ev.recipient.id;
-          if (igsid) queue(igsid, () => onEcho(igsid, m.mid, m.text || ""));
+          if (igsid) queue(keyOf(igsid, ch), () => onEcho(keyOf(igsid, ch), m.mid, m.text || ""));
           continue;
         }
         const igsid = ev.sender && ev.sender.id;
@@ -368,11 +384,12 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
         if (ev.timestamp && Date.now() - Number(ev.timestamp) > MAX_AGE_MS) continue;
         // Story mentions and reactions to stories aren't enquiries.
         if (!m.text && (m.attachments || []).every((a) => a.type === "story_mention")) continue;
-        queue(igsid, () => onDirect(igsid, (m.text || "").trim()));
+        queue(keyOf(igsid, ch), () => onDirect(igsid, (m.text || "").trim(), ch));
       }
-      for (const ch of entry.changes || []) {
-        if (ch.field !== "comments" || !ch.value) continue;
-        const v = ch.value;
+      if (ch === "fb") continue; // Page feed comments are not handled
+      for (const change of entry.changes || []) {
+        if (change.field !== "comments" || !change.value) continue;
+        const v = change.value;
         if (seen.has(v.id)) continue;
         remember(seen, v.id);
         queue(v.from && v.from.id ? v.from.id : v.id, () => onComment(igId, v));
@@ -382,7 +399,7 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
 
   // ── Setup check (Sozlamalar → Instagram) ──────────────────────────
   const status = async () => {
-    const out = { ok: false, page: null, instagram: null, app: null, scopes: [], missing: [], comments_scope: false, subscription: null, error: "" };
+    const out = { ok: false, page: null, instagram: null, app: null, scopes: [], missing: [], comments_scope: false, messenger_scope: false, subscription: null, error: "" };
     if (!pageToken || !appSecret) {
       out.error = "Serverda META_PAGE_ACCESS_TOKEN / META_APP_SECRET yo'q";
       return out;
@@ -398,6 +415,7 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
       out.scopes = (dbg.data && dbg.data.scopes) || [];
       out.missing = REQUIRED_SCOPES.filter((s) => !out.scopes.includes(s));
       out.comments_scope = out.scopes.includes(COMMENT_SCOPE);
+      out.messenger_scope = out.scopes.includes(MESSENGER_SCOPE);
       const subs = await graph("GET", `${app.id}/subscriptions`, {}, appToken);
       const ig = (subs.data || []).find((s) => s.object === "instagram");
       out.subscription = ig ? { active: ig.active !== false, fields: (ig.fields || []).map((f) => f.name || f) } : null;
@@ -410,8 +428,10 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
     return out;
   };
 
-  // Subscribes the app to the instagram webhook (messages + comments) so
-  // nobody has to click through the Meta dashboard. Safe on every start.
+  // Subscribes the app to the instagram webhook (messages + comments) and
+  // the Page webhook (leadgen + Messenger messages), and the Page itself to
+  // the app, so nobody has to click through the Meta dashboard. Safe on
+  // every start.
   const ensureSubscription = async () => {
     if (!pageToken || !appSecret || !verifyToken) return;
     try {
@@ -419,23 +439,32 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
       const appToken = `${app.id}|${appSecret}`;
       const subs = await graph("GET", `${app.id}/subscriptions`, {}, appToken);
       const pageSub = (subs.data || []).find((s) => s.object === "page");
-      const ig = (subs.data || []).find((s) => s.object === "instagram");
-      const have = ig ? (ig.fields || []).map((f) => f.name || f) : [];
-      const want = ["messages", "comments"];
-      if (ig && ig.active !== false && want.every((f) => have.includes(f))) {
-        console.log("Instagram webhook already subscribed:", have.join(","));
-        return;
-      }
       const callback = (pageSub && pageSub.callback_url) || `${callbackBase}/webhooks/meta-leads`;
-      await graph(
-        "POST",
-        `${app.id}/subscriptions`,
-        { object: "instagram", callback_url: callback, fields: [...new Set([...have, ...want])].join(","), verify_token: verifyToken, include_values: true },
-        appToken,
+      const fieldsOf = (sub) => (sub ? (sub.fields || []).map((f) => f.name || f) : []);
+      for (const [object, want] of [
+        ["instagram", ["messages", "comments"]],
+        ["page", ["leadgen", "messages"]],
+      ]) {
+        const sub = (subs.data || []).find((s) => s.object === object);
+        const have = fieldsOf(sub);
+        if (sub && sub.active !== false && want.every((f) => have.includes(f))) {
+          console.log(`Meta webhook (${object}) already subscribed:`, have.join(","));
+          continue;
+        }
+        await graph(
+          "POST",
+          `${app.id}/subscriptions`,
+          { object, callback_url: callback, fields: [...new Set([...have, ...want])].join(","), verify_token: verifyToken, include_values: true },
+          appToken,
+        ).catch((err) => console.error(`Meta webhook (${object}) subscribe failed:`, err.message));
+        console.log(`Meta webhook (${object}) subscribed:`, callback);
+      }
+      // The Page must also have the app installed for these fields.
+      await graph("POST", "me/subscribed_apps", { subscribed_fields: "leadgen,messages" }).catch((err) =>
+        console.error("Page subscribed_apps failed:", err.message),
       );
-      console.log("Instagram webhook subscribed:", callback);
     } catch (err) {
-      console.error("Instagram webhook subscribe failed:", err.message);
+      console.error("Meta webhook subscribe failed:", err.message);
     }
   };
 

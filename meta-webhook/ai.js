@@ -5,7 +5,9 @@
 // AI_AGENTS=staffbot,bosh,hisobchi. The Telegram bot itself keeps working —
 // task buttons, reminders, attendance and amoCRM notices don't use AI.
 
-const DEFAULT = "staffbot,bosh";
+// The Instagram/Messenger agent uses no AI (fixed texts) — on by default
+// since 2026-11-13; its replies still need Sozlamalar → Instagram «Yoqilgan».
+const DEFAULT = "staffbot,bosh,instagram";
 const NAMES = {
   hisobchi: "Hisobchi",
   marketolog: "Marketolog",

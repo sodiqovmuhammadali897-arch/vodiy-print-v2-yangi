@@ -31,7 +31,7 @@ const toErpLead = async (db, l, siteId) => {
     customer_type: "",
     tags: [],
   });
-  await startLead(db, { id: created.id, full_name: l.name }, { text: `🌐 Saytdan ariza — ${what}`, actor: "Sayt" });
+  await startLead(db, { id: created.id, full_name: l.name }, { text: `🌐 Saytdan ariza — ${what}`, actor: "Sayt", assign: true });
 };
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";

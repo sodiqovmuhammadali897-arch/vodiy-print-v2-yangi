@@ -175,7 +175,7 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
     form_id: formId || "",
   });
   const { lead_number } = created;
-  await startLead(db, { id: created.id, full_name: fullName }, { text: `Lid ochildi — ${source}${formName ? ` («${formName}»)` : ""}`, actor: "Meta forma" });
+  const owner = await startLead(db, { id: created.id, full_name: fullName }, { text: `Lid ochildi — ${source}${formName ? ` («${formName}»)` : ""}`, actor: "Meta forma", assign: true });
 
   if (campaignName) {
     await db
@@ -184,7 +184,7 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
       .set({ name: campaignName, campaign_id: campaignId || "" }, { merge: true });
   }
 
-  console.log(`Lead ingested: ${lead_number} (${fullName}, ${phone})`);
+  console.log(`Lead ingested: ${lead_number} (${fullName}, ${phone}) → ${owner ? owner.name : "unassigned"}`);
 };
 
 // Meta's one-time subscription handshake.
@@ -211,6 +211,11 @@ app.post("/webhooks/meta-leads", async (req, res) => {
   if (req.body && req.body.object === "instagram") {
     if (ai.on("instagram")) instagram.handleWebhook(req.body);
     return;
+  }
+  // Facebook Page Messenger (object "page", entry.messaging) — the same
+  // agent as Instagram Direct; the Page's leadgen changes go on below.
+  if (req.body && req.body.object === "page" && (req.body.entry || []).some((e) => (e.messaging || []).length)) {
+    if (ai.on("instagram")) instagram.handleWebhook(req.body);
   }
 
   try {

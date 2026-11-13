@@ -347,8 +347,13 @@ jobs:
             AMO_TOKEN=$AMO_TOKEN
             OPENAI_API_KEY=$OPENAI_API_KEY
             META_AD_ACCOUNT_ID=$META_AD_ACCOUNT_ID
+            META_PAGE_ID=${{ vars.META_PAGE_ID || '' }}
+            AI_AGENTS=${{ vars.AI_AGENTS || 'staffbot,bosh,instagram' }}
             EOF
             cd /opt/meta-webhook && npm install --omit=dev --no-audit --no-fund
+            # A System User key in META_PAGE_ACCESS_TOKEN → the Page's own key,
+            # the ads key and the ad account (metaToken.js; prints no tokens).
+            node /opt/meta-webhook/metaToken.js /opt/meta-webhook/.env || true
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S cp /tmp/deploy/meta-webhook.service /etc/systemd/system/meta-webhook.service
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S chown -R www-data:www-data /opt/meta-webhook
             echo "${{ secrets.SERVER_SUDO_PASSWORD }}" | sudo -S systemctl daemon-reload
