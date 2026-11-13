@@ -375,9 +375,9 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
           </div>
         )}
         <div>
-          <label className="label">Mois Zvonki akkaunti (e-pochta)</label>
-          <input className="input" type="email" placeholder="menejer@gmail.com" value={mzEmail} onChange={(e) => setMzEmail(e.target.value)} />
-          <p className="mt-1 text-xs text-ink-500">Shu raqamga kelgan qo'ng'iroqdan ochilgan lid shu xodimga biriktiriladi. ERP'ga kiradigan e-pochta bilan bir xil bo'lsa — bo'sh qoldiring.</p>
+          <label className="label">Mois Zvonki akkaunti</label>
+          <input className="input" placeholder="Mois Zvonki'dagi ismi, e-pochtasi yoki raqami" value={mzEmail} onChange={(e) => setMzEmail(e.target.value)} />
+          <p className="mt-1 text-xs text-ink-500">Shu xodimning raqamiga kelgan qo'ng'iroqdan ochilgan lid unga biriktiriladi. Bo'sh bo'lsa — xodim telefoni va ismi bo'yicha topiladi.</p>
         </div>
         <div>
           <label className="label">Rol</label>

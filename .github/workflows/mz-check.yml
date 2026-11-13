@@ -61,7 +61,8 @@ jobs:
               const since = new Date(Date.now() - days * 86400e3).toISOString();
               const calls = (await db.collection("calls").where("created_at", ">=", since).get()).docs.map((d) => d.data());
               const acc = {};
-              for (const c of calls) { const a = c.mz_account || "(no account in event)"; acc[a] = acc[a] || { n: 0, staff: c.staff_email }; acc[a].n++; }
+              const mphone = (p) => (p ? `***${String(p).slice(-2)}` : "");
+              for (const c of calls) { const a = `${c.mz_account || "(no user_name)"}${c.mz_src ? " / tel " + mphone(c.mz_src) : ""}`; acc[a] = acc[a] || { n: 0, staff: c.staff_email }; acc[a].n++; if (c.staff_email) acc[a].staff = c.staff_email; }
               console.log("== webhook account | calls | ERP staff");
               for (const [a, v] of Object.entries(acc).sort((x, y) => y[1].n - x[1].n)) {
                 const s = staff.find((x) => x.id === v.staff);

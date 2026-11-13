@@ -94,7 +94,7 @@ const recall = process.env.TELEGRAM_BOT_TOKEN ? require("./recall").create(db) :
 const debts = recall ? require("./debts").create(db, { team: recall.managers, admins: recall.admins }) : null;
 const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead, startLead } = require("./leads");
-const { pickOpenLead, callStaffEmail, dueIn, needsCallback, normalizePhone: normalizeCallPhone } = require("./callLeads");
+const { pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone: normalizeCallPhone } = require("./callLeads");
 // Calls open ERP leads (the ERP's CRM, phase 2) on their own switch, so the
 // Meta form and Instagram leads keep going to the managers as before.
 // ERP_CALL_LEADS=off turns it off.
@@ -291,14 +291,11 @@ const handleCallFinish = async (event) => {
 
   // Who took or made the call, when Mois Zvonki says so.
   const staffEmail = callStaffEmail(event);
-  // The account is the ERP login, or the staff's «Mois Zvonki akkaunti».
-  let staffDoc = staffEmail ? await db.collection("staff").doc(staffEmail).get() : null;
-  if (staffEmail && !(staffDoc && staffDoc.exists)) {
-    const q = await db.collection("staff").where("moizvonki_email", "==", staffEmail).limit(1).get();
-    staffDoc = q.empty ? null : q.docs[0];
-  }
-  const staffLogin = staffDoc && staffDoc.exists ? staffDoc.id : "";
-  const staffName = staffLogin ? staffDoc.data().full_name || staffLogin : "";
+  // Matched by callLeads.matchStaff (e-mail, «Mois Zvonki akkaunti», phone, name).
+  const staffAll = (await db.collection("staff").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const who = matchStaff(event, staffAll);
+  const staffLogin = who ? who.id : "";
+  const staffName = who ? who.full_name || who.id : "";
   const actor = { email: staffName ? staffLogin : "system", name: staffName || "Mois Zvonki" };
 
   // An incoming call with no open lead is a new enquiry — a new lead
@@ -337,7 +334,8 @@ const handleCallFinish = async (event) => {
     end_time: endTime ? new Date(endTime * 1000).toISOString() : null,
     staff_email: staffLogin,
     // Which Mois Zvonki account it was, matched or not — to link the rest.
-    mz_account: staffEmail,
+    mz_account: staffEmail || String(event?.user_name || ""),
+    mz_src: normalizeCallPhone(event?.src_number),
     // The event's field names (no values) — to see which one names the employee.
     event_keys: Object.keys(event || {}).sort(),
     created_at: now,

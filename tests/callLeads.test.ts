@@ -34,3 +34,18 @@ describe("calls → ERP leads", () => {
     expect(C.needsCallback([{ status: "open", type: "design_approval", due_date: "2026-11-12" }], now)).toBe(true);
   });
 });
+
+describe("who took the call", () => {
+  const staff = [
+    { id: "a@vp.uz", full_name: "Muhammaddiyor Karimov", moizvonki_email: "so.diyor@gmail.com", phone: "" },
+    { id: "b@vp.uz", full_name: "Nuriddin", moizvonki_email: "", phone: "+998 91 222 33 44" },
+    { id: "c@vp.uz", full_name: "Maryam", moizvonki_email: "Menejer 3" },
+  ];
+  it("matches by account field, phone or first name", () => {
+    expect(C.matchStaff({ user_account: "so.diyor@gmail.com" }, staff)?.id).toBe("a@vp.uz");
+    expect(C.matchStaff({ user_name: "Menejer 3" }, staff)?.id).toBe("c@vp.uz");
+    expect(C.matchStaff({ user_name: "?", src_number: "998912223344" }, staff)?.id).toBe("b@vp.uz");
+    expect(C.matchStaff({ user_name: "Muhammadiyor" }, staff)?.id).toBe("a@vp.uz");
+    expect(C.matchStaff({ user_name: "Boshqa" }, staff)).toBeNull();
+  });
+});

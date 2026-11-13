@@ -350,7 +350,12 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     e-mail (`callStaffEmail`), matched to the staff login or the staff's
     «Mois Zvonki akkaunti» (`staff.moizvonki_email`, Xodimlar form). The
     owner says 3 manager numbers are on Mois Zvonki with 3 gmail accounts.
-    `calls.event_keys` / `calls.mz_account` record what arrives;
+    **The event has no e-mail** (seen 2026-11-13): fields are user_name,
+    src_number, src_id, src_slot, user_group_id, client_number, recording …
+    `callLeads.matchStaff` matches staff by the «Mois Zvonki akkaunti» field
+    (e-mail, user_name or number), the staff phone, then the first name.
+    Recordings open (15/15 tried, audio). `calls.event_keys` / `mz_account`
+    (user_name) / `mz_src` record what arrives;
     `calls-check.yml` and `mz-check.yml` print them (masked). The Mois
     Zvonki API key on the server is rejected («Username or password is
     invalid», 2026-11-12) — the webhook still arrives, only API calls fail.
