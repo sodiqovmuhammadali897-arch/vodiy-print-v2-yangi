@@ -401,8 +401,10 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     → Instagram «Yoqilgan» (`instagram_config.enabled`, false on 2026-11-13).
   - **Round-robin** (`meta-webhook/assign.js`, `startLead(..., {assign:
     true})`): Instagram, Messenger, Meta form and site leads go to the next
-    seller (staff linked to Managerlar or with leads edit, not a plain
-    admin); people checked in today first; turn in `crm_meta/assign`;
+    seller — the names in the Variable `LEAD_MANAGERS` (else
+    RECALL_MANAGERS, else Muhammadiyor,Maryam,Nuriddin) matched to staff by
+    first name (a permissions rule took in «test», Jamila and Dilmurodjon —
+    fixed the same day); people checked in today first; turn in `crm_meta/assign`;
     `LEAD_ROUND_ROBIN=off` stops it. Calls stay with whoever took them.
   - On 2026-11-13 the Page token was still invalid («user logged out»),
     ads secrets unset, 0 Instagram/Facebook/site leads. `meta-check.yml`

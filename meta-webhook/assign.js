@@ -6,15 +6,24 @@
 const ON = process.env.LEAD_ROUND_ROBIN !== "off";
 const TZ = 5 * 3600e3;
 
-// Who can take leads: the same rule as the app's seller list (linked to
-// Managerlar, or allowed to edit leads), active, and not an admin account
-// that isn't a seller.
-function pool(staff) {
-  return staff
-    .filter((s) => s.active !== false && (s.report_manager_id || (s.permissions && s.permissions.leads && s.permissions.leads.edit)))
-    .filter((s) => !(s.role === "admin" && !s.report_manager_id))
-    .map((s) => ({ email: String(s.id || s.email || "").toLowerCase(), name: s.full_name || s.id || s.email }))
-    .filter((s) => s.email);
+// Who takes leads: the names in LEAD_MANAGERS (a GitHub Variable, else
+// RECALL_MANAGERS, else Muhammadiyor, Maryam, Nuriddin), matched to active
+// staff by first name — «Muhammadiyor» and «Muhammaddiyor» are the same.
+// (A rule by permissions took in a test account and the production
+// manager, 2026-11-13.)
+const DEFAULT_NAMES = "Muhammadiyor,Maryam,Nuriddin";
+const normName = (s) => String(s || "").toLowerCase().replace(/[^a-zа-яё]/g, "").replace(/(.)\1+/g, "$1");
+const firstName = (s) => normName(String(s || "").trim().split(/\s+/)[0]);
+function pool(staff, names = process.env.LEAD_MANAGERS || process.env.RECALL_MANAGERS || DEFAULT_NAMES) {
+  const out = [];
+  for (const want of String(names).split(",").map(firstName).filter(Boolean)) {
+    const hits = staff.filter((s) => s.active !== false && s.is_active !== false && firstName(s.full_name) === want);
+    const s = hits.find((x) => x.report_manager_id) || hits[0];
+    if (!s) continue;
+    const email = String(s.id || s.email || "").toLowerCase();
+    if (email && !out.some((o) => o.email === email)) out.push({ email, name: s.full_name || email });
+  }
+  return out;
 }
 
 // The next seller after `last`, in a fixed order (by e-mail).

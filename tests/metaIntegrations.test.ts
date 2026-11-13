@@ -13,8 +13,11 @@ describe("new internet leads go to the managers in turn", () => {
     { id: "old@vp.uz", full_name: "Old", report_manager_id: "m9", active: false },
     { id: "prod@vp.uz", full_name: "Dilmurodjon", permissions: { orders: { edit: true } } },
   ];
-  it("takes sellers only", () => {
-    expect(A.pool(staff).map((s: { name: string }) => s.name)).toEqual(["Nuriddin", "Muhammaddiyor", "Maryam"]);
+  it("takes the named sellers only", () => {
+    const more = [...staff, { id: "test@vp.uz", full_name: "test", permissions: { leads: { edit: true } } }, { id: "jamila@vp.uz", full_name: "Jamila", permissions: { leads: { edit: true } } }];
+    expect(A.pool(more, "Muhammadiyor,Maryam,Nuriddin").map((s: { name: string }) => s.name)).toEqual(["Muhammaddiyor", "Maryam", "Nuriddin"]);
+    expect(A.pool(more, "Nuriddin, Nobody").map((s: { name: string }) => s.name)).toEqual(["Nuriddin"]);
+    expect(A.pool(more, "Old")).toEqual([]); // inactive
   });
   it("goes round, preferring who is at work", () => {
     const p = A.pool(staff);

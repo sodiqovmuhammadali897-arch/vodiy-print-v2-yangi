@@ -349,6 +349,7 @@ jobs:
             META_AD_ACCOUNT_ID=$META_AD_ACCOUNT_ID
             META_PAGE_ID=${{ vars.META_PAGE_ID || '' }}
             AI_AGENTS=${{ vars.AI_AGENTS || 'staffbot,bosh,instagram' }}
+            LEAD_MANAGERS=${{ vars.LEAD_MANAGERS || vars.RECALL_MANAGERS || 'Muhammadiyor,Maryam,Nuriddin' }}
             EOF
             cd /opt/meta-webhook && npm install --omit=dev --no-audit --no-fund
             # A System User key in META_PAGE_ACCESS_TOKEN → the Page's own key,
