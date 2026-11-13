@@ -68,10 +68,10 @@ jobs:
               const st = (await db.collection("ads_state").doc("summary").get()).data();
               console.log(`ads sync (Targetolog): ${st ? `last ${st.last_sync || "—"}, campaigns ${st.campaigns ?? st.count ?? "?"}` : "never"}`);
               // New internet leads go to the managers in turn (assign.js).
-              const A = require("/opt/meta-webhook/assign.js");
+              const RR = require("/opt/meta-webhook/assign.js");
               const staffAll = (await db.collection("staff").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
               const turn = (await db.collection("crm_meta").doc("assign").get()).data() || {};
-              console.log(`round-robin: ${A.ON ? "on" : "off"}; managers: ${A.pool(staffAll).map((x) => x.name).join(", ") || "— none"}; last given to: ${turn.last_name || "—"}`);
+              console.log(`round-robin: ${RR.ON ? "on" : "off"}; managers: ${RR.pool(staffAll).map((x) => x.name).join(", ") || "— none"}; last given to: ${turn.last_name || "—"}`);
               process.exit(0);
             })().catch((e) => { console.error(e.message); process.exit(1); });
             JS
