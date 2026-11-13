@@ -6,6 +6,11 @@
 // ads_state/summary). Money is shown in so'm: the account currency times
 // the rate in ads_settings/default.
 //
+// READ ONLY by default (the owner, 2026-11-13: «budjetni o'zgartirishga
+// tegmasin»): no proposals, no warnings, no pausing, nothing executed —
+// only the 10:00 report with spend, leads, lead price and each ad (video)'s
+// leads. ADS_CHANGES=on brings back everything below.
+//
 // It never spends on its own. A change goes through ads_proposals:
 //   budget / resume: review (marketolog) → approve (admin) → executed;
 //   a campaign whose lead price is over N× the account average (or that
@@ -19,10 +24,40 @@ const { emitEvent, clip } = require("./shared");
 
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000;
 const POLL_MS = 15 * 60 * 1000;
-const DEFAULTS = { daily_limit: 200000, monthly_limit: 6000000, stop_multiplier: 3, grace_minutes: 120, rate: 12800, report_hour: 9 };
+const DEFAULTS = { daily_limit: 200000, monthly_limit: 6000000, stop_multiplier: 3, grace_minutes: 120, rate: 12800, report_hour: 10 };
+const CHANGES_ON = process.env.ADS_CHANGES === "on";
 // Currencies Meta keeps without cents (budgets come in whole units).
 const NO_CENTS = new Set(["JPY", "KRW", "CLP", "COP", "CRC", "HUF", "ISK", "IDR", "PYG", "TWD", "VND"]);
 const LEAD_ACTIONS = ["lead", "onsite_conversion.lead_grouped", "leadgen_grouped", "onsite_conversion.messaging_conversation_started_7d"];
+// Meta reports one form lead under several names at once («lead»,
+// «leadgen_grouped», «onsite_conversion.lead_grouped») — the largest is the
+// count, never their sum. Started chats are counted on top.
+const LEAD_TYPES = ["lead", "onsite_conversion.lead_grouped", "leadgen_grouped"];
+const CHAT_TYPE = "onsite_conversion.messaging_conversation_started_7d";
+function resultsOf(actions) {
+  const v = (t) => (actions || []).filter((a) => a.action_type === t).reduce((s, a) => s + Number(a.value || 0), 0);
+  const leads = Math.max(0, ...LEAD_TYPES.map(v));
+  const chats = v(CHAT_TYPE);
+  return { leads, chats, results: leads + chats };
+}
+
+// Per ad (video): spend in so'm and dollars, leads, lead price; best first.
+function adStats(rows, rate, videoIds = new Set()) {
+  const by = new Map();
+  for (const r of rows || []) {
+    const a = by.get(r.ad_id) || { id: r.ad_id, name: r.ad_name || r.ad_id, spend: 0, usd: 0, leads: 0, chats: 0 };
+    const res = resultsOf(r.actions);
+    a.usd += Number(r.spend || 0);
+    a.spend += Number(r.spend || 0) * rate;
+    a.leads += res.leads;
+    a.chats += res.chats;
+    by.set(r.ad_id, a);
+  }
+  return [...by.values()]
+    .filter((a) => a.spend > 0 || a.leads)
+    .map((a) => ({ ...a, spend: Math.round(a.spend), usd: Math.round(a.usd * 100) / 100, cpl: a.leads ? Math.round((a.spend) / a.leads) : null, video: videoIds.has(String(a.id)) }))
+    .sort((x, y) => y.leads - x.leads || x.spend - y.spend);
+}
 const OPEN_STAGES = ["warning", "review", "approve", "approved", "executing"];
 
 const tashkent = (ms = Date.now()) => new Date(ms + TZ_OFFSET_MS);
@@ -107,11 +142,16 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     const today = dayOf();
     const monthStart = `${today.slice(0, 7)}-01`;
     const since = [monthStart, addDays(today, -29)].sort()[0];
-    const [acc, campaigns, adsets, rows] = await Promise.all([
+    const yesterday = addDays(today, -1);
+    const [acc, campaigns, adsets, rows, adRowsY, adRowsM, ads] = await Promise.all([
       graph(`act_${act}`, { fields: "name,currency,account_status,spend_cap,amount_spent" }),
       graphAll(`act_${act}/campaigns`, { fields: "id,name,status,effective_status,objective,daily_budget" }),
       graphAll(`act_${act}/adsets`, { fields: "id,name,campaign_id,status,effective_status,daily_budget" }),
       graphAll(`act_${act}/insights`, { level: "campaign", fields: "campaign_id,spend,actions", time_increment: 1, time_range: { since, until: today } }),
+      // Each ad (video): yesterday and this month.
+      graphAll(`act_${act}/insights`, { level: "ad", fields: "ad_id,ad_name,spend,actions", time_range: { since: yesterday, until: yesterday } }),
+      graphAll(`act_${act}/insights`, { level: "ad", fields: "ad_id,ad_name,spend,actions", time_range: { since: monthStart, until: today } }),
+      graphAll(`act_${act}/ads`, { fields: "id,creative{video_id,object_type}" }).catch(() => []),
     ]);
     const currency = acc.currency || "USD";
     const rate = currency === "UZS" ? 1 : Number(cfg.rate) || DEFAULTS.rate;
@@ -121,7 +161,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     const days = new Map(); // campaign id → { day: { spend, results } }
     for (const r of rows) {
       const m = days.get(r.campaign_id) || {};
-      const results = (r.actions || []).filter((a) => LEAD_ACTIONS.includes(a.action_type)).reduce((s, a) => s + Number(a.value || 0), 0);
+      const { results } = resultsOf(r.actions);
       const d = r.date_start;
       m[d] = { spend: (m[d]?.spend || 0) + Number(r.spend || 0) * rate, results: (m[d]?.results || 0) + results };
       days.set(r.campaign_id, m);
@@ -188,7 +228,11 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     for (const c of list) batch.set(db.collection("ads_campaigns").doc(c.id), { ...c, updated_at: summary.last_sync });
     batch.set(db.collection("ads_state").doc("summary"), summary);
     await batch.commit();
-    last = { cfg, list, summary, today, minorToSom, offset, rate };
+    const videoIds = new Set(ads.filter((a) => a.creative && (a.creative.video_id || a.creative.object_type === "VIDEO")).map((a) => String(a.id)));
+    const adsY = adStats(adRowsY, rate, videoIds);
+    const adsM = adStats(adRowsM, rate, videoIds);
+    await db.collection("ads_state").doc("ads").set({ day: yesterday, yesterday: adsY.slice(0, 50), month: adsM.slice(0, 50), updated_at: summary.last_sync });
+    last = { cfg, list, summary, today, minorToSom, offset, rate, adsY, adsM, currency };
     return last;
   };
 
@@ -279,6 +323,10 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     });
     if (!claimed) return;
     const p = claimed;
+    if (!CHANGES_ON) {
+      await ref.update({ stage: "failed", result: "Agent faqat o'qiydi — reklamaga tegmaydi", updated_at: new Date().toISOString() });
+      return;
+    }
     const finish = async (stage, note) => {
       const now = new Date().toISOString();
       await ref.update({ stage, result: note, updated_at: now, history: [...(p.history || []), { at: now, by: "agent", action: stage === "done" ? "bajarildi" : "xato", note }] });
@@ -408,29 +456,24 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     return answer(res.msg, !res.ok);
   };
 
-  // ── morning report ────────────────────────────────────────────────
+  // ── 10:00 report ──────────────────────────────────────────────────
+  const erpLeadsOn = async (day) => {
+    const snap = await db.collection("leads").where("created_at", ">=", `${addDays(day, -1)}T19:00:00`).where("created_at", "<", `${day}T19:00:00`).get();
+    return snap.docs.map((d) => d.data()).filter((l) => ["Facebook Lead Ads", "Instagram Target"].includes(l.source)).length;
+  };
   const report = async () => {
     if (!last) return;
-    const { list, summary, cfg } = last;
-    const y = summary.yesterday;
-    const ranked = list.filter((c) => c.yesterday.spend > 0).sort((a, b) => (a.yesterday.cpl ?? 9e15) - (b.yesterday.cpl ?? 9e15));
-    const best = ranked.find((c) => c.yesterday.results);
-    const worst = [...ranked].reverse().find((c) => c !== best);
-    const lines = [
-      "📊 Reklama — ertalabki hisobot",
-      `Kecha: ${som(y.spend)} sarflandi · ${y.results} natija${y.cpl ? ` (bittasi ${som(y.cpl)})` : ""}`,
-      best ? `🥇 Eng yaxshi: ${best.name} — ${best.yesterday.results} natija, ${som(best.yesterday.cpl)}dan` : "",
-      worst ? `🔻 Eng qimmat: ${worst.name} — ${som(worst.yesterday.spend)}, ${worst.yesterday.results} natija` : "",
-      `Oy: ${som(summary.month.spend)} / ${som(cfg.monthly_limit)} (${Math.round((summary.month.spend / Number(cfg.monthly_limit)) * 100)}%) · faol reklamalar kuniga ${som(summary.active_daily_budget)} (chegara ${som(cfg.daily_limit)})`,
-    ].filter(Boolean);
-    await post(lines.join("\n"));
-    await emitEvent(db, { agent: "mkt", kind: "report", text: clip(lines.slice(0, 2).join(" · "), 200), bubble: "Reklama hisoboti 📊", source: "ads" });
+    const yDay = addDays(last.today, -1);
+    const erp = await erpLeadsOn(yDay).catch(() => null);
+    const text = reportText({ ...last, yDay, erp });
+    await post(text);
+    await emitEvent(db, { agent: "mkt", kind: "report", text: clip(text.split("\n").slice(0, 3).join(" · "), 200), bubble: "Reklama hisoboti 📊", source: "ads" });
   };
 
   const daily = async () => {
     if (!last) return;
     const hour = tashkent().getUTCHours();
-    if (hour < Number(last.cfg.report_hour || 9)) return;
+    if (hour < Number(last.cfg.report_hour || DEFAULTS.report_hour)) return;
     const run = db.collection("ads_runs").doc(dayOf());
     try {
       await run.create({ at: new Date().toISOString() });
@@ -438,6 +481,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
       return;
     }
     await report();
+    if (!CHANGES_ON) return;
     await growth(last);
     // Spending past the daily limit (a budget changed in Meta itself).
     if (last.summary.active_daily_budget > Number(last.cfg.daily_limit)) {
@@ -449,10 +493,12 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     if (!enabled || running) return;
     running = true;
     try {
-      watch();
+      if (CHANGES_ON) watch();
       const s = await sync();
-      await guard(s);
-      await expireWarnings();
+      if (CHANGES_ON) {
+        await guard(s);
+        await expireWarnings();
+      }
       await daily();
     } catch (err) {
       log.error("Targetolog sync failed", err.message || err);
@@ -470,8 +516,8 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     await tick();
     timer = setInterval(() => tick().catch((err) => log.error("Targetolog tick failed", err)), POLL_MS);
     // Answers and deadlines between syncs.
-    expiryTimer = setInterval(() => expireWarnings().catch(() => undefined), 60 * 1000);
-    log.log(`Targetolog started (act_${act}, every ${POLL_MS / 60000} min)`);
+    if (CHANGES_ON) expiryTimer = setInterval(() => expireWarnings().catch(() => undefined), 60 * 1000);
+    log.log(`Targetolog started (act_${act}, every ${POLL_MS / 60000} min, ${CHANGES_ON ? "may change ads" : "read only"})`);
   };
   const stop = () => {
     clearInterval(timer);
@@ -482,4 +528,31 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
   return { start, stop, tick, handleCallback, enabled, _test: { sync, guard, growth, checkLimits, execute, report, onChange, expireWarnings } };
 };
 
-module.exports = { create, sumDays, DEFAULTS };
+// The report: yesterday's totals, each ad (video), the month so far.
+const usd = (n) => `$${(Math.round(Number(n || 0) * 100) / 100).toFixed(2)}`;
+function reportText({ summary, adsY = [], adsM = [], currency = "USD", yDay, erp = null }) {
+  const y = summary.yesterday;
+  const m = summary.month;
+  const leadsY = adsY.reduce((s, a) => s + a.leads, 0);
+  const leadsM = adsM.reduce((s, a) => s + a.leads, 0);
+  const usdY = adsY.reduce((s, a) => s + a.usd, 0);
+  const usdM = adsM.reduce((s, a) => s + a.usd, 0);
+  const cur = (n) => (currency === "UZS" ? "" : ` (${usd(n)})`);
+  const adLine = (a) => `${a.video ? "🎬" : "🖼"} ${clip(a.name, 60)} — ${a.leads} lid${a.cpl ? ` · ${som(a.cpl)}dan` : ""} · ${som(a.spend)}`;
+  const shown = adsY.slice(0, 10);
+  const lines = [
+    `📊 Reklama hisoboti — ${yDay.slice(8, 10)}.${yDay.slice(5, 7)}`,
+    `Kecha: ${som(y.spend)}${cur(usdY)} sarflandi · ${leadsY} lid${leadsY ? ` · bitta lid ${som(Math.round(y.spend / leadsY))}` : ""}`,
+    erp !== null ? `ERP'ga tushgan Facebook lidlari: ${erp}` : "",
+    "",
+    shown.length ? "Har bir reklama (kecha):" : "Kecha faol reklama bo'lmadi.",
+    ...shown.map(adLine),
+    adsY.length > shown.length ? `… yana ${adsY.length - shown.length} ta` : "",
+    "",
+    `Oy boshidan: ${som(m.spend)}${cur(usdM)} · ${leadsM} lid${leadsM ? ` · bitta lid ${som(Math.round(m.spend / leadsM))}` : ""}`,
+    adsM.length ? `Oyning eng yaxshilari: ${adsM.slice(0, 3).map((a) => `${clip(a.name, 30)} (${a.leads})`).join(", ")}` : "",
+  ];
+  return lines.filter((x, i, arr) => x !== "" || (arr[i - 1] !== "" && i > 0)).join("\n").trim();
+}
+
+module.exports = { create, sumDays, DEFAULTS, resultsOf, adStats, reportText };

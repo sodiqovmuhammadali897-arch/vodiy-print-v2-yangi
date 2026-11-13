@@ -7,7 +7,7 @@
 
 // The Instagram/Messenger agent uses no AI (fixed texts) — on by default
 // since 2026-11-13; its replies still need Sozlamalar → Instagram «Yoqilgan».
-const DEFAULT = "staffbot,bosh,instagram";
+const DEFAULT = "staffbot,bosh,instagram,targetolog";
 const NAMES = {
   hisobchi: "Hisobchi",
   marketolog: "Marketolog",

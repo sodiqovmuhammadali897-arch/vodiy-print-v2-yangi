@@ -66,7 +66,7 @@ export type AdsSettings = {
   report_hour: number;
 };
 
-export const ADS_DEFAULTS: AdsSettings = { daily_limit: 200000, monthly_limit: 6000000, stop_multiplier: 3, grace_minutes: 120, rate: 12800, report_hour: 9 };
+export const ADS_DEFAULTS: AdsSettings = { daily_limit: 200000, monthly_limit: 6000000, stop_multiplier: 3, grace_minutes: 120, rate: 12800, report_hour: 10 };
 
 export const OPEN_STAGES: AdsStage[] = ["warning", "review", "approve", "approved", "executing"];
 

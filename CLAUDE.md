@@ -424,6 +424,18 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     subscribed to `leadgen` (not `messages` — no pages_messaging; the owner
     dropped Instagram Direct: «isntagramga yozishi shartmas»).
     `meta-check.yml` shows token, scopes, subscriptions and counts.
+- **Targetolog read-only — 2026-11-13** (owner: «budjetni o'zgartirishga
+  tegmasin, lid narxi, soni, summasi, qaysi videodan nechta lid — har kuni
+  10:00»): on by default now (`AI_AGENTS` default adds targetolog; no AI is
+  used). `ADS_CHANGES` is off unless «on»: no proposals, warnings, pausing
+  or budget changes (an approved proposal is refused). Reads campaigns +
+  ad-level insights (yesterday and month; video flag from the creative),
+  writes `ads_state/ads`; the report at `report_hour` (default 10) in the
+  🎯 Reklama topic: spend in so'm (+$), leads, lead price, every ad
+  (🎬 video / 🖼 image) with leads and price, ERP Facebook leads of that day,
+  month so far. Leads = the largest of Meta's lead counters, not their sum
+  (the old code summed «lead» + «leadgen_grouped» + … — 2–3× too many).
+  `meta-check.yml` prints a report preview.
 - **Sotuv bo'limi background («Fon») — built 2026-11-13** (owner: amoCRM-like,
   «ko'zga yoqimli»): button «Fon» on Sotuv bo'limi (every tab, everyone) →
   6 pictures (`public/fon/*.svg`, drawn by us; light ones get a dark veil),

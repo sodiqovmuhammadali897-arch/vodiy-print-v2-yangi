@@ -67,6 +67,14 @@ jobs:
               console.log(`site form requests: ${sl.length}; last: ${sl.map((x) => x.created_at).sort().pop() || "—"}`);
               const st = (await db.collection("ads_state").doc("summary").get()).data();
               console.log(`ads sync (Targetolog): ${st ? `last ${st.last_sync || "—"}, campaigns ${st.campaigns ?? st.count ?? "?"}` : "never"}`);
+              // Targetolog: the 10:00 report as it would look now (ad names and sums only).
+              const sumDoc = (await db.collection("ads_state").doc("summary").get()).data();
+              const adsDoc = (await db.collection("ads_state").doc("ads").get()).data();
+              if (sumDoc && sumDoc.ok !== false && adsDoc) {
+                const T2 = require("/opt/meta-webhook/targetolog.js");
+                console.log("== Report preview\n" + T2.reportText({ summary: sumDoc, adsY: adsDoc.yesterday || [], adsM: adsDoc.month || [], currency: (sumDoc.account || {}).currency, yDay: adsDoc.day, erp: null }));
+                console.log(`campaigns: ${sumDoc.campaigns}, active: ${sumDoc.active_campaigns}; ads with spend this month: ${(adsDoc.month || []).length}`);
+              } else if (sumDoc) console.log(`ads sync error: ${sumDoc.error || "—"}`);
               // New internet leads go to the managers in turn (assign.js).
               const RR = require("/opt/meta-webhook/assign.js");
               const staffAll = (await db.collection("staff").get()).docs.map((d) => ({ id: d.id, ...d.data() }));

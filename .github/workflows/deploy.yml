@@ -348,7 +348,7 @@ jobs:
             OPENAI_API_KEY=$OPENAI_API_KEY
             META_AD_ACCOUNT_ID=$META_AD_ACCOUNT_ID
             META_PAGE_ID=${{ vars.META_PAGE_ID || '' }}
-            AI_AGENTS=${{ vars.AI_AGENTS || 'staffbot,bosh,instagram' }}
+            AI_AGENTS=${{ vars.AI_AGENTS || 'staffbot,bosh,instagram,targetolog' }}
             LEAD_MANAGERS=${{ vars.LEAD_MANAGERS || vars.RECALL_MANAGERS || 'Muhammadiyor,Maryam,Nuriddin' }}
             EOF
             cd /opt/meta-webhook && npm install --omit=dev --no-audit --no-fund
