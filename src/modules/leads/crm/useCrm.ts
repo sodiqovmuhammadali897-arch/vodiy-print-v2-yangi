@@ -12,7 +12,7 @@ export function useCrm() {
   const email = (auth.user?.email || "").toLowerCase();
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [tasks, setTasks] = useState<LeadTask[]>([]);
-  const [orders, setOrders] = useState<Record<string, Pick<Order, "status" | "order_number" | "total_amount">>>({});
+  const [orders, setOrders] = useState<Record<string, Pick<Order, "status" | "order_number" | "total_amount" | "created_at">>>({});
   const [staff, setStaff] = useState<Staff[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +22,7 @@ export function useCrm() {
     const offTasks = auth.isAdmin
       ? subscribeAll<LeadTask>("lead_tasks", setTasks)
       : subscribeWhere<LeadTask>("lead_tasks", "assigned_to_email", email, setTasks, undefined, onErr);
-    const offOrders = subscribeAll<Order>("orders", (rows) => setOrders(Object.fromEntries(rows.map((o) => [o.id, { status: o.status, order_number: o.order_number, total_amount: o.total_amount }]))));
+    const offOrders = subscribeAll<Order>("orders", (rows) => setOrders(Object.fromEntries(rows.map((o) => [o.id, { status: o.status, order_number: o.order_number, total_amount: o.total_amount, created_at: o.created_at }]))));
     void listAll<Staff & { id: string }>("staff")
       .then((rows) => setStaff(rows))
       .catch(() => setStaff([]));

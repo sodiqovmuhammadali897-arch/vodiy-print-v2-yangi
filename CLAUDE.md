@@ -373,6 +373,18 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     account is linked — the owner assigns them on the lead page.
   - Not yet: SMS, bot reminders for tasks, task KPI from ERP, importing
     amoCRM leads, outgoing calls opening leads, auto-distribution.
+- **CRM home page — built 2026-11-13** («Lidlar (ERP)» opens on «Bosh sahifa»,
+  `src/modules/leads/crm/CrmHome.tsx`, logic in `src/lib/crmDash.ts`), from
+  amoCRM's dashboard: period (Bugun/Kecha/Hafta/Oy/Davr) and manager chips;
+  tiles for overdue / done / due-today tasks, leads without a task, new
+  leads, calls, talk time (answer → end), leads turned into orders; managers
+  table; sources donut; funnel; calls by hour; loss reasons. **Every tile and
+  bar opens its leads, tasks or calls** (owner: «ustiga bossa o'sha lidlar
+  chiqsin»); overdue tasks can be closed there. Calls are read only for the
+  period (`calls` by created_at). Still admin-only like the board. The
+  manager version (own tiles, daily talk target, monthly plan) was mocked,
+  not built — waiting for the owner to open the CRM to managers and set the
+  talk target.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
