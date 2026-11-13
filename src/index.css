@@ -246,3 +246,51 @@ html[data-nav="fade"]::view-transition-new(page) { animation: vtRise 0.5s cubic-
 img[src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"] {
   display: inline;
 }
+
+/* Sotuv bo'limi's background picture (modules/leads/SalesFon.tsx puts
+   these classes on <main> while the page is open): the dark palette, and
+   cards as frosted glass over the picture. --glass-a is how solid they are
+   (the picker's «Kartalar shaffofligi»). Modals render outside <main>. */
+.fon-glass {
+  color-scheme: dark;
+  --ink-50: 15 23 42;
+  --ink-100: 30 41 59;
+  --ink-200: 51 65 85;
+  --ink-300: 71 85 105;
+  --ink-400: 148 163 184;
+  --ink-500: 170 182 200;
+  --ink-600: 203 213 225;
+  --ink-700: 226 232 240;
+  --ink-800: 241 245 249;
+  --ink-900: 248 250 252;
+  --surface: 17 24 44;
+  /* body's text colour was worked out with the light palette; set it again */
+  color: rgb(var(--ink-800));
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.fon-glass .bg-surface,
+.fon-glass .card {
+  background-color: rgb(13 20 40 / var(--glass-a, 0.5));
+  border-color: rgb(255 255 255 / 0.14);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+main.fon-glass .fon-col,
+.fon-glass .fon-col.fon-col {
+  background-color: rgb(13 20 40 / calc(var(--glass-a, 0.5) * 0.7));
+  border: 1px solid rgb(255 255 255 / 0.1);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.fon-glass .fon-solid,
+.fon-glass .fon-solid .bg-surface {
+  background-color: rgb(22 30 52 / 0.97);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.fon-glass h1,
+.fon-glass h2 {
+  text-shadow: 0 1px 12px rgb(0 0 0 / 0.35);
+}

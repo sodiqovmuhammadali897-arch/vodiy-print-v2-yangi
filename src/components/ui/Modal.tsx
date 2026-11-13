@@ -1,4 +1,5 @@
 import { ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 type Props = {
@@ -37,7 +38,9 @@ export default function Modal({
 
   if (!open) return null;
 
-  return (
+  // On document.body: a parent with a background picture's blur
+  // (.fon-glass) would otherwise trap a fixed box inside itself.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"
@@ -69,6 +72,7 @@ export default function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

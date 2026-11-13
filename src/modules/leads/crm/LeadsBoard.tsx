@@ -290,7 +290,7 @@ export default function LeadsBoard() {
                   return (
                     <div
                       key={c.key}
-                      className={`flex min-h-[420px] flex-col rounded-2xl bg-ink-100/70 p-2 transition dark:bg-ink-800/40 ${overCol === c.key ? "ring-2 ring-brand-500" : ""}`}
+                      className={`fon-col flex min-h-[420px] flex-col rounded-2xl bg-ink-100/70 p-2 transition dark:bg-ink-800/40 ${overCol === c.key ? "ring-2 ring-brand-500" : ""}`}
                       onDragOver={(e) => {
                         e.preventDefault();
                         setOverCol(c.key);
@@ -328,7 +328,7 @@ export default function LeadsBoard() {
                               onDragStart={() => setDragId(l.id)}
                               onDragEnd={() => setDragId(null)}
                               onClick={() => navigate(`/leads/${l.id}`)}
-                              className={`cursor-pointer rounded-xl bg-surface p-2.5 text-xs shadow-sm ring-1 ring-ink-100 transition hover:ring-brand-300 dark:ring-ink-700 ${dragId === l.id ? "opacity-50" : ""} ${busy === l.id ? "animate-pulse" : ""}`}
+                              className={`fon-solid cursor-pointer rounded-xl bg-surface p-2.5 text-xs shadow-sm ring-1 ring-ink-100 transition hover:ring-brand-300 dark:ring-ink-700 ${dragId === l.id ? "opacity-50" : ""} ${busy === l.id ? "animate-pulse" : ""}`}
                             >
                               <div className="truncate text-[13px] font-bold text-ink-900">
                                 {l.brand

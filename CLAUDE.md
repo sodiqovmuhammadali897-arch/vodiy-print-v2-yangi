@@ -407,6 +407,18 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   - On 2026-11-13 the Page token was still invalid («user logged out»),
     ads secrets unset, 0 Instagram/Facebook/site leads. `meta-check.yml`
     shows all of it, plus the round-robin pool.
+- **Sotuv bo'limi background («Fon») — built 2026-11-13** (owner: amoCRM-like,
+  «ko'zga yoqimli»): button «Fon» on Sotuv bo'limi (every tab, everyone) →
+  6 pictures (`public/fon/*.svg`, drawn by us; light ones get a dark veil),
+  «Oddiy (fonsiz)», «O'z rasmingiz» (shrunk to 1920 px JPEG), «Kartalar
+  shaffofligi». Kept per person in this browser only (`localStorage`
+  `vp_fon_{email}`, `src/lib/salesFon.ts`), nothing in the database; default
+  «Tog'lar». `SalesFon.tsx useSalesFon` puts `dark fon-glass` + the picture
+  on the layout's `<main>` (also on `/leads/:id`); `.fon-glass` in
+  `index.css` = dark palette + frosted cards (`.fon-col` board columns,
+  `.fon-solid` lead cards and the picker). `Modal` now renders on
+  `document.body` (createPortal) so the blur can't trap it. Only Sotuv
+  bo'limi — the rest of the ERP is unchanged.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
