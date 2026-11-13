@@ -1,0 +1,70 @@
+name: Facebook form leads check (read only)
+
+# Run by hand when a Facebook form lead did not reach the ERP. Shows: the
+# app's webhook subscriptions, the Page's installed apps, the Page's forms
+# with their newest lead times, what nginx and the server logged for
+# /webhooks/meta-leads in the last hours. Prints no tokens and no customer
+# data — times, status codes, counts and error messages only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: "How many hours of logs"
+        default: "6"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check
+        uses: appleboy/ssh-action@v1
+        env:
+          HOURS: ${{ inputs.hours }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: HOURS
+          command_timeout: 5m
+          script: |
+            H="${HOURS:-6}"
+            SUDO="${{ secrets.SERVER_SUDO_PASSWORD }}"
+            echo "== nginx: requests to /webhooks/meta-leads (time, method, status)"
+            for f in /var/log/nginx/access.log /var/log/nginx/access.log.1; do
+              echo "$SUDO" | sudo -S grep -h "/webhooks/meta-leads" "$f" 2>/dev/null | awk '{print $4, $6, $9}' | tr -d '["' | tail -20
+            done
+            echo "== server log, last ${H}h (lead lines masked)"
+            echo "$SUDO" | sudo -S journalctl -u meta-webhook --since "${H} hours ago" --no-pager 2>/dev/null \
+              | grep -E "Lead ingested|lead fetch failed|Failed to process leadgen|Meta webhook|subscribed_apps|Lead announce failed|leadgen" \
+              | sed -E 's/Lead ingested: (LID-[0-9]+) \(.*\)/Lead ingested: \1 (…)/' | cut -c1-220 | tail -30
+            for k in META_PAGE_ACCESS_TOKEN META_APP_SECRET META_GRAPH_VERSION; do export $k="$(grep "^$k=" /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"; done
+            cat > /tmp/vp-lg.js <<'JS'
+            const V = process.env.META_GRAPH_VERSION || "v19.0";
+            const T = process.env.META_PAGE_ACCESS_TOKEN;
+            const g = async (path, token = T) => {
+              const r = await fetch(`https://graph.facebook.com/${V}/${path}${path.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}`);
+              return r.json().catch(() => ({ error: { message: `HTTP ${r.status}` } }));
+            };
+            const err = (j) => (j && j.error ? `ERROR: ${j.error.message}`.replace(/\d{8,}/g, "#") : "");
+            (async () => {
+              const app = await g("app?fields=id,name");
+              console.log(err(app) || `== app: ${app.name}`);
+              if (app.id) {
+                const subs = await g(`${app.id}/subscriptions`, `${app.id}|${process.env.META_APP_SECRET}`);
+                for (const s of subs.data || []) console.log(`app webhook ${s.object}: active=${s.active}; callback=${String(s.callback_url || "").replace(/^https?:\/\/([^/]+).*/, "$1")}…; fields=${(s.fields || []).map((f) => f.name || f).join(",")}`);
+                if (subs.error) console.log(err(subs));
+              }
+              const apps = await g("me/subscribed_apps");
+              console.log(err(apps) || `page installed apps: ${(apps.data || []).map((a) => `${a.name} [${(a.subscribed_fields || []).join(",")}]`).join("; ") || "none"}`);
+              const forms = await g("me/leadgen_forms?fields=id,name,status,leads_count&limit=50");
+              if (forms.error) return console.log(`forms: ${err(forms)}`);
+              console.log(`== forms: ${(forms.data || []).length}`);
+              for (const f of (forms.data || []).slice(0, 15)) {
+                const leads = await g(`${f.id}/leads?fields=created_time&limit=3`);
+                const times = (leads.data || []).map((l) => l.created_time).join(", ");
+                console.log(`«${f.name}» ${f.status}; leads ${f.leads_count ?? "?"}; newest: ${err(leads) || times || "—"}`);
+              }
+            })().catch((e) => console.log("check failed:", e.message));
+            JS
+            node /tmp/vp-lg.js; rm -f /tmp/vp-lg.js
