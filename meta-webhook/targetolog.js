@@ -41,21 +41,24 @@ function resultsOf(actions) {
   return { leads, chats, results: leads + chats };
 }
 
-// Per ad (video): spend in so'm and dollars, leads, lead price; best first.
+// Per video: spend in so'm and dollars, leads, lead price; best first. The
+// same video often runs as several ads (one per ad set) — one row per name.
 function adStats(rows, rate, videoIds = new Set()) {
   const by = new Map();
   for (const r of rows || []) {
-    const a = by.get(r.ad_id) || { id: r.ad_id, name: r.ad_name || r.ad_id, spend: 0, usd: 0, leads: 0, chats: 0 };
+    const key = String(r.ad_name || r.ad_id).trim().toLowerCase();
+    const a = by.get(key) || { id: r.ad_id, name: String(r.ad_name || r.ad_id).trim(), spend: 0, usd: 0, leads: 0, chats: 0, video: false };
+    if (videoIds.has(String(r.ad_id))) a.video = true;
     const res = resultsOf(r.actions);
     a.usd += Number(r.spend || 0);
     a.spend += Number(r.spend || 0) * rate;
     a.leads += res.leads;
     a.chats += res.chats;
-    by.set(r.ad_id, a);
+    by.set(key, a);
   }
   return [...by.values()]
     .filter((a) => a.spend > 0 || a.leads)
-    .map((a) => ({ ...a, spend: Math.round(a.spend), usd: Math.round(a.usd * 100) / 100, cpl: a.leads ? Math.round((a.spend) / a.leads) : null, video: videoIds.has(String(a.id)) }))
+    .map((a) => ({ ...a, spend: Math.round(a.spend), usd: Math.round(a.usd * 100) / 100, cpl: a.leads ? Math.round(a.spend / a.leads) : null }))
     .sort((x, y) => y.leads - x.leads || x.spend - y.spend);
 }
 const OPEN_STAGES = ["warning", "review", "approve", "approved", "executing"];
@@ -539,15 +542,19 @@ function reportText({ summary, adsY = [], adsM = [], currency = "USD", yDay, erp
   const usdM = adsM.reduce((s, a) => s + a.usd, 0);
   const cur = (n) => (currency === "UZS" ? "" : ` (${usd(n)})`);
   const adLine = (a) => `${a.video ? "🎬" : "🖼"} ${clip(a.name, 60)} — ${a.leads} lid${a.cpl ? ` · ${som(a.cpl)}dan` : ""} · ${som(a.spend)}`;
-  const shown = adsY.slice(0, 10);
+  const withLeads = adsY.filter((a) => a.leads);
+  const shown = withLeads.slice(0, 12);
+  const idle = adsY.filter((a) => !a.leads);
+  const idleSpend = idle.reduce((s, a) => s + a.spend, 0);
   const lines = [
     `📊 Reklama hisoboti — ${yDay.slice(8, 10)}.${yDay.slice(5, 7)}`,
     `Kecha: ${som(y.spend)}${cur(usdY)} sarflandi · ${leadsY} lid${leadsY ? ` · bitta lid ${som(Math.round(y.spend / leadsY))}` : ""}`,
     erp !== null ? `ERP'ga tushgan Facebook lidlari: ${erp}` : "",
     "",
-    shown.length ? "Har bir reklama (kecha):" : "Kecha faol reklama bo'lmadi.",
+    adsY.length ? "Qaysi reklama nechta lid olib keldi (kecha):" : "Kecha faol reklama bo'lmadi.",
     ...shown.map(adLine),
-    adsY.length > shown.length ? `… yana ${adsY.length - shown.length} ta` : "",
+    withLeads.length > shown.length ? `… yana ${withLeads.length - shown.length} ta` : "",
+    idle.length ? `⚪ Lidsiz: ${idle.length} ta reklama · ${som(idleSpend)}` : "",
     "",
     `Oy boshidan: ${som(m.spend)}${cur(usdM)} · ${leadsM} lid${leadsM ? ` · bitta lid ${som(Math.round(m.spend / leadsM))}` : ""}`,
     adsM.length ? `Oyning eng yaxshilari: ${adsM.slice(0, 3).map((a) => `${clip(a.name, 30)} (${a.leads})`).join(", ")}` : "",
