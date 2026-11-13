@@ -1,0 +1,75 @@
+name: Assign call leads (writes, owner-approved)
+
+# The owner's request 2026-11-13: give the ERP leads that calls opened
+# before the Mois Zvonki numbers were linked (source «Telefon», since
+# 2026-11-12, no owner) to the manager who last talked to that number —
+# from the server's calls (staff_email) or else amoCRM's calls
+# (amo_calls.staff_email). Their open tasks with no owner go along.
+# apply=no only counts; apply=yes writes and keeps a data_fixes record.
+# Prints manager names and counts only — no phones, no customer names.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "yes = write, no = only show"
+        default: "no"
+        required: false
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assign
+        uses: appleboy/ssh-action@v1
+        env:
+          APPLY: ${{ inputs.apply }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: APPLY
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-assign.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const norm = (p) => String(p || "").replace(/\D/g, "").slice(-9);
+            (async () => {
+              const leads = (await db.collection("leads").get()).docs.map((d) => ({ id: d.id, ...d.data() }))
+                .filter((l) => String(l.created_at) >= "2026-11-12" && l.source === "Telefon" && !l.assigned_to_email && l.status !== "lost");
+              const staff = new Map((await db.collection("staff").get()).docs.map((d) => [d.id, d.data().full_name || d.id]));
+              const since = "2026-11-10";
+              const calls = (await db.collection("calls").where("created_at", ">=", since).get()).docs.map((d) => d.data()).filter((c) => c.staff_email);
+              const amo = (await db.collection("amo_calls").get()).docs.map((d) => d.data()).filter((c) => c.staff_email && c.phone);
+              const plan = [];
+              for (const l of leads) {
+                const p = norm(l.phone);
+                if (p.length !== 9) { plan.push({ l, to: null, via: "no phone" }); continue; }
+                const a = calls.filter((c) => norm(c.phone) === p).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))[0];
+                const b = amo.filter((c) => norm(c.phone) === p).sort((x, y) => Number(y.at || 0) - Number(x.at || 0))[0];
+                const to = (a && a.staff_email) || (b && b.staff_email) || null;
+                plan.push({ l, to, via: a ? "ERP call" : b ? "amoCRM call" : "not found" });
+              }
+              console.log(`unassigned call leads: ${leads.length}`);
+              const by = {};
+              for (const x of plan) { const k = `${x.to ? staff.get(x.to) || x.to : "— not found"} (${x.via})`; by[k] = (by[k] || 0) + 1; }
+              for (const [k, n] of Object.entries(by)) console.log(`  ${k}: ${n}`);
+              if (process.env.APPLY !== "yes") return console.log("apply=no — nothing written");
+              const now = new Date().toISOString();
+              const done = [];
+              for (const x of plan.filter((y) => y.to)) {
+                const name = staff.get(x.to) || x.to;
+                await db.collection("leads").doc(x.l.id).update({ assigned_to_email: x.to, assigned_to_name: name, updated_at: now });
+                const ts = await db.collection("lead_tasks").where("lead_id", "==", x.l.id).get();
+                for (const t of ts.docs) if (t.data().status === "open" && !t.data().assigned_to_email) await t.ref.update({ assigned_to_email: x.to, assigned_to_name: name });
+                await db.collection("lead_activities").add({ lead_id: x.l.id, text: `Mas'ul biriktirildi: ${name} (oxirgi qo'ng'iroq bo'yicha)`, actor_email: "system", actor_name: "Tizim", created_at: now });
+                done.push({ lead_id: x.l.id, before: "", after: x.to, via: x.via });
+              }
+              await db.collection("data_fixes").add({ kind: "assign-call-leads", at: now, count: done.length, items: done });
+              console.log(`written: ${done.length}`);
+              process.exit(0);
+            })().then(() => process.exit(0)).catch((e) => { console.error(e.message); process.exit(1); });
+            JS
+            node /tmp/vp-assign.js; rm -f /tmp/vp-assign.js
