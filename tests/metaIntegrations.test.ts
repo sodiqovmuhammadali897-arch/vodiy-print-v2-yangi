@@ -18,6 +18,8 @@ describe("new internet leads go to the managers in turn", () => {
     expect(A.pool(more, "Muhammadiyor,Maryam,Nuriddin").map((s: { name: string }) => s.name)).toEqual(["Muhammaddiyor", "Maryam", "Nuriddin"]);
     expect(A.pool(more, "Nuriddin, Nobody").map((s: { name: string }) => s.name)).toEqual(["Nuriddin"]);
     expect(A.pool(more, "Old")).toEqual([]); // inactive
+    expect(A.pool([{ id: "m@vp.uz", full_name: "Марям" }], "Maryam").length).toBe(1);
+    expect(A.pool([{ id: "m@vp.uz", full_name: "Мaryam Karimova" }], "Maryam").length).toBe(1);
   });
   it("goes round, preferring who is at work", () => {
     const p = A.pool(staff);

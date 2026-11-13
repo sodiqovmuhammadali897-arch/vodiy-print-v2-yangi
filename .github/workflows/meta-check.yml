@@ -73,11 +73,13 @@ jobs:
               const turn = (await db.collection("crm_meta").doc("assign").get()).data() || {};
               console.log(`round-robin: ${RR.ON ? "on" : "off"}; managers: ${RR.pool(staffAll).map((x) => x.name).join(", ") || "— none"}; last given to: ${turn.last_name || "—"}`);
               // A named manager not found: show similar staff records (name and flags only).
-              const nn = (x) => String(x || "").toLowerCase().replace(/[^a-zа-яё]/g, "").replace(/(.)\1+/g, "$1");
+              const nn = RR.normName;
               for (const want of String(process.env.LEAD_MANAGERS || "").split(",").map((x) => nn(x.trim().split(/\s+/)[0])).filter(Boolean)) {
                 if (RR.pool(staffAll).some((p) => nn(String(p.name).split(/\s+/)[0]) === want)) continue;
                 const near = staffAll.filter((x) => nn(x.full_name).includes(want.slice(0, 4)));
                 console.log(`  «${want}» not matched; similar staff: ${near.map((x) => `«${x.full_name}» active=${x.active} is_active=${x.is_active} manager=${Boolean(x.report_manager_id)}`).join("; ") || "none"}`);
+                // Staff whose phone matched a Mois Zvonki number but whose name differs (first letters only).
+                console.log(`  staff linked to Mois Zvonki: ${staffAll.filter((x) => x.moizvonki_email || x.phone).map((x) => `${String(x.full_name || "").slice(0, 3)}… (${[...String(x.full_name || "")].filter((c) => c.charCodeAt(0) > 127).length} non-Latin chars)`).join(", ")}`);
               }
               process.exit(0);
             })().catch((e) => { console.error(e.message); process.exit(1); });

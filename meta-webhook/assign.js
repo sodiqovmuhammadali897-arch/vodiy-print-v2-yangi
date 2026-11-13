@@ -12,7 +12,15 @@ const TZ = 5 * 3600e3;
 // (A rule by permissions took in a test account and the production
 // manager, 2026-11-13.)
 const DEFAULT_NAMES = "Muhammadiyor,Maryam,Nuriddin";
-const normName = (s) => String(s || "").toLowerCase().replace(/[^a-zа-яё]/g, "").replace(/(.)\1+/g, "$1");
+// Cyrillic → Latin, so «Марям», «Maryam» and a name typed with mixed
+// keyboards («Мaryam») all compare equal.
+const CYR = { а: "a", б: "b", в: "v", г: "g", ғ: "g", д: "d", е: "e", ё: "yo", ж: "j", з: "z", и: "i", й: "y", к: "k", қ: "q", л: "l", м: "m", н: "n", о: "o", ў: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "x", ҳ: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sh", ы: "i", э: "e", ю: "yu", я: "ya", ъ: "", ь: "" };
+const normName = (s) =>
+  String(s || "")
+    .toLowerCase()
+    .replace(/[а-яёўқғҳ]/g, (c) => CYR[c] ?? "")
+    .replace(/[^a-z]/g, "")
+    .replace(/(.)\1+/g, "$1");
 const firstName = (s) => normName(String(s || "").trim().split(/\s+/)[0]);
 function pool(staff, names = process.env.LEAD_MANAGERS || process.env.RECALL_MANAGERS || DEFAULT_NAMES) {
   const out = [];
@@ -53,4 +61,4 @@ async function assignNext(db, now = Date.now()) {
   });
 }
 
-module.exports = { ON, pool, pickNext, assignNext };
+module.exports = { ON, pool, pickNext, assignNext, normName };
