@@ -133,18 +133,28 @@ const graphName = async (id) => {
   }
 };
 
-const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
+// A Facebook/Instagram form lead → an ERP lead. Comes from the webhook or
+// from leadPoll.js (the server reads the forms every 3 minutes, because
+// Meta did not deliver the webhook, 2026-11-13); `prefetched` is the lead
+// as the poll read it. meta_leads/{leadgenId} makes sure it is taken once.
+const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId, prefetched = null, via = "webhook") => {
   if (!ERP_LEADS_ON) {
     console.log(`Meta lead ${leadgenId} skipped: ERP leads are off (sales run in amoCRM)`);
     return;
   }
-  const res = await fetch(
-    `https://graph.facebook.com/${GRAPH_VERSION}/${leadgenId}?access_token=${PAGE_ACCESS_TOKEN}`,
-  );
-  const lead = await res.json();
-  if (lead.error) {
-    console.error("Graph API lead fetch failed", lead.error);
-    return;
+  let lead = prefetched;
+  if (!lead) {
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${leadgenId}?access_token=${PAGE_ACCESS_TOKEN}`);
+    lead = await res.json();
+    if (lead.error) {
+      console.error("Graph API lead fetch failed", lead.error);
+      return;
+    }
+  }
+  try {
+    await db.collection("meta_leads").doc(String(leadgenId)).create({ via, form_id: formId || lead.form_id || "", at: new Date().toISOString() });
+  } catch {
+    return; // already taken (the webhook and the poll both saw it)
   }
 
   const fieldData = lead.field_data || [];
@@ -156,11 +166,15 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId) => {
   const telegram = (fieldData.find((f) => (f.name || "").toLowerCase().includes("telegram"))?.values || [])[0] || "";
 
   const [campaignName, adSetName, adName, formName] = await Promise.all([
-    graphName(campaignId),
-    graphName(adSetId),
-    graphName(adId),
-    graphName(formId),
+    lead.campaign_name || graphName(campaignId || lead.campaign_id),
+    lead.adset_name || graphName(adSetId || lead.adset_id),
+    lead.ad_name || graphName(adId || lead.ad_id),
+    lead.form_name || graphName(formId || lead.form_id),
   ]);
+  campaignId = campaignId || lead.campaign_id;
+  adSetId = adSetId || lead.adset_id;
+  adId = adId || lead.ad_id;
+  formId = formId || lead.form_id;
 
   const source = lead.platform === "ig" ? "Instagram Target" : "Facebook Lead Ads";
   const created = await createLead(db, {
@@ -459,4 +473,6 @@ app.listen(PORT, () => {
   guideFacts.start();
   void amocrm.start().catch((err) => console.error("amoCRM start failed", err));
   if (targetolog && ai.on("targetolog")) void targetolog.start().catch((err) => console.error("Targetolog start failed", err));
+  // Facebook/Instagram form leads read from the forms every 3 min (leadPoll.js).
+  require("./leadPoll").create(db, { token: PAGE_ACCESS_TOKEN, graphVersion: GRAPH_VERSION, ingest: ingestLead }).start();
 });

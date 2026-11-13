@@ -424,6 +424,16 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     subscribed to `leadgen` (not `messages` — no pages_messaging; the owner
     dropped Instagram Direct: «isntagramga yozishi shartmas»).
     `meta-check.yml` shows token, scopes, subscriptions and counts.
+  - **Meta never delivered the leadgen webhook** (2026-11-13: nginx saw no
+    POST while forms «Vodiy print 9/10/11» got leads; the app is likely in
+    Development mode). So `meta-webhook/leadPoll.js` reads the Page's ACTIVE
+    forms every 3 min (leads after `crm_meta/meta_poll.since`, which starts
+    at the first run — older leads are not imported) and hands each to
+    `ingestLead` (now takes a prefetched lead); `meta_leads/{leadgenId}`
+    makes a lead go in once whether the webhook or the poll sees it.
+    `LEAD_POLL=off` stops it. `leadgen-check.yml` (read only) shows nginx
+    hits, masked server lines, app/page subscriptions, forms with their
+    newest lead times, the poll state and counts.
 - **Targetolog read-only — 2026-11-13** (owner: «budjetni o'zgartirishga
   tegmasin, lid narxi, soni, summasi, qaysi videodan nechta lid — har kuni
   10:00»): on by default now (`AI_AGENTS` default adds targetolog; no AI is

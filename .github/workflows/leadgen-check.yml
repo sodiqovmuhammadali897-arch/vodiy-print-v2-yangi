@@ -68,3 +68,19 @@ jobs:
             })().catch((e) => console.log("check failed:", e.message));
             JS
             node /tmp/vp-lg.js; rm -f /tmp/vp-lg.js
+            cat > /tmp/vp-lg2.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            (async () => {
+              const st = (await db.collection("crm_meta").doc("meta_poll").get()).data();
+              console.log(`== form poll: ${st ? `since ${new Date(st.since * 1000).toISOString()}; last run ${st.last_run || "—"}; last count ${st.last_count ?? "—"}; last error ${st.last_error || "—"}` : "not started"}`);
+              const day = new Date(Date.now() - 24 * 3600e3).toISOString();
+              const ml = (await db.collection("meta_leads").where("at", ">=", day).get()).docs.map((d) => d.data());
+              console.log(`meta_leads last 24h: ${ml.length} (webhook ${ml.filter((x) => x.via === "webhook").length}, poll ${ml.filter((x) => x.via === "poll").length})`);
+              const leads = (await db.collection("leads").where("created_at", ">=", day).get()).docs.map((d) => d.data()).filter((l) => ["Facebook Lead Ads", "Instagram Target"].includes(l.source));
+              console.log(`ERP leads from forms, last 24h: ${leads.length}; claimed ${leads.filter((l) => l.assigned_to_email).length}`);
+              process.exit(0);
+            })().catch((e) => { console.log("db check failed:", e.message); process.exit(0); });
+            JS
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-lg2.js; rm -f /tmp/vp-lg2.js
