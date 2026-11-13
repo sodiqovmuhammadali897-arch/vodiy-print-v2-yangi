@@ -354,7 +354,9 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     src_number, src_id, src_slot, user_group_id, client_number, recording …
     `callLeads.matchStaff` matches staff by the «Mois Zvonki akkaunti» field
     (e-mail, user_name or number), the staff phone, then the first name.
-    Recordings open (15/15 tried, audio). `calls.event_keys` / `mz_account`
+    Recordings open (15/15 tried, audio). Confirmed by the owner 2026-11-13: Mois
+    Zvonki «Администратор» (number …55) = Muhammaddiyor, «Menejer» (…77) =
+    Nuriddin (matched by staff phone); the third number not seen yet. `calls.event_keys` / `mz_account`
     (user_name) / `mz_src` record what arrives;
     `calls-check.yml` and `mz-check.yml` print them (masked). The Mois
     Zvonki API key on the server is rejected («Username or password is
