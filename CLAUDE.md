@@ -446,6 +446,14 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   month so far. Leads = the largest of Meta's lead counters, not their sum
   (the old code summed «lead» + «leadgen_grouped» + … — 2–3× too many).
   `meta-check.yml` prints a report preview.
+- **Which deals have no task — 2026-11-14** (owner: «zadachasiz lid deyapti,
+  qaysiligini ko'rsatib turadigan qilish kerak, amoda ko'rinmayapti»): the
+  count now opens the deals (`src/components/amo/NoTaskLeads.tsx`, from
+  `amo_tasks.no_task_list` — the 30 biggest by sum — each with «amoCRM'da
+  ochish» via `amo_meta/status.host`) on KPI («vazifasiz bitim: N —
+  qaysilar?») and in amoCRM tahlil → «Zadachasiz lid»; the managers' 09:00
+  Telegram message adds the 5 biggest with links (`amoTasks.noTaskText`,
+  sent even when there are no tasks that day).
 - **Sotuv bo'limi background («Fon») — built 2026-11-13** (owner: amoCRM-like,
   «ko'zga yoqimli»): button «Fon» on Sotuv bo'limi (every tab, everyone) →
   6 pictures (`public/fon/*.svg`, drawn by us; light ones get a dark veil),

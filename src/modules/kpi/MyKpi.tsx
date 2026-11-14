@@ -7,6 +7,7 @@ import { formatDate } from "../../lib/format";
 import { dateCodeOf } from "../../utils/attendanceCalculations";
 import { boostTips, canForecast, daysLeft, forecastPayout, monthLabel, monthProgress, num, rateLabel, short, so, type BoostTip, type KpiMonthStatus } from "../../lib/salesKpi";
 import { useKpiMonth, type KpiRow } from "./useKpiMonth";
+import { NoTaskLeadsButton } from "../../components/amo/NoTaskLeads";
 
 // Mening KPI — a manager's own month, live: the money earned so far up
 // front, then what each part is made of, what would raise it, and the
@@ -213,7 +214,9 @@ function Body({ row: r, month, threshold, all, setAll }: { row: KpiRow; month: s
               <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">muddati o'tgan: {r.amo.overdue_open}</span>
             )}
             {!r.frozen && live && r.amo && r.amo.no_task_leads > 0 && (
-              <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">vazifasiz bitim: {r.amo.no_task_leads}</span>
+              <NoTaskLeadsButton count={r.amo.no_task_leads} list={r.amo.no_task_list} className="rounded-md bg-amber-50 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                vazifasiz bitim: {r.amo.no_task_leads} — qaysilar?
+              </NoTaskLeadsButton>
             )}
           </div>
         )}

@@ -94,3 +94,18 @@ describe("amoCRM tasks", () => {
     expect(T.newMisses([moved], excused, now)).toEqual([]);
   });
 });
+
+describe("09:00: deals without a next task", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const TT = require("../meta-webhook/amoTasks");
+  it("lists the biggest with their amoCRM links", () => {
+    const s = { no_task_leads: 7, no_task_list: [{ id: 11, name: "Agro Invest", price: 4_800_000, stage: "Қабул Қилинди", updated: "" }, { id: 12, name: "Zilola", price: 0, stage: "", updated: "" }] };
+    const text = TT.noTaskText(s, "vodiyprint.amocrm.ru");
+    expect(text).toContain("📌 Zadachasiz lidlar: 7 ta");
+    expect(text).toContain("• Agro Invest — 4,8 mln · Қабул Қилинди\n  https://vodiyprint.amocrm.ru/leads/detail/11");
+    expect(text).toContain("• Zilola\n");
+    expect(text).toContain("… yana 5 ta");
+    expect(TT.noTaskText({ no_task_leads: 0 }, "x")).toBeNull();
+    expect(TT.noTaskText(undefined, "x")).toBeNull();
+  });
+});

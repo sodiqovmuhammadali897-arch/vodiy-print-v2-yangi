@@ -15,6 +15,7 @@ import {
   type AmoStatus,
 } from "../../lib/amoStats";
 import CallsDayReport from "./CallsDayReport";
+import { NoTaskLeadsButton } from "../../components/amo/NoTaskLeads";
 
 // Sotuv bo'limi: amoCRM, read only. The server pulls counts every couple of
 // minutes (meta-webhook/amocrm.js); admins see everyone and can pick a
@@ -781,7 +782,7 @@ function ConnectionPanel({ status, thisMonth }: { status: AmoStatus; thisMonth: 
 // left over from earlier days, what is due tomorrow and what was put off.
 function TasksToday({ rows, colorIndex }: { rows: AmoTaskDoc[]; colorIndex: Map<number, number> }) {
   const list = rows
-    .filter((r) => r.today_due || r.past_open || r.tomorrow_due || r.postponed_today || r.due)
+    .filter((r) => r.today_due || r.past_open || r.tomorrow_due || r.postponed_today || r.due || r.no_task_leads)
     .sort((a, b) => b.past_open + b.today_open + b.postponed_today - (a.past_open + a.today_open + a.postponed_today) || a.name.localeCompare(b.name));
   if (!list.length) return null;
   const cell = (n: number, tone: "bad" | "warn" | "good" | "plain" = "plain") => (
@@ -840,7 +841,11 @@ function TasksToday({ rows, colorIndex }: { rows: AmoTaskDoc[]; colorIndex: Map<
                 <td className="px-3 py-3 text-center">{cell(r.today_open || 0, "warn")}</td>
                 <td className="px-3 py-3 text-center">{cell(r.postponed_today || 0, "bad")}</td>
                 <td className="px-3 py-3 text-center">{cell(r.tomorrow_due || 0)}</td>
-                <td className="px-3 py-3 text-center">{cell(r.no_task_leads || 0, "warn")}</td>
+                <td className="px-3 py-3 text-center">
+                  <NoTaskLeadsButton name={r.name} count={r.no_task_leads || 0} list={r.no_task_list} className="decoration-amber-500">
+                    {cell(r.no_task_leads || 0, "warn")}
+                  </NoTaskLeadsButton>
+                </td>
                 <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums">
                   {r.pct === null ? <span className="text-ink-400">—</span> : <b className={r.pct >= 80 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600"}>{String(r.pct).replace(".", ",")}%</b>}
                   {r.due > 0 && <span className="ml-1 text-xs text-ink-400">{r.on_time}/{r.due}</span>}

@@ -583,20 +583,28 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       if (!byUser.has(t.user)) byUser.set(t.user, []);
       byUser.get(t.user).push(t);
     }
-    const summary = slot.key === "evening" ? T.computeTasks(T.monthOf(now), { tasks: [...tasks.values()], misses, leads: [...leads.values()], now }) : null;
+    // Both slots: the evening for the admin's line, the morning for each
+    // manager's deals without a next task (noTaskText).
+    const summary = T.computeTasks(T.monthOf(now), { tasks: [...tasks.values()], misses, leads: [...leads.values()], now, stageOf });
+    const morning = slot.key === "morning";
     const rows = [];
-    for (const [user, list] of byUser) {
+    for (const user of new Set([...byUser.keys(), ...(morning ? summary.keys() : [])])) {
+      const list = byUser.get(user) || [];
       const email = staffByUser.get(user);
       const info = email && staffInfo.get(email);
-      const text = slot.key === "morning" ? T.morningText(list, now, leadName) : T.eveningText(list, now, leadName);
+      let text = morning ? T.morningText(list, now, leadName) : T.eveningText(list, now, leadName);
+      if (morning) {
+        const extra = T.noTaskText(summary.get(user), host);
+        if (extra) text = text ? `${text}\n\n${extra}` : extra;
+      }
       if (text && info && info.chat) await notify("sendMessage", { chat_id: info.chat, text }).catch((err) => log.error("amoCRM reminder failed", err.message));
       if (text && email) await push.toEmail(email, "amo", text, "/leads");
-      if (summary && summary.has(user)) {
+      if (!morning && summary.has(user)) {
         const s = summary.get(user);
         if (s.today_due) rows.push({ name: (users.get(user) || {}).name || `#${user}`, total: s.today_due, open: s.today_open, noTask: s.no_task_leads });
       }
     }
-    const adminMsg = summary ? T.adminText(rows) : null;
+    const adminMsg = morning ? null : T.adminText(rows);
     if (adminMsg) {
       for (const info of staffInfo.values()) if (info.admin && info.chat) await notify("sendMessage", { chat_id: info.chat, text: adminMsg }).catch(() => undefined);
       await push.toAdmins("admin", adminMsg, "/leads");

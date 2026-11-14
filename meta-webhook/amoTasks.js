@@ -150,6 +150,22 @@ function morningText(tasks, now, leadName) {
   return out.join("\n");
 }
 
+// Added to the 09:00 message: open deals with no next task, biggest first,
+// each with its amoCRM link (the owner, 2026-11-14: «qaysiligini ko'rsatib
+// turadigan qilish kerak»).
+function noTaskText(s, host, max = 5) {
+  if (!s || !s.no_task_leads) return null;
+  const list = (s.no_task_list || []).slice(0, max);
+  const mln = (n) => (n ? ` — ${(n / 1e6).toFixed(1).replace(".", ",")} mln` : "");
+  return [
+    `📌 Zadachasiz lidlar: ${s.no_task_leads} ta — har biriga keyingi zadacha qo'ying:`,
+    ...list.map((l) => `• ${l.name}${mln(l.price)}${l.stage ? ` · ${l.stage}` : ""}${host ? `\n  https://${host}/leads/detail/${l.id}` : ""}`),
+    s.no_task_leads > list.length ? `… yana ${s.no_task_leads - list.length} ta — ERP → KPI'da «vazifasiz bitim» ni bosing` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 // 18:00 — what of today is still open.
 function eveningText(tasks, now, leadName) {
   const today = dayOf(now);
@@ -180,4 +196,4 @@ function adminText(rows) {
   return ["📊 Bugun amoCRM zadachalari", ...rows.map((r) => `• ${r.name}: ${r.open ? `${r.open} ta qoldi` : "hammasi bajarildi ✅"} (${r.total} tadan)${r.noTask ? `, zadachasiz lid: ${r.noTask}` : ""}`)].join("\n");
 }
 
-module.exports = { leadBrief, LIST_MAX, toTask, newMisses, postponed, computeTasks, morningText, eveningText, adminText, postponeText, adminPostponeText, dayOf, monthOf, hmOf, dayLabel };
+module.exports = { leadBrief, LIST_MAX, toTask, newMisses, postponed, computeTasks, morningText, noTaskText, eveningText, adminText, postponeText, adminPostponeText, dayOf, monthOf, hmOf, dayLabel };
