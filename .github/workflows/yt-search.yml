@@ -1,0 +1,52 @@
+name: YouTube search (read only)
+
+# Competitors' videos on YouTube (the owner, 2026-11-15: «raqobatchilarning
+# youtube videolarini qidirib ko'r»). Public data only: title, channel,
+# date, views, length, link. Queries separated by «|».
+
+on:
+  workflow_dispatch:
+    inputs:
+      queries:
+        description: "Queries, separated by |"
+        required: true
+      limit:
+        description: "Results per query"
+        default: "10"
+      channel:
+        description: "Optional: a channel URL to list its latest videos"
+        default: ""
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install yt-dlp
+        run: python3 -m pip install --quiet --upgrade yt-dlp
+      - name: Search
+        env:
+          QUERIES: ${{ inputs.queries }}
+          LIMIT: ${{ inputs.limit }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          def run(target):
+              out = subprocess.run(["yt-dlp", "--flat-playlist", "--dump-json", "--no-warnings", target], capture_output=True, text=True, timeout=300)
+              rows = [json.loads(l) for l in out.stdout.splitlines() if l.strip()]
+              if out.returncode and not rows: print("  error:", out.stderr.strip()[:300])
+              return rows
+          def show(v):
+              views = v.get("view_count")
+              dur = v.get("duration")
+              d = f"{int(dur)//60}:{int(dur)%60:02d}" if dur else "—"
+              print(f"- {str(v.get('title',''))[:90]} | {v.get('channel') or v.get('uploader') or '—'} | {views if views is not None else '?'} ko'rish | {d} | https://youtu.be/{v.get('id')}")
+          limit = int(os.environ.get("LIMIT") or 10)
+          for q in [x.strip() for x in os.environ["QUERIES"].split("|") if x.strip()]:
+              print(f"\n### {q}")
+              for v in run(f"ytsearch{limit}:{q}"): show(v)
+          ch = (os.environ.get("CHANNEL") or "").strip()
+          if ch:
+              print(f"\n### Kanal: {ch}")
+              for v in run(ch.rstrip("/") + "/videos")[:30]: show(v)
+          PY
