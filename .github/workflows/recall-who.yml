@@ -46,11 +46,11 @@ jobs:
                 const rows = (await db.collection(col).where("day", ">=", since).get()).docs.map((d) => d.data());
                 const by = {};
                 for (const r of rows) {
-                  const k = `${r.manager_name || "?"} → «${(staff.get(r.staff_email) || {}).full_name || r.staff_email || "?"}»`;
+                  const k = `${r.day} · ${r.manager_name || "?"} → «${(staff.get(r.staff_email) || {}).full_name || r.staff_email || "?"}»`;
                   by[k] = (by[k] || 0) + 1;
                 }
                 console.log(`== ${col}, last 7 days: ${rows.length}`);
-                for (const [k, n] of Object.entries(by)) console.log(`  ${k}: ${n}`);
+                for (const [k, n] of Object.entries(by).sort()) console.log(`  ${k}: ${n}`);
               }
               process.exit(0);
             })().catch((e) => { console.log("failed:", e.message); process.exit(1); });
