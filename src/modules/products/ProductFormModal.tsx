@@ -3,6 +3,7 @@ import { ImageOff, Lock, Plus, Trash2, Upload } from "lucide-react";
 import { getOne, insertOne, updateOne, upsertOne } from "../../lib/firestoreDb";
 import { PRODUCT_CATEGORIES, TEXTILE_COLORS, TEXTILE_SIZES } from "../../lib/orderConstants";
 import { sortTiers } from "../../lib/priceTiers";
+import { marginLabel, marginOf, parseMargin, priceFromMargin } from "../../lib/priceMargin";
 import { compressImageFile, MAX_IMAGE_MB } from "../../lib/imageCompression";
 import type { Product, ProductCost } from "../../lib/types";
 import { useAuth } from "../../lib/AuthContext";
@@ -18,7 +19,9 @@ type Props = {
   onSaved: () => void;
 };
 
-type TierRow = { min_qty: number; price: number; cost_price: number };
+// `margin` is the field as typed (not saved: price and cost are); `auto`
+// marks a price worked out from the margin (lib/priceMargin.ts).
+type TierRow = { min_qty: number; price: number; cost_price: number; margin?: string; auto?: boolean };
 
 const emptyTiers: TierRow[] = [{ min_qty: 1, price: 0, cost_price: 0 }];
 
@@ -134,11 +137,10 @@ export default function ProductFormModal({
         void getOne<ProductCost>("product_costs", product.id).then((c) => {
           const costByQty = new Map((c?.cost_tiers || []).map((t) => [t.min_qty, t.cost_price]));
           setTiers(
-            priceTiers.map((t) => ({
-              min_qty: t.min_qty,
-              price: t.price,
-              cost_price: costByQty.get(t.min_qty) ?? 0,
-            })),
+            priceTiers.map((t) => {
+              const cost_price = costByQty.get(t.min_qty) ?? 0;
+              return { min_qty: t.min_qty, price: t.price, cost_price, margin: marginLabel(marginOf(cost_price, t.price)) };
+            }),
           );
         });
       } else {
@@ -180,6 +182,29 @@ export default function ProductFormModal({
   const updateTier = (i: number, patch: Partial<TierRow>) =>
     setTiers((t) => t.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
   const addTier = () => setTiers((t) => [...t, { min_qty: 0, price: 0, cost_price: 0 }]);
+  // Cost, margin and price follow each other: a margin sets the price, a
+  // typed price sets the margin, a new cost keeps the margin and moves the price.
+  const setCost = (i: number, cost_price: number) =>
+    setTiers((t) =>
+      t.map((r, idx) => {
+        if (idx !== i) return r;
+        const m = parseMargin(r.margin || "");
+        const p = m !== null ? priceFromMargin(cost_price, m) : null;
+        if (p !== null) return { ...r, cost_price, price: p, auto: true };
+        return { ...r, cost_price, margin: r.price > 0 ? marginLabel(marginOf(cost_price, r.price)) : r.margin };
+      }),
+    );
+  const setMargin = (i: number, margin: string) =>
+    setTiers((t) =>
+      t.map((r, idx) => {
+        if (idx !== i) return r;
+        const m = parseMargin(margin);
+        const p = m !== null ? priceFromMargin(r.cost_price, m) : null;
+        return p !== null ? { ...r, margin, price: p, auto: true } : { ...r, margin };
+      }),
+    );
+  const setPrice = (i: number, price: number) =>
+    setTiers((t) => t.map((r, idx) => (idx === i ? { ...r, price, auto: false, margin: marginLabel(marginOf(r.cost_price, price)) } : r)));
   const removeTier = (i: number) => setTiers((t) => (t.length === 1 ? t : t.filter((_, idx) => idx !== i)));
 
   const submit = async () => {
@@ -248,7 +273,7 @@ export default function ProductFormModal({
       open={open}
       onClose={onClose}
       title={product ? "Mahsulotni tahrirlash" : duplicateFrom ? "Nusxadan yangi mahsulot" : "Yangi mahsulot"}
-      size="lg"
+      size={canCost ? "xl" : "lg"}
       footer={
         <>
           <button className="btn-secondary" onClick={onClose}>
@@ -479,56 +504,86 @@ export default function ProductFormModal({
               <Plus className="h-3.5 w-3.5" /> Pog'ona qo'shish
             </button>
           </div>
-          <div className="space-y-2">
-            {tiers.map((t, i) => (
-              <div key={i} className="grid grid-cols-12 items-end gap-2">
-                <div className={canCost ? "col-span-3" : "col-span-5"}>
-                  <label className="label">Nechtadan boshlab</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={t.min_qty || ""}
-                    onChange={(e) => updateTier(i, { min_qty: Number(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className={canCost ? "col-span-3" : "col-span-5"}>
+          <div className={canCost ? "space-y-3" : "space-y-2"}>
+            {tiers.map((t, i) => {
+              const profit = t.cost_price > 0 && t.price > 0 ? t.price - t.cost_price : null;
+              const priceInput = (
+                <div className={canCost ? "col-span-6 sm:col-span-2" : "col-span-5"}>
                   <label className="label">Narxi (1 {form.unit || "dona"})</label>
-                  <input
-                    type="number"
-                    className="input"
-                    value={t.price || ""}
-                    onChange={(e) => updateTier(i, { price: Number(e.target.value) || 0 })}
-                  />
+                  <input type="number" className="input font-semibold" value={t.price || ""} onChange={(e) => setPrice(i, Number(e.target.value) || 0)} />
+                  {canCost && t.auto && <div className="mt-0.5 text-[11px] font-semibold text-emerald-700">⚡ marjadan hisoblandi</div>}
                 </div>
-                {canCost && (
-                  <div className="col-span-4">
-                    <label className="label flex items-center gap-1 text-amber-700">
-                      <Lock className="h-3 w-3" /> Tan narx (1 {form.unit || "dona"})
-                    </label>
+              );
+              return (
+                <div key={i} className="grid grid-cols-12 items-start gap-2">
+                  <div className={canCost ? "col-span-6 sm:col-span-2" : "col-span-5"}>
+                    <label className="label" title="Nechtadan boshlab">{canCost ? "Nechtadan" : "Nechtadan boshlab"}</label>
                     <input
                       type="number"
-                      className="input border-amber-200 bg-amber-50"
-                      value={t.cost_price || ""}
-                      onChange={(e) => updateTier(i, { cost_price: Number(e.target.value) || 0 })}
+                      className="input"
+                      value={t.min_qty || ""}
+                      onChange={(e) => updateTier(i, { min_qty: Number(e.target.value) || 0 })}
                     />
                   </div>
-                )}
-                <div className="col-span-2 flex justify-end pb-1">
-                  <button className="btn-ghost text-rose-600 hover:bg-rose-50" onClick={() => removeTier(i)} disabled={tiers.length === 1}>
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {!canCost && priceInput}
+                  {canCost && (
+                    <>
+                      <div className="col-span-6 sm:col-span-3">
+                        <label className="label flex items-center gap-1 text-amber-700">
+                          <Lock className="h-3 w-3" /> Tan narx (1 {form.unit || "dona"})
+                        </label>
+                        <input
+                          type="number"
+                          className="input border-amber-200 bg-amber-50"
+                          value={t.cost_price || ""}
+                          onChange={(e) => setCost(i, Number(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div className="col-span-4 sm:col-span-2">
+                        <label className="label text-emerald-700">Marja %</label>
+                        <div className="relative">
+                          <input
+                            inputMode="decimal"
+                            className="input border-emerald-200 bg-emerald-50 pr-8 font-semibold text-emerald-800"
+                            placeholder={t.cost_price > 0 ? "35" : "avval tan narx"}
+                            value={t.margin || ""}
+                            onChange={(e) => setMargin(i, e.target.value)}
+                          />
+                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-emerald-700">%</span>
+                        </div>
+                      </div>
+                      <div className="col-span-4 sm:col-span-2">
+                        <label className="label">Foyda (1 {form.unit || "dona"})</label>
+                        <div className={`input flex items-center font-semibold ${profit === null ? "text-ink-400" : profit < 0 ? "text-rose-600" : "text-emerald-700"}`}>
+                          {profit === null ? "—" : `${profit > 0 ? "+" : ""}${profit.toLocaleString("ru-RU")}`}
+                        </div>
+                      </div>
+                      {priceInput}
+                    </>
+                  )}
+                  <div className={`${canCost ? "col-span-4 sm:col-span-1" : "col-span-2"} flex justify-end pt-6`}>
+                    <button className="btn-ghost text-rose-600 hover:bg-rose-50" onClick={() => removeTier(i)} disabled={tiers.length === 1}>
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <p className="mt-2 text-xs text-ink-500">
             Masalan: 1 dan → 5000 so'm, 10 dan → 4500 so'm, 100 dan → 4000 so'm
           </p>
           {canCost && (
-            <p className="mt-1 text-xs text-amber-700">
-              Tan narx faqat sizga (admin) ko'rinadi — har bir pog'ona uchun alohida, chunki miqdor ko'p bo'lsa
-              ta'minotchidan tan narx ham pasayishi mumkin.
-            </p>
+            <>
+              <p className="mt-1 text-xs text-ink-500">
+                Marja — foyda sotuv narxining necha foizi: tan narx 4 300, marja 35% → 6 615 → <b>6 700</b> (100 so'mga yuqoriga
+                yaxlitlanadi). Narxni qo'lda yozsangiz, marja o'zi qayta hisoblanadi.
+              </p>
+              <p className="mt-1 text-xs text-amber-700">
+                Tan narx, marja va foyda faqat sizga (admin) ko'rinadi — har bir pog'ona uchun alohida, chunki miqdor ko'p bo'lsa
+                ta'minotchidan tan narx ham pasayishi mumkin.
+              </p>
+            </>
           )}
         </div>
       )}

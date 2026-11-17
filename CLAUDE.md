@@ -458,6 +458,13 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   qaysilar?») and in amoCRM tahlil → «Zadachasiz lid»; the managers' 09:00
   Telegram message adds the 5 biggest with links (`amoTasks.noTaskText`,
   sent even when there are no tasks that day).
+- **Margin on product price tiers — 2026-11-17** (owner: «marjani yozsam
+  avtomatik o'zi sotuv narxini chiqsin»): Mahsulotlar → product form → Narx,
+  admin only: Nechtadan · Tan narx · Marja % · Foyda · Narxi per tier. Margin
+  = profit ÷ SALE price (as the Marja page), not markup: price = cost ÷
+  (1 − m), rounded UP to 100 so'm (`src/lib/priceMargin.ts`); a typed price
+  re-computes the margin; a new cost keeps the margin. The margin is not
+  saved — price_tiers and product_costs are as before.
 - **Sotuv bo'limi background («Fon») — built 2026-11-13** (owner: amoCRM-like,
   «ko'zga yoqimli»): button «Fon» on Sotuv bo'limi (every tab, everyone) →
   6 pictures (`public/fon/*.svg`, drawn by us; light ones get a dark veil),
