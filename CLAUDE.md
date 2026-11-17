@@ -111,7 +111,11 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   - Monthly plans: Nuriddin 60 mln, Muhammadiyor 120 mln, Muhammadali
     8 mln (possibly a typo for 80).
   - The recall and debt bots go to `RECALL_MANAGERS`
-    (deploy.yml, default "Muhammadiyor,Maryam,Nuriddin").
+    (deploy.yml, default "Muhammadiyor,Nuriddin" since 2026-11-17 — owner:
+    «klient bazani Nuriddin va Muhammadiyorga yubor»; Maryam's Managerlar
+    record was renamed «Jamila» and she has had no list since 2026-11-14;
+    her customers are shared out between the two). `recall-who.yml` shows
+    who gets the lists, per day.
 - **amoCRM** (read only, `AMO_SUBDOMAIN` / `AMO_TOKEN`):
   - Users: «Diyorbek» (13825110) is Muhammadiyor's account,
     Nuriddin (13825130), and «Menejer 2» (14021786) is Maryam's.
