@@ -1,0 +1,58 @@
+name: Who gets the client lists (read only)
+
+# Which staff accounts get the daily old-customer (recall) and debt lists,
+# through which Managerlar record, and how many customers each got in the
+# last 7 days. Staff names and counts only — no customer data.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            echo "RECALL_MANAGERS=$(grep '^RECALL_MANAGERS=' /opt/meta-webhook/.env | cut -d= -f2-)"
+            cat > /tmp/vp-rw.js <<'JS'
+            const fs = require("fs");
+            for (const l of fs.readFileSync("/opt/meta-webhook/.env", "utf8").split("\n")) {
+              const i = l.indexOf("=");
+              if (i > 0 && !l.trim().startsWith("#")) process.env[l.slice(0, i).trim()] = l.slice(i + 1).trim();
+            }
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const recall = require("/opt/meta-webhook/recall.js").create(db);
+            (async () => {
+              const staff = new Map((await db.collection("staff").get()).docs.map((d) => [d.id, d.data()]));
+              const team = await recall.managers();
+              console.log("== Lists go to (Managerlar name → staff account name):");
+              for (const m of team) console.log(`  ${m.name} → «${(staff.get(m.email) || {}).full_name || "?"}»`);
+              const mgr = (await db.collection("managers").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+              console.log("== Managerlar and linked staff:");
+              for (const m of mgr) {
+                const linked = [...staff.entries()].filter(([, s]) => s.report_manager_id === m.id).map(([, s]) => `«${s.full_name || "?"}»${s.telegram_chat_id ? "" : " (no Telegram)"}`);
+                console.log(`  ${m.name}: ${linked.join(", ") || "— no staff"}`);
+              }
+              const since = new Date(Date.now() - 7 * 86400e3).toISOString().slice(0, 10);
+              for (const col of ["recall_calls", "debt_calls"]) {
+                const rows = (await db.collection(col).where("day", ">=", since).get()).docs.map((d) => d.data());
+                const by = {};
+                for (const r of rows) {
+                  const k = `${r.manager_name || "?"} → «${(staff.get(r.staff_email) || {}).full_name || r.staff_email || "?"}»`;
+                  by[k] = (by[k] || 0) + 1;
+                }
+                console.log(`== ${col}, last 7 days: ${rows.length}`);
+                for (const [k, n] of Object.entries(by)) console.log(`  ${k}: ${n}`);
+              }
+              process.exit(0);
+            })().catch((e) => { console.log("failed:", e.message); process.exit(1); });
+            JS
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-rw.js; rm -f /tmp/vp-rw.js
