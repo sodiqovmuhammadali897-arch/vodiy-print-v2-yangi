@@ -259,7 +259,7 @@ const create = (db) => {
     const seen = new Set();
     return (await all("staff"))
       .filter((s) => s.report_manager_id && s.telegram_chat_id && s.active !== false && s.is_active !== false)
-      .map((s) => ({ manager_id: s.report_manager_id, name: names.get(s.report_manager_id) || s.full_name || s.id, chat: Number(s.telegram_chat_id), email: s.id }))
+      .map((s) => ({ manager_id: s.report_manager_id, name: names.get(s.report_manager_id) || s.full_name || s.id, first: String(s.full_name || names.get(s.report_manager_id) || "").trim().split(/\s+/)[0], chat: Number(s.telegram_chat_id), email: s.id }))
       .filter((m) => !only.length || only.includes(m.name.toLowerCase()))
       .filter((m) => !seen.has(m.manager_id) && seen.add(m.manager_id));
   };
@@ -361,7 +361,7 @@ const create = (db) => {
         if (!n)
           await telegram("sendMessage", {
             chat_id: m.chat,
-            text: `☎️ ${m.name}, bugungi eski mijozlar bittadan keladi. Qo'ng'iroq qilib, natijani tugma bilan belgilang — keyingisi darhol keladi (bugun ko'pi bilan ${PER_DAY} ta).`,
+            text: `Assalomu alaykum, ${m.first || m.name}!\n☎️ Bugungi eski mijozlar bittadan keladi. Qo'ng'iroq qilib, natijani tugma bilan belgilang — keyingisi darhol keladi (bugun ko'pi bilan ${PER_DAY} ta).`,
           }).catch(() => undefined);
         const r = await telegram("sendMessage", { chat_id: m.chat, text, reply_markup: resultButtons(id) }).catch(() => null);
         if (r && r.result) await col.doc(id).update({ message_id: r.result.message_id });
@@ -459,4 +459,15 @@ const create = (db) => {
   return { start, stop, tick, sendDay, sendNext, sendSummary, handleCallback, managers, admins };
 };
 
-module.exports = { create, planDay, whoNeedsNext, customerStats, callState, customerText, summaryText, seasonOffer, addDays };
+// The one-time start message (the owner, 2026-11-20).
+const startText = (first, open) =>
+  [
+    `Assalomu alaykum, ${first}!`,
+    "Rahbar buyrug'iga asosan sizga hozirdan boshlab eski mijozlarni bittadan berishni boshladik.",
+    "Har bir mijozga qo'ng'iroq qiling va natijani tugma bilan belgilang (✅ Buyurtma bo'ldi · 🕒 Keyinroq · ❌ Kerak emas · 📵 Javob bermadi) — keyingi mijoz darhol keladi.",
+    open ? `Avval bugun ertalab kelgan ${open} ta mijozni belgilang — shundan keyin yangilari bittadan kela boshlaydi.` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+module.exports = { create, planDay, whoNeedsNext, startText, customerStats, callState, customerText, summaryText, seasonOffer, addDays };

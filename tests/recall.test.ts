@@ -87,3 +87,13 @@ describe("recall one at a time", () => {
     expect(R.whoNeedsNext([team[0]], [...done.slice(0, 2), { manager_id: "m1", status: "carried" }], 3).length).toBe(1);
   });
 });
+
+describe("recall start message", () => {
+  it("greets by name and says what comes next", () => {
+    const t = R.startText("Muhammaddiyor", 5);
+    expect(t.startsWith("Assalomu alaykum, Muhammaddiyor!")).toBe(true);
+    expect(t).toContain("Rahbar buyrug'iga asosan sizga hozirdan boshlab eski mijozlarni bittadan berishni boshladik.");
+    expect(t).toContain("Avval bugun ertalab kelgan 5 ta mijozni belgilang");
+    expect(R.startText("Nuriddin", 0)).not.toContain("ertalab");
+  });
+});
