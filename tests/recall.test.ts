@@ -70,3 +70,20 @@ describe("recall texts", () => {
     expect(t).toContain("yangi yil");
   });
 });
+
+describe("recall one at a time", () => {
+  const team = [{ manager_id: "m1" }, { manager_id: "m2" }];
+  it("gives the next customer only after the current one is marked", () => {
+    const todays = [
+      { manager_id: "m1", status: "sent" },
+      { manager_id: "m2", status: "done" },
+    ];
+    expect(R.whoNeedsNext(team, todays, 20).map((m: { manager_id: string }) => m.manager_id)).toEqual(["m2"]);
+    expect(R.whoNeedsNext(team, [], 20).length).toBe(2); // morning: both start
+  });
+  it("stops at the day's limit, not counting customers moved on", () => {
+    const done = Array.from({ length: 3 }, () => ({ manager_id: "m1", status: "done" }));
+    expect(R.whoNeedsNext([team[0]], done, 3)).toEqual([]);
+    expect(R.whoNeedsNext([team[0]], [...done.slice(0, 2), { manager_id: "m1", status: "carried" }], 3).length).toBe(1);
+  });
+});

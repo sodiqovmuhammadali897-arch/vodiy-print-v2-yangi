@@ -1,12 +1,14 @@
 // Eski mijozlarga qo'ng'iroq.
 //
-// Every working day at 09:00 (Tashkent; not on Sundays or holidays) each
-// sales manager — staff linked to a Managerlar record with a Telegram chat,
-// limited to RECALL_MANAGERS (names; set in deploy.yml) —
-// gets PER_DAY old customers to call, one message each: who, phone, what
-// they bought last time and when, all their orders, and what to offer now.
-// The longest-silent customers come first; a customer goes to the manager
-// who sold to them before when that manager still has room.
+// Every working day from 09:00 to 19:00 (Tashkent; not on Sundays or
+// holidays) each sales manager — staff linked to a Managerlar record with a
+// Telegram chat, limited to RECALL_MANAGERS (names; set in deploy.yml) —
+// gets old customers to call ONE AT A TIME (the owner, 2026-11-20: «bittadan
+// bersin, qabul qilib gaplashsa keyingi mijozni ber»): the next one comes
+// as soon as the current one is marked, up to PER_DAY a day. Each message:
+// who, phone, what they bought last time and when, all their orders, and
+// what to offer now. The longest-silent customers come first; a customer
+// goes to the manager who sold to them before when that manager has room.
 //
 // Under each customer: ✅ Buyurtma bo'ldi · 🕒 Keyinroq · ❌ Kerak emas ·
 // 📵 Javob bermadi. «Keyinroq» asks when, «Kerak emas» asks why. The
@@ -21,7 +23,8 @@
 const { telegram } = require("./telegram");
 const { todayCode, customerName } = require("./shared");
 
-const PER_DAY = Number(process.env.RECALL_PER_DAY || 5);
+// At most this many a day per manager (one at a time; was 5 at once).
+const PER_DAY = Number(process.env.RECALL_PER_DAY || 20);
 const START = process.env.RECALL_START || "2026-11-02";
 const SEND_AT = 9 * 60;
 const SUMMARY_AT = 19 * 60;
@@ -121,6 +124,14 @@ const callState = (call, today) => {
 
 // Today's list: { [manager_id]: [{ customer_id, why }] }. Due ones first
 // (to their own manager), then the longest-silent customers.
+// Who should get the next customer now: no customer still waiting for a
+// mark today, and under the day's limit.
+const whoNeedsNext = (team, todays, cap = PER_DAY) =>
+  team.filter((m) => {
+    const mine = todays.filter((c) => c.manager_id === m.manager_id && c.status !== "carried");
+    return !mine.some((c) => c.status === "sent") && mine.length < cap;
+  });
+
 const planDay = ({ customers, stats, calls, managerIds, today, perDay = PER_DAY }) => {
   const latest = new Map();
   for (const c of calls) {
@@ -305,6 +316,63 @@ const create = (db) => {
     return { sent, counts };
   };
 
+  // One at a time: whoever has marked their customer (or has none yet
+  // today) gets the next. Cheap when nobody needs one; the full customer
+  // data is read only when someone does.
+  const exhausted = new Set(); // `${day}:${manager_id}` — nobody left to call
+  let nexting = false;
+  const sendNext = async (today, only = null) => {
+    if (nexting) return 0;
+    nexting = true;
+    try {
+      const team = await managers();
+      const todays = (await col.where("day", "==", today).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+      // Reached the day's limit with everything marked: say so once.
+      for (const m of team) {
+        const mine = todays.filter((c) => c.manager_id === m.manager_id && c.status !== "carried");
+        if (mine.length >= PER_DAY && !mine.some((c) => c.status === "sent") && (await once(today, `finished_${m.manager_id}`)))
+          await telegram("sendMessage", { chat_id: m.chat, text: `✅ ${m.name}, bugungi ${mine.length} ta eski mijoz tugadi. Rahmat! Ertaga 09:00 da davom etamiz.` }).catch(() => undefined);
+      }
+      const need = whoNeedsNext(team, todays).filter((m) => (!only || m.manager_id === only) && !exhausted.has(`${today}:${m.manager_id}`));
+      if (!need.length) return 0;
+      const data = await load(today);
+      const idByName = new Map(team.map((m) => [m.name.trim().toLowerCase(), m.manager_id]));
+      for (const st of data.stats.values()) st.manager_id = idByName.get(String(st.manager_name || "").trim().toLowerCase()) || st.manager_id;
+      const { plan } = planDay({ ...data, managerIds: team.map((m) => m.manager_id), today, perDay: 1 });
+      let sent = 0;
+      for (const m of need) {
+        const item = plan[m.manager_id][0];
+        const n = todays.filter((c) => c.manager_id === m.manager_id && c.status !== "carried").length;
+        if (!item) {
+          exhausted.add(`${today}:${m.manager_id}`);
+          if (n) await telegram("sendMessage", { chat_id: m.chat, text: `✅ ${m.name}, bugungi eski mijozlar tugadi — ${n} ta. Rahmat!` }).catch(() => undefined);
+          continue;
+        }
+        const c = data.byId.get(item.customer_id);
+        const id = `${today}_${c.id}`;
+        const text = customerText(c, data.stats.get(c.id), n + 1, PER_DAY, today, item.why);
+        const doc = { day: today, customer_id: c.id, customer_name: c.company || customerName(c), manager_id: m.manager_id, manager_name: m.name, staff_email: m.email, chat_id: m.chat, why: item.why, status: "sent", text, sent_at: new Date().toISOString() };
+        try {
+          await col.doc(id).create(doc);
+        } catch {
+          continue; // already given today
+        }
+        for (const old of data.calls.filter((x) => x.customer_id === c.id && x.status === "sent" && x.day < today)) await col.doc(old.id).update({ status: "carried" });
+        if (!n)
+          await telegram("sendMessage", {
+            chat_id: m.chat,
+            text: `☎️ ${m.name}, bugungi eski mijozlar bittadan keladi. Qo'ng'iroq qilib, natijani tugma bilan belgilang — keyingisi darhol keladi (bugun ko'pi bilan ${PER_DAY} ta).`,
+          }).catch(() => undefined);
+        const r = await telegram("sendMessage", { chat_id: m.chat, text, reply_markup: resultButtons(id) }).catch(() => null);
+        if (r && r.result) await col.doc(id).update({ message_id: r.result.message_id });
+        sent++;
+      }
+      return sent;
+    } finally {
+      nexting = false;
+    }
+  };
+
   const sendSummary = async (today) => {
     const team = await managers();
     const calls = await all("recall_calls");
@@ -339,7 +407,8 @@ const create = (db) => {
     if (min < SEND_AT) return;
     if (!(await workday(today))) return;
     if (min < SUMMARY_AT) {
-      if (await once(today, "sent")) await sendDay(today);
+      await once(today, "sent"); // the day has started (the 19:00 summary waits for it)
+      await sendNext(today);
     } else {
       const d = (await days.doc(today).get()).data() || {};
       if (d.sent && (await once(today, "summary"))) await sendSummary(today);
@@ -374,16 +443,20 @@ const create = (db) => {
     await db.collection("customer_notes").add({ customer_id: call.customer_id, author_email: call.staff_email || "", author_name: call.manager_name || "", text: noteText(next), created_at: now });
     await answer(RESULT[next.result]);
     await edit(`${call.text}\n\n${resultLine(next)} — ${hm(now)}`);
+    // Marked → the next customer right away (in working hours).
+    const today = todayCode();
+    if (call.day === today && tashkentMinutes() >= SEND_AT && tashkentMinutes() < SUMMARY_AT && (await workday(today)))
+      await sendNext(today, call.manager_id).catch((err) => console.error("Recall next failed", err.message));
   };
 
   let timer = null;
   const start = () => {
     timer = setInterval(() => void tick().catch((err) => console.error("Recall tick failed", err.message)), TICK_MS);
-    console.log(`Recall: ${PER_DAY} old customers per manager each working day from ${START}`);
+    console.log(`Recall: old customers one at a time, up to ${PER_DAY} per manager each working day from ${START}`);
   };
   const stop = () => clearInterval(timer);
 
-  return { start, stop, tick, sendDay, sendSummary, handleCallback, managers, admins };
+  return { start, stop, tick, sendDay, sendNext, sendSummary, handleCallback, managers, admins };
 };
 
-module.exports = { create, planDay, customerStats, callState, customerText, summaryText, seasonOffer, addDays };
+module.exports = { create, planDay, whoNeedsNext, customerStats, callState, customerText, summaryText, seasonOffer, addDays };

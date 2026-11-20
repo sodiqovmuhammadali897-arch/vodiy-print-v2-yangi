@@ -156,7 +156,12 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     9 781 583, of which 1 148 183 was already paid. Nuriddin's and
     Muhammadali's October are still open.
 - **Launch gates:** these went live on **2026-11-02**:
-  - the recall lists (5 old customers per manager a day, oldest first);
+  - the recall lists (oldest first; since 2026-11-20 ONE AT A TIME — the
+    owner: «bittadan bersin, qabul qilib gaplashsa keyingi mijozni ber»:
+    from 09:00 to 19:00 a manager gets the next customer as soon as the
+    current one is marked, up to `RECALL_PER_DAY` (default now 20) a day;
+    an unmarked one blocks the next; «tugadi» message at the limit;
+    `recall.js sendNext` + `whoNeedsNext`);
   - the debt lists;
   - the deal alerts (10:00 and 15:00);
   - the missed-call buttons.
