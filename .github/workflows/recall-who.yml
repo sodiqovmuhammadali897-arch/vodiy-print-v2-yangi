@@ -45,6 +45,11 @@ jobs:
               for (const col of ["recall_calls", "debt_calls"]) {
                 const rows = (await db.collection(col).where("day", ">=", since).get()).docs.map((d) => d.data());
                 const by = {};
+                const todayT = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+                for (const r of rows.filter((x) => x.day === todayT)) {
+                  const k = `today ${r.manager_name} status=${r.status}${r.result ? "/" + r.result : ""}`;
+                  by[k] = (by[k] || 0) + 1;
+                }
                 for (const r of rows) {
                   const k = `${r.day} · ${r.manager_name || "?"} → «${(staff.get(r.staff_email) || {}).full_name || r.staff_email || "?"}»`;
                   by[k] = (by[k] || 0) + 1;
