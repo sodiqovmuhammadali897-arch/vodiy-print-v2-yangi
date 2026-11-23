@@ -482,6 +482,15 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   `.fon-solid` lead cards and the picker). `Modal` now renders on
   `document.body` (createPortal) so the blur can't trap it. Only Sotuv
   bo'limi — the rest of the ERP is unchanged.
+- **Viloyat majburiy — 2026-11-23** (owner: «viloyatni tanlamasa buyurtma
+  kirgizilmasin»; «Tuzatish … ashi zakazlar ko'rinsin»): a new order, or a
+  draft made real, is not saved without a customer that has a region
+  (`src/lib/orderRegion.ts regionProblem`; drafts and older orders are
+  exempt). The wizard's Mijoz step shows a red region picker when the chosen
+  customer has none (writes `customers.region`); the customer form requires
+  Viloyat. Moliya → Ma'lumot sifati «N ta mijozda viloyat yo'q → Tuzatish»
+  opens `NoRegionModal` (those customers, their orders of the period, a
+  region picker each; `financeDash.salesOf`).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

@@ -1,3 +1,4 @@
+import { regionProblem } from "../../../lib/orderRegion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -95,6 +96,7 @@ export default function OrderWizard() {
   const [discountOkFor, setDiscountOkFor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [initialStatus, setInitialStatus] = useState<string | null>(null);
+  const [wasDraft, setWasDraft] = useState(false);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -168,6 +170,7 @@ export default function OrderWizard() {
         const order = await getOne<Order>("orders", id);
         if (order) {
           setInitialStatus(order.status);
+          setWasDraft(!!order.is_draft);
           setPayload({
             id: order.id,
             order_number: order.order_number,
@@ -320,7 +323,7 @@ export default function OrderWizard() {
     setPayload((p) => ({ ...p, ...patch }));
 
   const onCustomerCreated = (c: Customer, brand: Brand | null) => {
-    setCustomers((cs) => [...cs, c]);
+    setCustomers((cs) => [...cs.filter((x) => x.id !== c.id), c]);
     if (brand) {
       setBrands((bs) => [...bs.filter((b) => b.id !== brand.id), brand]);
     }
@@ -356,6 +359,12 @@ export default function OrderWizard() {
     const filteredProducts = products.filter((p) => p.product_name.trim() || p.quantity > 0);
     if (!payload.title.trim() && !filteredProducts[0]?.product_name) {
       setError("Buyurtma nomi yoki mahsulot kiritilishi shart");
+      return;
+    }
+    const noRegion = regionProblem(linkedCustomer, { asDraft, isNew, wasDraft });
+    if (noRegion) {
+      setError(noRegion);
+      setStep(0);
       return;
     }
     setSaving(true);

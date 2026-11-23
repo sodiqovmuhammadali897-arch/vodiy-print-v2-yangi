@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, UserPlus } from "lucide-react";
 import type { Brand, Customer } from "../../../lib/types";
 import type { OrderPayload } from "../../../lib/orderService";
-import { CUSTOMER_SOURCES } from "../../../lib/orderConstants";
+import { CUSTOMER_SOURCES, UZBEKISTAN_REGIONS } from "../../../lib/orderConstants";
+import { updateOne } from "../../../lib/firestoreDb";
 import CustomerTypeBadge from "../../../components/ui/CustomerTypeBadge";
 import CustomerFormModal from "../../customers/CustomerFormModal";
 
@@ -38,6 +39,22 @@ export default function CustomerStep({
   const [modalOpen, setModalOpen] = useState(false);
 
   const selectedCustomer = customers.find((c) => c.id === payload.customer_id) || null;
+  // No region on the chosen customer → picked here; the order can't be
+  // entered without it (lib/orderRegion.ts).
+  const [regionBusy, setRegionBusy] = useState(false);
+  const [regionError, setRegionError] = useState("");
+  const setRegion = async (region: string) => {
+    if (!selectedCustomer || !region) return;
+    setRegionBusy(true);
+    setRegionError("");
+    try {
+      await updateOne("customers", selectedCustomer.id, { region });
+      onCustomerCreated({ ...selectedCustomer, region }, null);
+    } catch {
+      setRegionError("Saqlanmadi — mijozni tahrirlash huquqi kerak. Rahbarga ayting.");
+    }
+    setRegionBusy(false);
+  };
 
   // Seed the display text once, when an existing order's customer loads in.
   useEffect(() => {
@@ -163,7 +180,24 @@ export default function CustomerStep({
                 {selectedCustomer.company ? ` · ${selectedCustomer.company}` : ""}
               </div>
             </div>
-            <CustomerTypeBadge type={selectedCustomer.customer_type} />
+            <div className="flex items-center gap-2">
+              {selectedCustomer.region && <span className="text-xs font-semibold text-emerald-700">{selectedCustomer.region}</span>}
+              <CustomerTypeBadge type={selectedCustomer.customer_type} />
+            </div>
+          </div>
+        )}
+        {selectedCustomer && !String(selectedCustomer.region || "").trim() && (
+          <div className="mt-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <label className="label text-red-700">Mijozning viloyati yozilmagan — tanlang (majburiy)</label>
+            <select className="input border-red-300" value="" disabled={regionBusy} onChange={(e) => void setRegion(e.target.value)}>
+              <option value="">-- viloyatni tanlang --</option>
+              {UZBEKISTAN_REGIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            {regionError && <div className="mt-1 text-xs text-red-700">{regionError}</div>}
           </div>
         )}
       </div>

@@ -46,6 +46,7 @@ import {
 } from "../../../lib/financeDash";
 import { ColumnChart, Delta, HBars, Legend, Waterfall } from "./charts";
 import TemplatesCard from "./TemplatesCard";
+import NoRegionModal from "./NoRegionModal";
 
 type Props = {
   input: FinanceInput;
@@ -119,6 +120,7 @@ const DIMS: { key: Dim; label: string; icon: ReactNode }[] = [
 export default function FinanceDashboard({ input, range, customers, templates, amo, today, onChanged, canEdit }: Props) {
   const [dim, setDim] = useState<Dim>("region");
   const [allSlices, setAllSlices] = useState(false);
+  const [regionIds, setRegionIds] = useState<string[] | null>(null);
   const span = useMemo(() => ({ from: range.from, to: range.to }), [range]);
   const prev = useMemo(() => compareSpan({ from: range.from, to: range.to }, range.preset), [range]);
   const delivered = useMemo(() => deliveredDays(input.orders, input.history), [input.orders, input.history]);
@@ -206,6 +208,11 @@ export default function FinanceDashboard({ input, range, customers, templates, a
                   Tuzatish <ArrowRight className="h-3 w-3" />
                 </Link>
               )}
+              {i.action === "region" && i.ids && (
+                <button type="button" onClick={() => setRegionIds(i.ids!)} className="inline-flex shrink-0 items-center gap-0.5 self-center text-xs font-bold underline-offset-2 hover:underline">
+                  Tuzatish <ArrowRight className="h-3 w-3" />
+                </button>
+              )}
               {i.action === "expense" && (
                 <a href="#doimiy-xarajatlar" className="inline-flex shrink-0 items-center gap-0.5 self-center text-xs font-bold underline-offset-2 hover:underline">
                   Kiritish <ArrowRight className="h-3 w-3" />
@@ -215,6 +222,7 @@ export default function FinanceDashboard({ input, range, customers, templates, a
           );
         })}
       </div>
+      {regionIds && <NoRegionModal ids={regionIds} customers={customers} orders={input.orders} span={span} onChanged={onChanged} onClose={() => setRegionIds(null)} />}
     </Card>
   );
 

@@ -91,6 +91,7 @@ export default function CustomerFormModal({
   const submit = async () => {
     if (!fullName.trim()) return setError("Ism familiya kiritilishi shart");
     if (!form.phone.trim()) return setError("Telefon raqami kiritilishi shart");
+    if (!form.region.trim()) return setError("Viloyatni tanlang — viloyatsiz mijoz va buyurtma kiritilmaydi");
     const normalizedPhone = form.phone.replace(/\D/g, "");
     const duplicate = existing.find(
       (c) =>
@@ -275,7 +276,7 @@ export default function CustomerFormModal({
           </datalist>
         </div>
         <div>
-          <label className="label">Viloyat</label>
+          <label className="label">Viloyat *</label>
           <select
             className="input"
             value={form.region}

@@ -174,7 +174,7 @@ export function templateStatus(templates: ExpenseTemplate[], expenses: (Expense 
 }
 
 // ── Data quality ────────────────────────────────────────────────────
-export type Issue = { key: string; level: "critical" | "warning" | "info"; title: string; detail: string; link?: string; action?: "expense" };
+export type Issue = { key: string; level: "critical" | "warning" | "info"; title: string; detail: string; link?: string; action?: "expense" | "region"; ids?: string[] };
 const MONTHLY_CATEGORIES = ["Ijara", "Maosh", "Reklama", "Kommunal"];
 
 export function dataQuality(
@@ -199,10 +199,24 @@ export function dataQuality(
   if (noType) out.push({ key: "paytype", level: "warning", title: `${noType} ta to'lovda turi yo'q`, detail: "Naqd, karta yoki hisob raqam tanlanmagan." });
   else if (pays.length >= 10 && cash / pays.length >= 0.9) out.push({ key: "paycash", level: "info", title: `To'lovlarning ${Math.round((cash / pays.length) * 100)}% «Naqd»`, detail: "Karta va hisob raqam to'lovlari ham «Naqd» deb yozilayotgan bo'lishi mumkin." });
   const buyers = new Set(input.orders.filter((o) => isSale(o) && inSpan(saleDay(o), span) && o.customer_id).map((o) => o.customer_id!));
-  const noRegion = [...buyers].filter((id) => !String(opts.customers.get(id)?.region || "").trim()).length;
-  if (noRegion) out.push({ key: "region", level: "info", title: `${noRegion} ta mijozda viloyat yo'q`, detail: "Viloyat kesimida ular «Yozilmagan» bo'lib ko'rinadi.", link: "/customers" });
+  // «Tuzatish» opens exactly these customers (the owner, 2026-11-23: «umumiy
+  // zakazlarga o'tyapti, ashi zakazlar ko'rinsin»).
+  const noRegion = [...buyers].filter((id) => !String(opts.customers.get(id)?.region || "").trim());
+  if (noRegion.length) out.push({ key: "region", level: "info", title: `${noRegion.length} ta mijozda viloyat yo'q`, detail: "Viloyat kesimida ular «Yozilmagan» bo'lib ko'rinadi.", action: "region", ids: noRegion });
   const order = { critical: 0, warning: 1, info: 2 };
   return out.sort((a, b) => order[a.level] - order[b.level]);
+}
+// The period's sales of the given customers, newest first — what the
+// «viloyat yo'q» list shows under each customer.
+export function salesOf(orders: Order[], span: Span, ids: string[]): Map<string, Order[]> {
+  const want = new Set(ids);
+  const out = new Map<string, Order[]>();
+  for (const o of orders) {
+    if (!o.customer_id || !want.has(o.customer_id) || !isSale(o) || !inSpan(saleDay(o), span)) continue;
+    out.set(o.customer_id, [...(out.get(o.customer_id) || []), o]);
+  }
+  for (const l of out.values()) l.sort((a, b) => saleDay(b).localeCompare(saleDay(a)));
+  return out;
 }
 // Net profit is final only when nothing critical or warning is open.
 export const isProvisional = (issues: Issue[]) => issues.some((i) => i.level !== "info");
