@@ -1,0 +1,78 @@
+name: Ads probe (read only)
+
+# What the Meta ad account really gives for Reklama 2.0 (the owner,
+# 2026-11-24: «kunlik hamma budjetni qayerga sarflanayotganini bilishimiz
+# kerak»): currency, today's totals with reach/impressions/clicks, which
+# breakdowns work (platform/placement, age/gender, region, hour), video
+# metrics, the API usage headers (can we poll every 2 minutes?) and the
+# Central Bank's dollar rate. Ad data only — no customer data.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            for k in META_ADS_TOKEN META_AD_ACCOUNT_ID META_GRAPH_VERSION; do export $k="$(grep "^$k=" /opt/meta-webhook/.env | head -1 | cut -d= -f2-)"; done
+            cat > /tmp/vp-probe.js <<'JS'
+            const V = process.env.META_GRAPH_VERSION || "v19.0";
+            const act = String(process.env.META_AD_ACCOUNT_ID || "").replace(/^act_/, "");
+            const T = process.env.META_ADS_TOKEN;
+            const usage = [];
+            const g = async (path, params = {}) => {
+              const u = new URL(`https://graph.facebook.com/${V}/${path}`);
+              for (const [k, v] of Object.entries({ ...params, access_token: T })) u.searchParams.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+              const t = Date.now();
+              const r = await fetch(u);
+              const h = r.headers.get("x-business-use-case-usage") || r.headers.get("x-ad-account-usage") || r.headers.get("x-app-usage") || "";
+              if (h) usage.push(h.replace(/\d{8,}/g, "#"));
+              const j = await r.json().catch(() => ({}));
+              return { j, ms: Date.now() - t };
+            };
+            const show = (name, { j, ms }, pick) => {
+              if (j.error) return console.log(`✗ ${name}: ${j.error.message} (${ms} ms)`);
+              const rows = j.data || [];
+              console.log(`✓ ${name}: ${rows.length} rows, ${ms} ms`);
+              for (const r of rows.slice(0, 12)) console.log("    " + pick(r));
+            };
+            const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+            const base = "spend,impressions,reach,frequency,clicks,inline_link_clicks,cpm,ctr,cpc";
+            (async () => {
+              if (!T || !act) return console.log("META_ADS_TOKEN / META_AD_ACCOUNT_ID not set");
+              const acc = await g(`act_${act}`, { fields: "currency,timezone_name,account_status,amount_spent,spend_cap" });
+              console.log("account:", acc.j.error ? acc.j.error.message : `currency ${acc.j.currency}, tz ${acc.j.timezone_name}, status ${acc.j.account_status}`);
+              const tr = { since: today, until: today };
+              show("today account", await g(`act_${act}/insights`, { fields: base, time_range: tr }), (r) => `spend ${r.spend} impr ${r.impressions} reach ${r.reach} freq ${r.frequency} clicks ${r.clicks} link ${r.inline_link_clicks} cpm ${r.cpm} ctr ${r.ctr}`);
+              show("month by day", await g(`act_${act}/insights`, { fields: "spend", time_increment: 1, date_preset: "this_month" }), (r) => `${r.date_start} ${r.spend}`);
+              show("today ad level", await g(`act_${act}/insights`, { level: "ad", fields: "campaign_name,adset_name,ad_name,spend,impressions,clicks", time_range: tr, limit: 200 }), (r) => `${r.campaign_name} | ${r.adset_name} | ${r.ad_name} | ${r.spend}`);
+              show("placement", await g(`act_${act}/insights`, { fields: "spend,impressions,actions", breakdowns: "publisher_platform,platform_position", date_preset: "last_7d" }), (r) => `${r.publisher_platform}/${r.platform_position} spend ${r.spend} impr ${r.impressions}`);
+              show("age,gender", await g(`act_${act}/insights`, { fields: "spend,impressions", breakdowns: "age,gender", date_preset: "last_7d" }), (r) => `${r.age} ${r.gender} spend ${r.spend}`);
+              show("region", await g(`act_${act}/insights`, { fields: "spend,impressions", breakdowns: "region", date_preset: "last_7d" }), (r) => `${r.region} spend ${r.spend}`);
+              show("hourly", await g(`act_${act}/insights`, { fields: "spend,impressions", breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone", date_preset: "yesterday" }), (r) => `${r.hourly_stats_aggregated_by_advertiser_time_zone} spend ${r.spend}`);
+              show("device", await g(`act_${act}/insights`, { fields: "spend", breakdowns: "device_platform", date_preset: "last_7d" }), (r) => `${r.device_platform} spend ${r.spend}`);
+              show("video (ad, 7d)", await g(`act_${act}/insights`, { level: "ad", fields: "ad_name,video_play_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p100_watched_actions,video_thruplay_watched_actions,video_avg_time_watched_actions", date_preset: "last_7d", limit: 50 }), (r) => {
+                const v = (k) => ((r[k] || [])[0] || {}).value || "-";
+                return `${r.ad_name} | play ${v("video_play_actions")} p25 ${v("video_p25_watched_actions")} p50 ${v("video_p50_watched_actions")} p75 ${v("video_p75_watched_actions")} p100 ${v("video_p100_watched_actions")} thru ${v("video_thruplay_watched_actions")} avg ${v("video_avg_time_watched_actions")}`;
+              });
+              show("ad thumbnails", await g(`act_${act}/ads`, { fields: "name,effective_status,creative{thumbnail_url,video_id,object_type}", limit: 5 }), (r) => `${r.name} ${r.effective_status} thumb ${r.creative && r.creative.thumbnail_url ? "yes" : "no"} video ${r.creative && r.creative.video_id ? "yes" : "no"}`);
+              console.log("API usage headers (last 3):");
+              for (const u of usage.slice(-3)) console.log("    " + u.slice(0, 400));
+              try {
+                const r = await fetch("https://cbu.uz/uz/arkhiv-kursov-valyut/json/USD/");
+                const j = await r.json();
+                console.log("CBU USD:", j[0] && `${j[0].Rate} so'm, date ${j[0].Date}`);
+              } catch (e) {
+                console.log("CBU USD: failed", e.message);
+              }
+            })().catch((e) => console.log("failed:", e.message));
+            JS
+            node /tmp/vp-probe.js; rm -f /tmp/vp-probe.js
