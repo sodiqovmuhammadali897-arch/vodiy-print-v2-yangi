@@ -491,6 +491,18 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   Viloyat. Moliya → Ma'lumot sifati «N ta mijozda viloyat yo'q → Tuzatish»
   opens `NoRegionModal` (those customers, their orders of the period, a
   region picker each; `financeDash.salesOf`).
+- **«Bot unga nima bersin» — 2026-11-24** (owner: «doim sanga managerga
+  buyruqlar beryapman, shuni xodimlar ruxsatiga belgidan qil»): Xodimlar →
+  edit form section + «Botdan oladi» chips. `staff.bot_tasks {recall,
+  recall_per_day, debts, leads, amo}` (`src/lib/botTasks.ts`,
+  `meta-webhook/botTasks.js wants/perDay`). recall.js `managers(kind)`
+  (debts get `managers("debts")`), each person's own daily cap; leadClaim
+  refuses the Telegram «Qabul qildim» without `leads` (admins always may);
+  amocrm.js sends no Telegram reminders without `amo` (admins' summaries
+  stay). Unticked = old behaviour (recall/debts by RECALL_MANAGERS, leads
+  and amo on); on start the server writes that once onto staff without
+  bot_tasks (`migrate`). From now on change who gets what in Xodimlar,
+  not RECALL_MANAGERS. The web claim button isn't gated (CRM is admin-only).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

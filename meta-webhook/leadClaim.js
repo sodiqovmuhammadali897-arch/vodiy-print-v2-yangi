@@ -1,3 +1,4 @@
+const BT = require("./botTasks");
 // «✅ Qabul qildim» (the owner, 2026-11-13: «lid managerga biriktirilishi
 // shartmas, yangi lidga tushsin, manager o'ziga olsin qabul qildim qilib»).
 // A new internet lead (Facebook form, Instagram, the site form) comes in
@@ -67,6 +68,7 @@ const create = (db, { route = null } = {}) => {
     const staff = (await db.collection("staff").where("telegram_chat_id", "in", [Number(userId), String(userId)]).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
     const s = staff.find((x) => x.active !== false && x.is_active !== false);
     if (!s) return answer("Telegram'ingiz ERP'dagi xodimga ulanmagan — rahbarga ayting");
+    if (s.role !== "admin" && !BT.wants(s, "leads")) return answer("Sizga lid olish belgilanmagan — rahbarga ayting (Xodimlar → «Bot unga nima bersin»)");
     const who = { email: String(s.id).toLowerCase(), name: s.full_name || s.id };
     const r = await claim(m[1], who);
     const msg = cq.message;

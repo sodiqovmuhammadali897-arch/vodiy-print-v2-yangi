@@ -24,6 +24,7 @@ const { telegram } = require("./telegram");
 const { todayCode, customerName } = require("./shared");
 
 // At most this many a day per manager (one at a time; was 5 at once).
+const BT = require("./botTasks");
 const PER_DAY = Number(process.env.RECALL_PER_DAY || 20);
 const START = process.env.RECALL_START || "2026-11-02";
 const SEND_AT = 9 * 60;
@@ -129,7 +130,7 @@ const callState = (call, today) => {
 const whoNeedsNext = (team, todays, cap = PER_DAY) =>
   team.filter((m) => {
     const mine = todays.filter((c) => c.manager_id === m.manager_id && c.status !== "carried");
-    return !mine.some((c) => c.status === "sent") && mine.length < cap;
+    return !mine.some((c) => c.status === "sent") && mine.length < (m.cap || cap);
   });
 
 const planDay = ({ customers, stats, calls, managerIds, today, perDay = PER_DAY }) => {
@@ -253,14 +254,16 @@ const create = (db) => {
   const all = async (name) => (await db.collection(name).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
 
   // Sales managers with a Telegram chat: { manager_id, name, chat, email }.
-  const managers = async () => {
+  // `kind` "recall" or "debts": who has it ticked in Xodimlar → «Bot unga
+  // nima bersin» (botTasks.js; before that, RECALL_MANAGERS). `cap` is the
+  // person's own customers-a-day.
+  const managers = async (kind = "recall") => {
     const names = new Map((await all("managers")).map((m) => [m.id, m.name]));
-    const only = (process.env.RECALL_MANAGERS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
     const seen = new Set();
     return (await all("staff"))
       .filter((s) => s.report_manager_id && s.telegram_chat_id && s.active !== false && s.is_active !== false)
-      .map((s) => ({ manager_id: s.report_manager_id, name: names.get(s.report_manager_id) || s.full_name || s.id, first: String(s.full_name || names.get(s.report_manager_id) || "").trim().split(/\s+/)[0], chat: Number(s.telegram_chat_id), email: s.id }))
-      .filter((m) => !only.length || only.includes(m.name.toLowerCase()))
+      .filter((s) => BT.wants(s, kind, { managerName: names.get(s.report_manager_id) || "" }))
+      .map((s) => ({ manager_id: s.report_manager_id, name: names.get(s.report_manager_id) || s.full_name || s.id, first: String(s.full_name || names.get(s.report_manager_id) || "").trim().split(/\s+/)[0], chat: Number(s.telegram_chat_id), email: s.id, cap: BT.perDay(s, PER_DAY) }))
       .filter((m) => !seen.has(m.manager_id) && seen.add(m.manager_id));
   };
   const admins = async () =>
@@ -330,7 +333,7 @@ const create = (db) => {
       // Reached the day's limit with everything marked: say so once.
       for (const m of team) {
         const mine = todays.filter((c) => c.manager_id === m.manager_id && c.status !== "carried");
-        if (mine.length >= PER_DAY && !mine.some((c) => c.status === "sent") && (await once(today, `finished_${m.manager_id}`)))
+        if (mine.length >= (m.cap || PER_DAY) && !mine.some((c) => c.status === "sent") && (await once(today, `finished_${m.manager_id}`)))
           await telegram("sendMessage", { chat_id: m.chat, text: `✅ ${m.name}, bugungi ${mine.length} ta eski mijoz tugadi. Rahmat! Ertaga 09:00 da davom etamiz.` }).catch(() => undefined);
       }
       const need = whoNeedsNext(team, todays).filter((m) => (!only || m.manager_id === only) && !exhausted.has(`${today}:${m.manager_id}`));
@@ -350,7 +353,7 @@ const create = (db) => {
         }
         const c = data.byId.get(item.customer_id);
         const id = `${today}_${c.id}`;
-        const text = customerText(c, data.stats.get(c.id), n + 1, PER_DAY, today, item.why);
+        const text = customerText(c, data.stats.get(c.id), n + 1, m.cap || PER_DAY, today, item.why);
         const doc = { day: today, customer_id: c.id, customer_name: c.company || customerName(c), manager_id: m.manager_id, manager_name: m.name, staff_email: m.email, chat_id: m.chat, why: item.why, status: "sent", text, sent_at: new Date().toISOString() };
         try {
           await col.doc(id).create(doc);
@@ -361,7 +364,7 @@ const create = (db) => {
         if (!n)
           await telegram("sendMessage", {
             chat_id: m.chat,
-            text: `Assalomu alaykum, ${m.first || m.name}!\n☎️ Bugungi eski mijozlar bittadan keladi. Qo'ng'iroq qilib, natijani tugma bilan belgilang — keyingisi darhol keladi (bugun ko'pi bilan ${PER_DAY} ta).`,
+            text: `Assalomu alaykum, ${m.first || m.name}!\n☎️ Bugungi eski mijozlar bittadan keladi. Qo'ng'iroq qilib, natijani tugma bilan belgilang — keyingisi darhol keladi (bugun ko'pi bilan ${m.cap || PER_DAY} ta).`,
           }).catch(() => undefined);
         const r = await telegram("sendMessage", { chat_id: m.chat, text, reply_markup: resultButtons(id) }).catch(() => null);
         if (r && r.result) await col.doc(id).update({ message_id: r.result.message_id });
@@ -470,4 +473,4 @@ const startText = (first, open) =>
     .filter(Boolean)
     .join("\n\n");
 
-module.exports = { create, planDay, whoNeedsNext, startText, customerStats, callState, customerText, summaryText, seasonOffer, addDays };
+module.exports = { PER_DAY, create, planDay, whoNeedsNext, startText, customerStats, callState, customerText, summaryText, seasonOffer, addDays };

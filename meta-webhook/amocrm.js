@@ -1,3 +1,4 @@
+const BT = require("./botTasks");
 // amoCRM → ERP, read only: the "amoCRM tahlil" tab in Sotuv bo'limi.
 //
 // Every couple of minutes the server pulls from amoCRM (API v4, long-lived
@@ -360,7 +361,10 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       const s = d.data();
       const email = String(s.email || d.id).toLowerCase();
       byEmail.set(email, email);
-      staffInfo.set(email, { chat: s.telegram_chat_id || null, admin: s.role === "admin" && !s.report_manager_id, name: s.full_name || email });
+      const admin = s.role === "admin" && !s.report_manager_id;
+      // «amoCRM eslatmalari» unticked in Xodimlar → no Telegram from here.
+      const chat = admin || BT.wants(s, "amo") ? s.telegram_chat_id || null : null;
+      staffInfo.set(email, { chat, admin, name: s.full_name || email });
       if (s.amo_user_id) byId.set(Number(s.amo_user_id), email);
     }
     staffByUser = new Map();

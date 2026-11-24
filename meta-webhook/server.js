@@ -93,7 +93,7 @@ content.register(app);
 // Eski mijozlarga qo'ng'iroq: each sales manager's daily list (recall.js).
 const recall = process.env.TELEGRAM_BOT_TOKEN ? require("./recall").create(db) : null;
 // Qarz undirish: each sales manager's debts, daily (debts.js).
-const debts = recall ? require("./debts").create(db, { team: recall.managers, admins: recall.admins }) : null;
+const debts = recall ? require("./debts").create(db, { team: () => recall.managers("debts"), admins: recall.admins }) : null;
 const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm, claims);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead, startLead } = require("./leads");
 const { pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone: normalizeCallPhone } = require("./callLeads");
@@ -468,6 +468,12 @@ app.listen(PORT, () => {
   if (tasks) tasks.start();
   if (bonus) bonus.start();
   if (recall) recall.start();
+  // Xodimlar → «Bot unga nima bersin»: today's behaviour written once onto
+  // staff that have no bot_tasks yet (botTasks.js).
+  require("./botTasks")
+    .migrate(db, require("./recall").PER_DAY)
+    .then((n) => n && console.log(`bot_tasks: set on ${n} staff`))
+    .catch((e) => console.error("bot_tasks migrate failed:", e.message));
   if (debts) debts.start();
   salesKpi.start();
   guideFacts.start();

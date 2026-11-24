@@ -1,3 +1,4 @@
+import { BOT_TASK_ROWS, botTasksOf, type BotTasks } from "../../lib/botTasks";
 import { useEffect, useState } from "react";
 import { Users, Plus, Pencil, Trash2, ShieldCheck } from "lucide-react";
 import { getOne, listAll, upsertOne, deleteOne } from "../../lib/firestoreDb";
@@ -99,6 +100,7 @@ export default function StaffPermissionsPanel() {
                   <th className="table-th">Rol</th>
                   <th className="table-th">Buyurtmalar</th>
                   <th className="table-th">Davomat xabari</th>
+                  <th className="table-th">Botdan oladi</th>
                   <th className="table-th text-right">Amallar</th>
                 </tr>
               </thead>
@@ -140,6 +142,9 @@ export default function StaffPermissionsPanel() {
                       ) : (
                         <span className="text-rose-600">Telefon yo'q</span>
                       )}
+                    </td>
+                    <td className="table-td">
+                      <BotChips s={s} />
                     </td>
                     <td className="table-td">
                       <div className="flex items-center justify-end gap-1">
@@ -194,6 +199,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
   const [phone, setPhone] = useState("");
   const [notify, setNotify] = useState(true);
   const [botAsk, setBotAsk] = useState(false);
+  const [botTasks, setBotTasks] = useState<BotTasks>(botTasksOf(null));
   const [amoUserId, setAmoUserId] = useState("");
   const [mzEmail, setMzEmail] = useState("");
   const [amoUsers, setAmoUsers] = useState<{ id: number; name: string }[]>([]);
@@ -220,6 +226,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       setPhone(staff.phone || "");
       setNotify(staff.attendance_notify !== false);
       setBotAsk(staff.bot_ask === true);
+      setBotTasks(botTasksOf(staff));
       setAmoUserId(staff.amo_user_id ? String(staff.amo_user_id) : "");
       setMzEmail(staff.moizvonki_email || "");
     } else {
@@ -232,6 +239,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
       setPhone("");
       setNotify(true);
       setBotAsk(false);
+      setBotTasks(botTasksOf(null));
       setAmoUserId("");
       setMzEmail("");
     }
@@ -270,6 +278,7 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
         phone: phone.trim(),
         attendance_notify: notify,
         bot_ask: botAsk,
+        bot_tasks: botTasks,
         amo_user_id: amoUserId ? Number(amoUserId) : null,
         moizvonki_email: mzEmail.trim().toLowerCase(),
       });
@@ -379,6 +388,40 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
           <input className="input" placeholder="Mois Zvonki'dagi ismi, e-pochtasi yoki raqami" value={mzEmail} onChange={(e) => setMzEmail(e.target.value)} />
           <p className="mt-1 text-xs text-ink-500">Shu xodimning raqamiga kelgan qo'ng'iroqdan ochilgan lid unga biriktiriladi. Bo'sh bo'lsa — xodim telefoni va ismi bo'yicha topiladi.</p>
         </div>
+        <div className="rounded-2xl border-2 border-brand-200 bg-brand-50/40 p-4 md:col-span-2">
+          <div className="font-display text-sm font-bold text-ink-900">🤖 Bot unga nima bersin</div>
+          <p className="mt-0.5 text-xs text-ink-500">Belgilasangiz — bot shu ishlarni shu xodimga beradi. Belgini olsangiz — darhol to'xtaydi.</p>
+          <div className="mt-2 divide-y divide-ink-100">
+            {BOT_TASK_ROWS.map((r) => (
+              <label key={r.key} className="flex cursor-pointer items-start gap-3 py-2.5">
+                <input type="checkbox" className="mt-1 h-4 w-4" checked={botTasks[r.key]} onChange={(e) => setBotTasks((b) => ({ ...b, [r.key]: e.target.checked }))} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-ink-900">{r.label}</span>
+                  <span className="block text-xs text-ink-500">{r.hint}</span>
+                  {r.key === "recall" && botTasks.recall && (
+                    <span className="mt-1.5 inline-flex items-center gap-2 text-xs text-ink-700" onClick={(e) => e.preventDefault()}>
+                      Kuniga
+                      <input
+                        type="number"
+                        min={1}
+                        max={200}
+                        className="input w-20 py-1 text-sm"
+                        value={botTasks.recall_per_day}
+                        onChange={(e) => setBotTasks((b) => ({ ...b, recall_per_day: Math.max(1, Math.min(200, Number(e.target.value) || 1)) }))}
+                      />
+                      ta
+                    </span>
+                  )}
+                </span>
+              </label>
+            ))}
+          </div>
+          {(botTasks.recall || botTasks.debts) && (!reportManagerId || !staff?.telegram_chat_id) && (
+            <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Eski mijoz va qarzdorlar borishi uchun{!reportManagerId ? " «Manager profili» tanlangan" : ""}{!reportManagerId && !staff?.telegram_chat_id ? " va" : ""}{!staff?.telegram_chat_id ? " Telegram ulangan" : ""} bo'lishi kerak.
+            </div>
+          )}
+        </div>
         <div>
           <label className="label">Rol</label>
           <select
@@ -464,5 +507,22 @@ function StaffFormModal({ open, onClose, staff, managers, onSaved }: FormProps) 
         </div>
       )}
     </Modal>
+  );
+}
+
+// What the bot gives this person, as chips in the staff list.
+function BotChips({ s }: { s: Staff }) {
+  const bt = botTasksOf(s);
+  const on = BOT_TASK_ROWS.filter((r) => bt[r.key]);
+  if (!on.length) return <span className="text-ink-400">—</span>;
+  return (
+    <div className="flex max-w-[260px] flex-wrap gap-1">
+      {on.map((r) => (
+        <span key={r.key} className={`chip whitespace-nowrap ${r.cls}`}>
+          {r.chip}
+          {r.key === "recall" ? ` · ${bt.recall_per_day}/kun` : ""}
+        </span>
+      ))}
+    </div>
   );
 }
