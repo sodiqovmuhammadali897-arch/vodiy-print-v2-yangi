@@ -3,7 +3,10 @@
 // ad's spend that day in dollars and in so'm at that day's Central Bank
 // rate; this sums any period and builds campaign → ad set → ad.
 
-export type AdsDayAd = { c: string; cn: string; s: string; sn: string; a: string; an: string; usd: number; spend: number; impr: number; clicks: number; link: number; leads: number; chats: number; erp: number };
+export type AdsDayAd = { c: string; cn: string; s: string; sn: string; a: string; an: string; usd: number; spend: number; impr: number; clicks: number; link: number; leads: number; chats: number; erp: number; v3?: number };
+export type AudRow = { k: string; usd: number; spend: number; impr: number; clicks: number; leads: number; chats: number };
+export type VideoDayRow = { a: string; plays: number; p25: number; p50: number; p75: number; p95: number; p100: number; thru: number; avg_sum: number };
+export type Creatives = Record<string, { vid: string; thumb: string; name: string }>;
 export type AdsPlacement = { plat: string; pos: string; usd: number; spend: number; impr: number; clicks: number; leads: number; chats: number };
 export type AdsDay = {
   day: string;
@@ -11,6 +14,9 @@ export type AdsDay = {
   ads: AdsDayAd[];
   totals: { usd: number; spend: number; impr: number; clicks: number; link: number; leads: number; chats: number; erp: number; results: number; reach?: number };
   placements?: AdsPlacement[];
+  aud?: { age?: AudRow[]; region?: AudRow[]; hour?: AudRow[]; device?: AudRow[] };
+  video?: VideoDayRow[];
+  aud_at?: string;
   updated_at?: string;
 };
 
@@ -130,3 +136,149 @@ export const placeLabel = (p: { plat: string; pos: string }) => `${PLAT[p.plat] 
 
 export const pct = (n: number, total: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
 export const pctLabel = (n: number) => `${String(n).replace(".", ",")}%`;
+
+// ── Phase 2: who saw it, when, and how the videos were watched ─────────
+export type AudKind = "age" | "region" | "hour" | "device";
+export function aggregateAudience(days: AdsDay[], from: string, to: string) {
+  const inSpan = days.filter((d) => d.day >= from && d.day <= to);
+  const out = {} as Record<AudKind, AudRow[]>;
+  for (const kind of ["age", "region", "hour", "device"] as AudKind[]) {
+    const by = new Map<string, AudRow>();
+    for (const d of inSpan)
+      for (const r of d.aud?.[kind] || []) {
+        const cur = by.get(r.k) || { k: r.k, usd: 0, spend: 0, impr: 0, clicks: 0, leads: 0, chats: 0 };
+        cur.usd += r.usd;
+        cur.spend += r.spend;
+        cur.impr += r.impr;
+        cur.clicks += r.clicks;
+        cur.leads += r.leads;
+        cur.chats += r.chats;
+        by.set(r.k, cur);
+      }
+    out[kind] = [...by.values()];
+  }
+  out.age.sort((a, b) => a.k.localeCompare(b.k));
+  out.region.sort((a, b) => b.spend - a.spend);
+  out.device.sort((a, b) => b.spend - a.spend);
+  // All 24 hours, so empty hours show as empty.
+  const hours = new Map(out.hour.map((h) => [h.k, h]));
+  out.hour = Array.from({ length: 24 }, (_, i) => {
+    const k = String(i).padStart(2, "0");
+    return hours.get(k) || { k, usd: 0, spend: 0, impr: 0, clicks: 0, leads: 0, chats: 0 };
+  });
+  return { ...out, has: inSpan.some((d) => d.aud), at: inSpan.map((d) => d.aud_at || "").sort().pop() || null };
+}
+
+export type VideoStat = {
+  key: string;
+  name: string;
+  thumb: string;
+  ads: number;
+  spend: number;
+  usd: number;
+  impr: number;
+  results: number;
+  erp: number;
+  v3: number;
+  plays: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p95: number;
+  p100: number;
+  thru: number;
+  avgSec: number | null;
+  cpl: number | null;
+};
+
+// One row per video: the same video in several ad sets is one row
+// (Meta's video id; else the ad's name).
+export function aggregateVideos(days: AdsDay[], from: string, to: string, creatives: Creatives = {}): VideoStat[] {
+  const inSpan = days.filter((d) => d.day >= from && d.day <= to);
+  const keyOf = (adId: string, name: string) => creatives[adId]?.vid || `n:${name.trim().toLowerCase()}`;
+  const adName = new Map<string, string>();
+  const by = new Map<string, VideoStat & { avgSum: number; adIds: Set<string> }>();
+  const get = (adId: string, name: string) => {
+    const k = keyOf(adId, name);
+    let v = by.get(k);
+    if (!v) {
+      v = { key: k, name: name || creatives[adId]?.name || "Video", thumb: "", ads: 0, spend: 0, usd: 0, impr: 0, results: 0, erp: 0, v3: 0, plays: 0, p25: 0, p50: 0, p75: 0, p95: 0, p100: 0, thru: 0, avgSec: null, cpl: null, avgSum: 0, adIds: new Set() };
+      by.set(k, v);
+    }
+    if (!v.thumb && creatives[adId]?.thumb) v.thumb = creatives[adId].thumb;
+    v.adIds.add(adId);
+    return v;
+  };
+  for (const d of inSpan) {
+    for (const a of d.ads || []) {
+      adName.set(a.a, a.an);
+      const v = get(a.a, a.an);
+      v.spend += a.spend;
+      v.usd += a.usd;
+      v.impr += a.impr;
+      v.results += a.leads + a.chats;
+      v.erp += a.erp || 0;
+      v.v3 += a.v3 || 0;
+    }
+    for (const r of d.video || []) {
+      const v = get(r.a, adName.get(r.a) || creatives[r.a]?.name || "");
+      v.plays += r.plays;
+      v.p25 += r.p25;
+      v.p50 += r.p50;
+      v.p75 += r.p75;
+      v.p95 += r.p95;
+      v.p100 += r.p100;
+      v.thru += r.thru;
+      v.avgSum += r.avg_sum;
+    }
+  }
+  return [...by.values()]
+    .filter((v) => v.plays > 0 || v.spend > 0)
+    .map(({ avgSum, adIds, ...v }) => ({ ...v, ads: adIds.size, avgSec: v.plays ? Math.round((avgSum / v.plays) * 10) / 10 : null, cpl: v.results ? Math.round(v.spend / v.results) : null }))
+    .sort((a, b) => b.spend - a.spend);
+}
+
+// Plain-language hints about the videos (compared with each other).
+export function videoHints(videos: VideoStat[]): string[] {
+  const seen = videos.filter((v) => v.plays >= 300 && v.impr > 0);
+  if (seen.length < 2) return [];
+  const hook = (v: VideoStat) => (v.v3 ? v.v3 / v.impr : v.plays / v.impr);
+  const hold = (v: VideoStat) => v.p25 / v.plays;
+  const best = [...seen].sort((a, b) => hold(b) - hold(a))[0];
+  const worst = [...seen].sort((a, b) => hold(a) - hold(b))[0];
+  const p = (x: number) => `${String(Math.round(x * 1000) / 10).replace(".", ",")}%`;
+  const out = [`✅ Eng yaxshi ushlab turgan video: «${best.name}» — ${p(hold(best))} odam chorakkacha ko'rgan.`];
+  if (worst !== best && hold(worst) < hold(best) / 2) out.push(`⚠️ «${worst.name}» — chorakkacha atigi ${p(hold(worst))} ko'rgan: boshidagi 3 soniyani (hook) almashtirib sinab ko'ring.`);
+  const lowHook = [...seen].sort((a, b) => hook(a) - hook(b))[0];
+  if (lowHook !== worst && hook(lowHook) < hook(best) / 2) out.push(`👀 «${lowHook.name}» — ko'rganlarning atigi ${p(hook(lowHook))} 3 soniyadan ko'p to'xtagan.`);
+  const noRes = seen.filter((v) => v.spend > 0 && !v.results).sort((a, b) => b.spend - a.spend)[0];
+  if (noRes) out.push(`🔴 «${noRes.name}» — ${Math.round(noRes.spend).toLocaleString("ru-RU").replace(/[\s\u00a0]/g, " ")} so'm ketdi, natija yo'q.`);
+  return out;
+}
+
+const REGION: Record<string, string> = {
+  "Fergana Region": "Farg'ona",
+  "Andijan Region": "Andijon",
+  "Namangan Region": "Namangan",
+  "Tashkent": "Toshkent shahri",
+  "Tashkent Region": "Toshkent viloyati",
+  "Samarqand Region": "Samarqand",
+  "Samarkand Region": "Samarqand",
+  "Bukhara Region": "Buxoro",
+  "Jizzakh Region": "Jizzax",
+  "Khorezm Region": "Xorazm",
+  "Navoiy Region": "Navoiy",
+  "Kashkadarya Region": "Qashqadaryo",
+  "Surxondaryo Region": "Surxondaryo",
+  "Sirdaryo Region": "Sirdaryo",
+  "Karakalpakstan": "Qoraqalpog'iston",
+  Unknown: "Noma'lum",
+};
+export const regionLabel = (k: string) => REGION[k] || k.replace(/ Region$/, "");
+const GENDER: Record<string, string> = { male: "erkak", female: "ayol", unknown: "noma'lum" };
+export const ageLabel = (k: string) => {
+  const [age, g] = k.split("|");
+  return `${age} · ${GENDER[g] || g}`;
+};
+const DEVICE: Record<string, string> = { mobile_app: "Telefon (ilova)", mobile_web: "Telefon (brauzer)", desktop: "Kompyuter", unknown: "Noma'lum" };
+export const deviceLabel = (k: string) => DEVICE[k] || k;

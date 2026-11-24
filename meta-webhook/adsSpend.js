@@ -16,8 +16,10 @@ const CHAT_TYPE = "onsite_conversion.messaging_conversation_started_7d";
 const num = (v) => Number(v || 0) || 0;
 const actionsOf = (actions) => {
   const v = (t) => (actions || []).filter((a) => a.action_type === t).reduce((s, a) => s + num(a.value), 0);
-  return { leads: Math.max(0, ...LEAD_TYPES.map(v)), chats: v(CHAT_TYPE) };
+  return { leads: Math.max(0, ...LEAD_TYPES.map(v)), chats: v(CHAT_TYPE), v3: v("video_view") };
 };
+// Meta's video fields are lists like [{ action_type: "video_view", value }].
+const listVal = (r, f) => (Array.isArray(r[f]) ? r[f].reduce((s, a) => s + num(a.value), 0) : num(r[f]));
 const r2 = (n) => Math.round(n * 100) / 100;
 
 // One day from Meta's ad-level rows (already that day's only).
@@ -43,6 +45,7 @@ function buildDay({ day, rate, rows = [], account = null, placements = null, erp
       link: num(r.inline_link_clicks),
       leads,
       chats,
+      v3: actionsOf(r.actions).v3,
       erp,
     };
     ads.push(a);
@@ -71,6 +74,53 @@ function placementRows(rows, rate) {
     })
     .filter((p) => p.usd > 0 || p.impr > 0 || p.leads)
     .sort((a, b) => b.usd - a.usd);
+}
+
+// Phase 2 — who saw it and when (one day's rows of one breakdown).
+// `key` names the row: "25-34 male", "Fergana Region", "15", "mobile_app".
+const AUD_KEYS = {
+  age: (r) => `${r.age || "?"}|${r.gender || "unknown"}`,
+  region: (r) => String(r.region || "Unknown"),
+  hour: (r) => String(r.hourly_stats_aggregated_by_advertiser_time_zone || "").slice(0, 2),
+  device: (r) => String(r.device_platform || "unknown"),
+};
+function audienceRows(rows, rate, kind) {
+  const by = new Map();
+  for (const r of rows || []) {
+    const k = AUD_KEYS[kind](r);
+    const { leads, chats } = actionsOf(r.actions);
+    const cur = by.get(k) || { k, usd: 0, spend: 0, impr: 0, clicks: 0, leads: 0, chats: 0 };
+    cur.usd = r2(cur.usd + num(r.spend));
+    cur.spend = Math.round(cur.usd * rate);
+    cur.impr += num(r.impressions);
+    cur.clicks += num(r.inline_link_clicks || r.clicks);
+    cur.leads += leads;
+    cur.chats += chats;
+    by.set(k, cur);
+  }
+  return [...by.values()].filter((x) => x.usd > 0 || x.impr > 0 || x.leads);
+}
+
+// Video watching per ad that day: starts, 25/50/75/95/100%, ThruPlay, and
+// the average watch time × starts (so days add up to a true average).
+const VIDEO_FIELDS = "ad_id,ad_name,video_play_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p95_watched_actions,video_p100_watched_actions,video_thruplay_watched_actions,video_avg_time_watched_actions";
+function videoRows(rows) {
+  return (rows || [])
+    .map((r) => {
+      const plays = listVal(r, "video_play_actions");
+      return {
+        a: String(r.ad_id || ""),
+        plays,
+        p25: listVal(r, "video_p25_watched_actions"),
+        p50: listVal(r, "video_p50_watched_actions"),
+        p75: listVal(r, "video_p75_watched_actions"),
+        p95: listVal(r, "video_p95_watched_actions"),
+        p100: listVal(r, "video_p100_watched_actions"),
+        thru: listVal(r, "video_thruplay_watched_actions"),
+        avg_sum: r2(listVal(r, "video_avg_time_watched_actions") * plays),
+      };
+    })
+    .filter((v) => v.plays > 0);
 }
 
 // Group rows that carry date_start by day.
@@ -132,4 +182,4 @@ function limitAlerts({ today, month, activeDaily, dailyLimit, monthlyLimit, days
   return out;
 }
 
-module.exports = { buildDay, placementRows, byDay, usagePct, cbuRate, limitAlerts, actionsOf };
+module.exports = { audienceRows, videoRows, VIDEO_FIELDS, AUD_KEYS, buildDay, placementRows, byDay, usagePct, cbuRate, limitAlerts, actionsOf };

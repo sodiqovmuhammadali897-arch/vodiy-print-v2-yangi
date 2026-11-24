@@ -39,3 +39,32 @@ describe("aggregate", () => {
     expect(placeLabel({ plat: "facebook", pos: "feed" })).toBe("Facebook · Lenta");
   });
 });
+
+import { aggregateAudience, aggregateVideos, videoHints, regionLabel, ageLabel } from "../src/lib/adsSpend";
+describe("phase 2", () => {
+  const aud = (k: string, spend: number, leads = 0) => ({ k, usd: spend / 12000, spend, impr: 100, clicks: 1, leads, chats: 0 });
+  const d1: AdsDay = { day: "2026-11-23", rate: 12000, ads: [ad("1", "a", "x", 100000, 2)], totals: { usd: 0, spend: 100000, impr: 0, clicks: 0, link: 0, leads: 2, chats: 0, erp: 0, results: 2 }, aud: { age: [aud("25-34|male", 60000, 2)], hour: [aud("02", 10000)], region: [aud("Fergana Region", 100000, 2)], device: [] }, video: [{ a: "x", plays: 1000, p25: 200, p50: 100, p75: 50, p95: 30, p100: 20, thru: 80, avg_sum: 3000 }] };
+  const d2: AdsDay = { day: "2026-11-24", rate: 12000, ads: [ad("1", "b", "y", 50000, 0)], totals: { usd: 0, spend: 50000, impr: 0, clicks: 0, link: 0, leads: 0, chats: 0, erp: 0, results: 0 }, aud: { age: [aud("25-34|male", 20000)], hour: [aud("15", 50000)], region: [], device: [] }, video: [{ a: "y", plays: 1000, p25: 40, p50: 10, p75: 5, p95: 2, p100: 1, thru: 10, avg_sum: 1000 }, { a: "x", plays: 1000, p25: 200, p50: 100, p75: 50, p95: 30, p100: 20, thru: 80, avg_sum: 5000 }] };
+  it("audience sums over days, 24 hours always", () => {
+    const a = aggregateAudience([d1, d2], "2026-11-23", "2026-11-24");
+    expect(a.age).toEqual([{ k: "25-34|male", usd: 80000 / 12000, spend: 80000, impr: 200, clicks: 2, leads: 2, chats: 0 }]);
+    expect(a.hour).toHaveLength(24);
+    expect(a.hour[2].spend).toBe(10000);
+    expect(a.has).toBe(true);
+  });
+  it("one row per video; same video in two ad sets merges by video id", () => {
+    const v = aggregateVideos([d1, d2], "2026-11-23", "2026-11-24", { x: { vid: "V1", thumb: "t", name: "" }, y: { vid: "V2", thumb: "", name: "" } });
+    const v1 = v.find((r) => r.key === "V1")!;
+    expect(v1.plays).toBe(2000);
+    expect(v1.avgSec).toBe(4);
+    expect(v1.thumb).toBe("t");
+    expect(v1.results).toBe(2);
+    const hints = videoHints(v);
+    expect(hints[0]).toContain("Ax");
+    expect(hints.some((h) => h.includes("Ay") && h.includes("hook"))).toBe(true);
+  });
+  it("labels", () => {
+    expect(regionLabel("Fergana Region")).toBe("Farg'ona");
+    expect(ageLabel("25-34|female")).toBe("25-34 · ayol");
+  });
+});

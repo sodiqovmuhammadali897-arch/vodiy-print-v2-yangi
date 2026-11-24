@@ -74,6 +74,9 @@ jobs:
                 console.log("ERP summary:", JSON.stringify({ today: s.today, month: s.month, rate: s.rate, rate_source: s.rate_source, last_sync: s.last_sync, last_fast: s.last_fast, usage: s.usage, limit: s.monthly_limit, active_daily: s.active_daily_budget }));
                 const d = (await db.collection("ads_days").doc(today).get()).data();
                 console.log("ERP ads_days today:", d ? JSON.stringify({ rate: d.rate, totals: d.totals, ads: d.ads.length, placements: (d.placements || []).length, updated_at: d.updated_at }) : "none");
+                if (d) console.log("ERP phase 2 today:", JSON.stringify({ aud: d.aud ? Object.fromEntries(Object.entries(d.aud).map(([k, v]) => [k, v.length])) : null, video: d.video ? d.video.length : null, aud_at: d.aud_at || null }));
+                const cr = (await db.collection("ads_state").doc("creatives").get()).data();
+                console.log("ERP creatives:", cr ? `${Object.keys(cr.map || {}).length} ads, with picture ${Object.values(cr.map || {}).filter((x) => x.thumb).length}` : "none");
                 const n = (await db.collection("ads_days").get()).size;
                 const fx = (await db.collection("ads_fx").get()).size;
                 const al = (await db.collection("ads_alerts").doc(today).get()).data();

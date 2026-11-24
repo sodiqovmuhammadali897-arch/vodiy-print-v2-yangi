@@ -31,6 +31,8 @@ const TZ_OFFSET_MS = 5 * 60 * 60 * 1000;
 const FAST_MS = Math.max(1, Number(process.env.ADS_FAST_MIN || 2)) * 60 * 1000;
 const HEAVY_MS = Math.max(5, Number(process.env.ADS_HEAVY_MIN || 30)) * 60 * 1000;
 const SP = require("./adsSpend");
+// Phase 2 (age/gender, region, hour, device, video) — heavier, hourly.
+const AUD_MS = Math.max(15, Number(process.env.ADS_AUDIENCE_MIN || 60)) * 60 * 1000;
 const DEFAULTS = { daily_limit: 200000, monthly_limit: 6000000, stop_multiplier: 3, grace_minutes: 120, rate: 12800, report_hour: 10 };
 const CHANGES_ON = process.env.ADS_CHANGES === "on";
 // Currencies Meta keeps without cents (budgets come in whole units).
@@ -99,6 +101,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
   let last = null; // the latest sync, for guards and the report
   let usage = 0; // Meta's latest usage share, 0–100
   let lastHeavy = 0;
+  let lastAud = 0;
 
   // ── Graph API ──────────────────────────────────────────────────────
   const graph = async (path, params = {}, method = "GET") => {
@@ -259,7 +262,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
       graphAll(`act_${act}/insights`, { level: "ad", fields: AD_FIELDS, time_increment: 1, time_range: range }),
       graphAll(`act_${act}/insights`, { fields: "spend,impressions,reach,clicks", time_increment: 1, time_range: range }),
       graphAll(`act_${act}/insights`, { fields: "spend,impressions,clicks,actions", breakdowns: "publisher_platform,platform_position", time_increment: 1, time_range: range }).catch(() => null),
-      graphAll(`act_${act}/ads`, { fields: "id,creative{video_id,object_type}" }).catch(() => []),
+      graphAll(`act_${act}/ads`, { fields: "id,name,creative{video_id,object_type,thumbnail_url}" }).catch(() => []),
     ]);
     const currency = acc.currency || "USD";
     const dayList = [];
@@ -289,9 +292,39 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     const dayBatch = db.batch();
     for (const d of dayList) {
       const doc = SP.buildDay({ day: d, rate: rateOf(d), rows: adBy.get(d) || [], account: (accBy.get(d) || [])[0] || null, placements: placeBy ? placeBy.get(d) || [] : null, erpByAd: erp[d] || {} });
-      dayBatch.set(db.collection("ads_days").doc(d), { ...doc, updated_at: new Date().toISOString() });
+      dayBatch.set(db.collection("ads_days").doc(d), { ...doc, updated_at: new Date().toISOString() }, { merge: true });
     }
     await dayBatch.commit();
+    // Which video each ad shows, and its picture (Meta's links expire, so
+    // they are refreshed every sync).
+    const creatives = {};
+    for (const a of ads) if (a.creative) creatives[String(a.id)] = { vid: String(a.creative.video_id || ""), thumb: a.creative.thumbnail_url || "", name: a.name || "" };
+    await db.collection("ads_state").doc("creatives").set({ map: creatives, at: new Date().toISOString() });
+    // Phase 2, hourly: who saw it, where, when, and how the videos were watched.
+    if (!lastAud || Date.now() - lastAud >= AUD_MS) {
+      const bd = (breakdowns) => graphAll(`act_${act}/insights`, { fields: "spend,impressions,inline_link_clicks,actions", breakdowns, time_increment: 1, time_range: range }).catch((err) => (log.error("Ads breakdown failed", breakdowns, err.message), null));
+      const [age, region, hour, device, video] = await Promise.all([
+        bd("age,gender"),
+        bd("region"),
+        bd("hourly_stats_aggregated_by_advertiser_time_zone"),
+        bd("device_platform"),
+        graphAll(`act_${act}/insights`, { level: "ad", fields: SP.VIDEO_FIELDS, time_increment: 1, time_range: range }).catch((err) => (log.error("Ads video failed", err.message), null)),
+      ]);
+      const parts = { age, region, hour, device };
+      const byKind = Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, v ? SP.byDay(v) : null]));
+      const vBy = video ? SP.byDay(video) : null;
+      const audBatch = db.batch();
+      for (const d of dayList) {
+        const aud = {};
+        for (const [k, m] of Object.entries(byKind)) if (m) aud[k] = SP.audienceRows(m.get(d) || [], rateOf(d), k);
+        const patch = { aud_at: new Date().toISOString() };
+        if (Object.keys(aud).length) patch.aud = aud;
+        if (vBy) patch.video = SP.videoRows(vBy.get(d) || []);
+        audBatch.set(db.collection("ads_days").doc(d), patch, { merge: true });
+      }
+      await audBatch.commit();
+      lastAud = Date.now();
+    }
     // Reach is people, not a sum of days: asked for each page period.
     const reachOf = async (from) => {
       const r = (await graphAll(`act_${act}/insights`, { fields: "reach,impressions", time_range: { since: from, until: today } }).catch(() => []))[0] || {};
@@ -692,6 +725,21 @@ function whereText(dayDoc) {
   for (const c of [...camps.values()].sort((a, b) => b.spend - a.spend).slice(0, 8)) lines.push(`• ${clip(c.name, 45)} — ${som(c.spend)} (${pct(c.spend)}) · ${c.leads} lid${c.leads ? ` · ${som(Math.round(c.spend / c.leads))}dan` : " ⚠️"}`);
   const places = (dayDoc.placements || []).filter((p) => p.spend > 0);
   if (places.length) lines.push(`📍 Joylashuv: ${places.slice(0, 5).map((p) => `${placeName(p)} ${pct(p.spend)}`).join(" · ")}`);
+  const aud = dayDoc.aud || {};
+  if (aud.hour && aud.hour.length) {
+    const night = aud.hour.filter((h) => Number(h.k) < 6);
+    const nSpend = night.reduce((x, h) => x + h.spend, 0);
+    const nRes = night.reduce((x, h) => x + h.leads + h.chats, 0);
+    if (nSpend > 0) lines.push(`🌙 Kechasi 00–06: ${som(nSpend)} (${pct(nSpend)}) · ${nRes} lid${nRes ? "" : " ⚠️"}`);
+  }
+  if (aud.age && aud.age.length) {
+    const g = { male: "erkak", female: "ayol", unknown: "noma'lum" };
+    const top = [...aud.age].sort((a, b) => b.spend - a.spend).slice(0, 2).map((a) => {
+      const [age, sex] = a.k.split("|");
+      return `${age} ${g[sex] || sex} ${pct(a.spend)} · ${a.leads + a.chats} lid`;
+    });
+    lines.push(`👥 Kimga: ${top.join("; ")}`);
+  }
   if (dayDoc.rate) lines.push(`💱 Kurs: 1 $ = ${som(dayDoc.rate)} (Markaziy bank)`);
   return ["", ...lines];
 }

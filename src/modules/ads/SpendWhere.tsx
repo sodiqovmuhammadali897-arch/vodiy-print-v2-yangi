@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Coins, MapPin } from "lucide-react";
+import { ChevronDown, ChevronRight, Coins } from "lucide-react";
+import AdsBreakdowns from "./AdsBreakdowns";
 import { subscribeOne, subscribeSince } from "../../lib/firestoreDb";
-import { PERIODS, addDays, aggregate, metrics, pct, pctLabel, periodSpan, placeLabel, type AdsDay, type Node, type PeriodKey } from "../../lib/adsSpend";
+import { PERIODS, addDays, aggregate, metrics, pct, pctLabel, periodSpan, type AdsDay, type Node, type PeriodKey } from "../../lib/adsSpend";
 import { formatSom } from "../../lib/ads";
 
 // «Har bir so'm qayerga ketdi» (the owner, 2026-11-24: «kunlik hamma
@@ -171,32 +172,7 @@ export default function SpendWhere({ avgCpl }: { avgCpl: number | null }) {
           </div>
           <p className="mt-2 text-[11px] text-ink-400">Qatorni bossangiz ichi ochiladi: auditoriyalar, keyin videolar. Natija = Meta hisoblagan lid + yozishma; ERP lid = ERP'ga tushgan forma lidlari.</p>
 
-          {agg.placements.length > 0 && (
-            <div className="mt-5">
-              <div className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ink-900">
-                <MapPin className="h-4 w-4 text-ink-500" /> Platforma va joylashuv
-              </div>
-              <div className="grid gap-x-6 gap-y-1 md:grid-cols-2">
-                {agg.placements.map((p) => {
-                  const share = pct(p.spend, total);
-                  const res = p.leads + p.chats;
-                  const idle = p.spend > 0 && !res;
-                  return (
-                    <div key={`${p.plat}/${p.pos}`} className="flex items-center gap-2 border-b border-ink-100 py-1.5 text-sm">
-                      <span className={`w-28 shrink-0 truncate sm:w-40 ${idle ? "text-rose-600" : "text-ink-800"}`}>{placeLabel(p)}</span>
-                      <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-ink-100">
-                        <span className={`block h-full rounded-full ${idle ? "bg-rose-400" : "bg-brand-500"}`} style={{ width: `${Math.min(100, share)}%` }} />
-                      </span>
-                      <span className="w-28 shrink-0 text-right tabular-nums text-ink-700">
-                        {n0(p.spend)} · {pctLabel(share)}
-                      </span>
-                      <span className={`w-16 shrink-0 text-right text-xs tabular-nums sm:w-20 ${idle ? "font-semibold text-rose-600" : "text-ink-500"}`}>{res ? `${res} natija` : "natijasiz"}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <AdsBreakdowns days={days} from={span.from} to={span.to} placements={agg.placements} spendTotal={total} />
         </>
       )}
     </div>

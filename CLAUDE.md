@@ -477,8 +477,15 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     expandable tree, placements. 10:00 report adds «💸 Pul qayerga ketdi».
   - `ads-probe.yml` (read only): what Meta gives (all breakdowns and video
     metrics work), usage headers, CBU rate, what the server wrote.
-  - Next phases (approved): 2 — video retention + age/gender/region/hour;
-    3 — lead → order (phone, 60 days) → sales/profit per ad, ROAS/ROMI/CAC;
+  - **Phase 2 — built 2026-11-24:** hourly (`ADS_AUDIENCE_MIN`, 5 insight
+    calls) the heavy sync adds to each ads_days doc `aud {age, region, hour,
+    device}` and `video` (starts, 25–100%, ThruPlay, avg time × starts);
+    ad rows carry `v3` (3-second views); `ads_state/creatives` maps ad →
+    video id + thumbnail. Page tabs under the tree (`AdsBreakdowns.tsx`):
+    Joylashuv, Video (one row per video id, retention chips, hints from
+    `videoHints`), Auditoriya (age·gender, region, device), Soatlar (24 bars,
+    night 00–06 flagged). The 10:00 report adds night spend and top audiences.
+  - Next phases (approved): 3 — lead → order (phone, 60 days) → sales/profit per ad, ROAS/ROMI/CAC;
     4 — alert-only agent triggers (CPL jump, CTR drop, frequency, no sales).
 - **Which deals have no task — 2026-11-14** (owner: «zadachasiz lid deyapti,
   qaysiligini ko'rsatib turadigan qilish kerak, amoda ko'rinmayapti»): the
