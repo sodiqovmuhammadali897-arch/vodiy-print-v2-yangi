@@ -66,7 +66,7 @@ export default function ProposalEditor() {
     created_at: new Date().toISOString(),
   });
   const [saving, setSaving] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"" | "pdf" | "png">("");
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -203,7 +203,7 @@ export default function ProposalEditor() {
 
   const doExport = async (format: "pdf" | "png") => {
     if (!previewRef.current) return;
-    setExporting(true);
+    setExporting(format);
     try {
       const fileBase = `${proposal.number}${
         linkedCustomer ? "-" + linkedCustomer.first_name : ""
@@ -214,7 +214,7 @@ export default function ProposalEditor() {
         await exportProposalPng(previewRef.current, fileBase);
       }
     } finally {
-      setExporting(false);
+      setExporting("");
     }
   };
 
@@ -482,16 +482,16 @@ export default function ProposalEditor() {
             <button
               className="btn-secondary"
               onClick={() => doExport("pdf")}
-              disabled={exporting}
+              disabled={!!exporting}
             >
-              <FileDown className="h-4 w-4" /> PDF
+              <FileDown className="h-4 w-4" /> {exporting === "pdf" ? "Tayyorlanmoqda…" : "PDF"}
             </button>
             <button
               className="btn-secondary"
               onClick={() => doExport("png")}
-              disabled={exporting}
+              disabled={!!exporting}
             >
-              <ImageIcon className="h-4 w-4" /> PNG
+              <ImageIcon className="h-4 w-4" /> {exporting === "png" ? "Tayyorlanmoqda…" : "PNG"}
             </button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { captureOptions } from "./exportPng";
 
 export const exportNodeToPdf = async (node: HTMLElement, fileBase: string): Promise<void> => {
   // Exported PDFs are always meant to read as a plain document, regardless
@@ -16,23 +17,20 @@ export const exportNodeToPdf = async (node: HTMLElement, fileBase: string): Prom
     // See exportPng.ts — capturing before web fonts finish loading can
     // shift text metrics enough to change how content wraps.
     await document.fonts.ready;
-    canvas = await html2canvas(node, {
-      scale: 3,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-    });
+    // 2.5× and JPEG pages: see htmlToPdf.ts (much faster, same look).
+    canvas = await html2canvas(node, { ...captureOptions(node), scale: 2.5 });
   } finally {
     if (wasDark) root.classList.add("dark");
   }
-  const img = canvas.toDataURL("image/png");
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const img = canvas.toDataURL("image/jpeg", 0.92);
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const ratio = canvas.height / canvas.width;
   const fullH = pageW * ratio;
 
   if (fullH <= pageH) {
-    pdf.addImage(img, "PNG", 0, 0, pageW, fullH);
+    pdf.addImage(img, "JPEG", 0, 0, pageW, fullH, undefined, "FAST");
   } else {
     // Taller than one page: slice the canvas into page-sized chunks.
     const pageCanvasH = (pageH / pageW) * canvas.width;
@@ -46,14 +44,7 @@ export const exportNodeToPdf = async (node: HTMLElement, fileBase: string): Prom
       const ctx = sliceCanvas.getContext("2d")!;
       ctx.drawImage(canvas, 0, -renderedH);
       if (!first) pdf.addPage();
-      pdf.addImage(
-        sliceCanvas.toDataURL("image/png"),
-        "PNG",
-        0,
-        0,
-        pageW,
-        (sliceH / canvas.width) * pageW,
-      );
+      pdf.addImage(sliceCanvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageW, (sliceH / canvas.width) * pageW, undefined, "FAST");
       renderedH += sliceH;
       first = false;
     }

@@ -1,15 +1,15 @@
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { captureOptions } from "./exportPng";
 
 const capture = async (node: HTMLElement) => {
   // See exportPng.ts — capturing before web fonts finish loading can shift
   // text metrics enough to change how content wraps.
   await document.fonts.ready;
-  return html2canvas(node, {
-    scale: 3,
-    useCORS: true,
-    backgroundColor: "#ffffff",
-  });
+  // 2.5× (~200 DPI on A4) is sharp in print and on screen; pages go in as
+  // JPEG — jsPDF re-compresses a PNG in JavaScript, which took most of the
+  // time (the owner, 2026-11-24: «juda sekin pdf saqlayapti»).
+  return html2canvas(node, { ...captureOptions(node), scale: 2.5 });
 };
 
 // Slices the captured canvas into A4-height chunks and adds one PDF page per
@@ -17,7 +17,7 @@ const capture = async (node: HTMLElement) => {
 // a document with many rows should paginate like a real document.
 export const htmlToPdf = async (node: HTMLElement): Promise<jsPDF> => {
   const canvas = await capture(node);
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
   const pageWidthMm = pdf.internal.pageSize.getWidth();
   const pageHeightMm = pdf.internal.pageSize.getHeight();
   const pxPerMm = canvas.width / pageWidthMm;
@@ -46,14 +46,7 @@ export const htmlToPdf = async (node: HTMLElement): Promise<jsPDF> => {
     );
 
     if (!isFirstPage) pdf.addPage();
-    pdf.addImage(
-      pageCanvas.toDataURL("image/png"),
-      "PNG",
-      0,
-      0,
-      pageWidthMm,
-      sliceHeightPx / pxPerMm,
-    );
+    pdf.addImage(pageCanvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageWidthMm, sliceHeightPx / pxPerMm, undefined, "FAST");
 
     renderedPx += sliceHeightPx;
     isFirstPage = false;

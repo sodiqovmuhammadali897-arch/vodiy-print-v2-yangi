@@ -55,7 +55,7 @@ export default function SouvenirOfferEditor() {
   });
   const [noteTouched, setNoteTouched] = useState(!isNew);
   const [saving, setSaving] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"" | "pdf" | "png">("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -139,13 +139,13 @@ export default function SouvenirOfferEditor() {
 
   const doExport = async (format: "pdf" | "png") => {
     if (!previewRef.current) return;
-    setExporting(true);
+    setExporting(format);
     try {
       const fileBase = `${proposal.number}-${proposal.recipient_name || "suvenir"}`.replace(/[^\p{L}\p{N}-]+/gu, "-").replace(/-+$/, "");
       if (format === "pdf") await exportProposalPdf(previewRef.current, fileBase);
       else await exportProposalPng(previewRef.current, fileBase);
     } finally {
-      setExporting(false);
+      setExporting("");
     }
   };
 
@@ -283,11 +283,11 @@ export default function SouvenirOfferEditor() {
             <button className="btn-primary" onClick={() => void save()} disabled={saving}>
               <Save className="h-4 w-4" /> {saving ? "Saqlanmoqda..." : "Saqlash"}
             </button>
-            <button className="btn-secondary" onClick={() => void doExport("png")} disabled={exporting || !ready}>
-              <ImageIcon className="h-4 w-4" /> PNG
+            <button className="btn-secondary" onClick={() => void doExport("png")} disabled={!!exporting || !ready}>
+              <ImageIcon className="h-4 w-4" /> {exporting === "png" ? "Tayyorlanmoqda…" : "PNG"}
             </button>
-            <button className="btn-secondary" onClick={() => void doExport("pdf")} disabled={exporting || !ready}>
-              <FileDown className="h-4 w-4" /> PDF
+            <button className="btn-secondary" onClick={() => void doExport("pdf")} disabled={!!exporting || !ready}>
+              <FileDown className="h-4 w-4" /> {exporting === "pdf" ? "Tayyorlanmoqda…" : "PDF"}
             </button>
           </div>
         </div>
