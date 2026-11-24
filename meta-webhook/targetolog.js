@@ -102,6 +102,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
   let usage = 0; // Meta's latest usage share, 0–100
   let lastHeavy = 0;
   let lastAud = 0;
+  let audFullDay = ""; // the day the 30-day audience backfill last ran
 
   // ── Graph API ──────────────────────────────────────────────────────
   const graph = async (path, params = {}, method = "GET") => {
@@ -302,19 +303,24 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     await db.collection("ads_state").doc("creatives").set({ map: creatives, at: new Date().toISOString() });
     // Phase 2, hourly: who saw it, where, when, and how the videos were watched.
     if (!lastAud || Date.now() - lastAud >= AUD_MS) {
-      const bd = (breakdowns) => graphAll(`act_${act}/insights`, { fields: "spend,impressions,inline_link_clicks,actions", breakdowns, time_increment: 1, time_range: range }).catch((err) => (log.error("Ads breakdown failed", breakdowns, err.message), null));
+      // 30 days once a day; otherwise the last 3 (older days don't change
+      // and these calls cost the most of Meta's hourly allowance).
+      const full = audFullDay !== today;
+      const audRange = full ? range : { since: addDays(today, -2), until: today };
+      const audDays = dayList.filter((d) => d >= audRange.since);
+      const bd = (breakdowns) => graphAll(`act_${act}/insights`, { fields: "spend,impressions,inline_link_clicks,actions", breakdowns, time_increment: 1, time_range: audRange }).catch((err) => (log.error("Ads breakdown failed", breakdowns, err.message), null));
       const [age, region, hour, device, video] = await Promise.all([
         bd("age,gender"),
         bd("region"),
         bd("hourly_stats_aggregated_by_advertiser_time_zone"),
         bd("device_platform"),
-        graphAll(`act_${act}/insights`, { level: "ad", fields: SP.VIDEO_FIELDS, time_increment: 1, time_range: range }).catch((err) => (log.error("Ads video failed", err.message), null)),
+        graphAll(`act_${act}/insights`, { level: "ad", fields: SP.VIDEO_FIELDS, time_increment: 1, time_range: audRange }).catch((err) => (log.error("Ads video failed", err.message), null)),
       ]);
       const parts = { age, region, hour, device };
       const byKind = Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, v ? SP.byDay(v) : null]));
       const vBy = video ? SP.byDay(video) : null;
       const audBatch = db.batch();
-      for (const d of dayList) {
+      for (const d of audDays) {
         const aud = {};
         for (const [k, m] of Object.entries(byKind)) if (m) aud[k] = SP.audienceRows(m.get(d) || [], rateOf(d), k);
         const patch = { aud_at: new Date().toISOString() };
@@ -324,6 +330,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
       }
       await audBatch.commit();
       lastAud = Date.now();
+      if (full && [age, region, hour, device, video].every(Boolean)) audFullDay = today;
     }
     // Reach is people, not a sum of days: asked for each page period.
     const reachOf = async (from) => {
