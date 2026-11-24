@@ -23,7 +23,14 @@ const { telegram: tgDefault } = require("./telegram");
 const { emitEvent, clip } = require("./shared");
 
 const TZ_OFFSET_MS = 5 * 60 * 60 * 1000;
-const POLL_MS = 15 * 60 * 1000;
+// Today's spend every 2 minutes (the owner, 2026-11-24: «har bir
+// yangilanish har 2 minutda bo'lsin»); campaigns, older days and
+// placements every 30. Meta's development tier allows ~100 insight calls
+// an hour: a fast tick is 2 calls, a full one 6; when Meta says usage is
+// high (headers) the fast ticks wait.
+const FAST_MS = Math.max(1, Number(process.env.ADS_FAST_MIN || 2)) * 60 * 1000;
+const HEAVY_MS = Math.max(5, Number(process.env.ADS_HEAVY_MIN || 30)) * 60 * 1000;
+const SP = require("./adsSpend");
 const DEFAULTS = { daily_limit: 200000, monthly_limit: 6000000, stop_multiplier: 3, grace_minutes: 120, rate: 12800, report_hour: 10 };
 const CHANGES_ON = process.env.ADS_CHANGES === "on";
 // Currencies Meta keeps without cents (budgets come in whole units).
@@ -50,8 +57,9 @@ function adStats(rows, rate, videoIds = new Set()) {
     const a = by.get(key) || { id: r.ad_id, name: String(r.ad_name || r.ad_id).trim(), spend: 0, usd: 0, leads: 0, chats: 0, video: false };
     if (videoIds.has(String(r.ad_id))) a.video = true;
     const res = resultsOf(r.actions);
+    const rt = typeof rate === "function" ? rate(String(r.date_start || "").slice(0, 10)) : rate;
     a.usd += Number(r.spend || 0);
-    a.spend += Number(r.spend || 0) * rate;
+    a.spend += Number(r.spend || 0) * rt;
     a.leads += res.leads;
     a.chats += res.chats;
     by.set(key, a);
@@ -89,6 +97,8 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
   let running = false;
   let unwatch = null;
   let last = null; // the latest sync, for guards and the report
+  let usage = 0; // Meta's latest usage share, 0–100
+  let lastHeavy = 0;
 
   // ── Graph API ──────────────────────────────────────────────────────
   const graph = async (path, params = {}, method = "GET") => {
@@ -100,6 +110,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
       else body.set(k, val);
     }
     const res = await fetchImpl(url.toString(), { method, ...(method === "GET" ? {} : { body }), signal: AbortSignal.timeout(30000) });
+    usage = SP.usagePct(res.headers);
     const data = await res.json().catch(() => ({}));
     if (data.error) throw new Error(`Meta: ${data.error.error_user_msg || data.error.message || "xato"}`);
     return data;
@@ -139,6 +150,99 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
   };
   const addLog = (text, by = "agent") => db.collection("ads_log").add({ text, by, at: new Date().toISOString() });
 
+  // ── dollar rate: the Central Bank's, per day (ads_fx/{day}) ─────────
+  const fxCache = new Map();
+  const ratesFor = async (days, fallback) => {
+    const out = {};
+    const need = days.filter((d) => !fxCache.has(d));
+    if (need.length) {
+      const snaps = await Promise.all(need.map((d) => db.collection("ads_fx").doc(d).get()));
+      snaps.forEach((sn, i) => sn.exists && Number(sn.data().rate) > 0 && fxCache.set(need[i], Number(sn.data().rate)));
+    }
+    for (const d of days) {
+      if (!fxCache.has(d) && d <= dayOf()) {
+        try {
+          const r = await SP.cbuRate(d, fetchImpl);
+          fxCache.set(d, r.rate);
+          await db.collection("ads_fx").doc(d).set({ day: d, rate: r.rate, cbu_date: r.date, source: "cbu.uz", at: new Date().toISOString() });
+        } catch (err) {
+          log.error("CBU rate failed", d, err.message);
+        }
+      }
+      out[d] = fxCache.get(d) || [...fxCache.entries()].filter(([k]) => k < d).sort().map(([, v]) => v).pop() || fallback;
+    }
+    return out;
+  };
+
+  // ERP leads from Facebook/Instagram ads, by Tashkent day and ad id.
+  const erpByDayAd = async (since) => {
+    const snap = await db.collection("leads").where("created_at", ">=", `${addDays(since, -1)}T19:00:00`).get();
+    const out = {};
+    for (const d of snap.docs) {
+      const l = d.data();
+      if (!["Facebook Lead Ads", "Instagram Target"].includes(l.source)) continue;
+      const day = dayOf(Date.parse(l.created_at));
+      const ad = String(l.ad_id || "_");
+      out[day] = out[day] || {};
+      out[day][ad] = (out[day][ad] || 0) + 1;
+    }
+    return out;
+  };
+
+  const AD_FIELDS = "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,actions";
+
+  // ── fast: today only, every 2 minutes ───────────────────────────────
+  const fast = async () => {
+    const cfg = await settings();
+    const today = dayOf();
+    const [adRows, accRows] = await Promise.all([
+      graphAll(`act_${act}/insights`, { level: "ad", fields: AD_FIELDS, time_range: { since: today, until: today } }),
+      graphAll(`act_${act}/insights`, { fields: "spend,impressions,reach,clicks", time_range: { since: today, until: today } }),
+    ]);
+    const rates = await ratesFor([today], Number(cfg.rate) || DEFAULTS.rate);
+    const erp = (await erpByDayAd(today).catch(() => ({})))[today] || {};
+    const doc = SP.buildDay({ day: today, rate: rates[today], rows: adRows, account: accRows[0] || null, erpByAd: erp });
+    await db.collection("ads_days").doc(today).set({ ...doc, updated_at: new Date().toISOString() }, { merge: true });
+    await patchSummary(cfg, today);
+  };
+
+  // Summary's today / month from the day docs (fresh every 2 minutes).
+  const patchSummary = async (cfg, today) => {
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const snap = await db.collection("ads_days").where("day", ">=", monthStart).get();
+    let mSpend = 0;
+    let mRes = 0;
+    let tDoc = null;
+    for (const d of snap.docs) {
+      const x = d.data();
+      if (x.day > today) continue;
+      mSpend += Number(x.totals?.spend || 0);
+      mRes += Number(x.totals?.results || 0);
+      if (x.day === today) tDoc = x;
+    }
+    const tt = tDoc?.totals || {};
+    const todayP = { spend: Math.round(tt.spend || 0), results: tt.results || 0, cpl: tt.results ? Math.round(tt.spend / tt.results) : null };
+    const monthP = { spend: Math.round(mSpend), results: mRes, cpl: mRes ? Math.round(mSpend / mRes) : null };
+    const sumRef = db.collection("ads_state").doc("summary");
+    const cur = (await sumRef.get()).data() || {};
+    await sumRef.set({ today: todayP, month: monthP, last_fast: new Date().toISOString(), rate: tDoc?.rate || cur.rate || null, usage }, { merge: true });
+    await alerts(cfg, today, todayP.spend, monthP.spend, Number(cur.active_daily_budget || 0), tDoc?.rate);
+  };
+
+  // Limits: a Telegram line once a day each (read only — never changes ads).
+  const alerts = async (cfg, today, todaySpend, monthSpend, activeDaily, rate) => {
+    const end = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate();
+    const lines = SP.limitAlerts({ today: todaySpend, month: monthSpend, activeDaily, dailyLimit: Number(cfg.daily_limit), monthlyLimit: Number(cfg.monthly_limit), daysLeft: end - Number(today.slice(8, 10)), rate });
+    const real = lines.filter((l) => l.key !== "_rate");
+    if (!real.length) return;
+    const ref = db.collection("ads_alerts").doc(today);
+    const sent = ((await ref.get()).data() || {}).sent || {};
+    const fresh = real.filter((l) => !sent[l.key]);
+    if (!fresh.length) return;
+    await ref.set({ sent: { ...sent, ...Object.fromEntries(fresh.map((l) => [l.key, new Date().toISOString()])) } }, { merge: true });
+    await post([...fresh.map((l) => l.text), lines.find((l) => l.key === "_rate")?.text || ""].filter(Boolean).join("\n"));
+  };
+
   // ── sync ───────────────────────────────────────────────────────────
   const sync = async () => {
     const cfg = await settings();
@@ -146,29 +250,55 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     const monthStart = `${today.slice(0, 7)}-01`;
     const since = [monthStart, addDays(today, -29)].sort()[0];
     const yesterday = addDays(today, -1);
-    const [acc, campaigns, adsets, rows, adRowsY, adRowsM, ads] = await Promise.all([
+    const range = { since, until: today };
+    const [acc, campaigns, adsets, adDaily, accDaily, placeDaily, ads] = await Promise.all([
       graph(`act_${act}`, { fields: "name,currency,account_status,spend_cap,amount_spent" }),
       graphAll(`act_${act}/campaigns`, { fields: "id,name,status,effective_status,objective,daily_budget" }),
       graphAll(`act_${act}/adsets`, { fields: "id,name,campaign_id,status,effective_status,daily_budget" }),
-      graphAll(`act_${act}/insights`, { level: "campaign", fields: "campaign_id,spend,actions", time_increment: 1, time_range: { since, until: today } }),
-      // Each ad (video): yesterday and this month.
-      graphAll(`act_${act}/insights`, { level: "ad", fields: "ad_id,ad_name,spend,actions", time_range: { since: yesterday, until: yesterday } }),
-      graphAll(`act_${act}/insights`, { level: "ad", fields: "ad_id,ad_name,spend,actions", time_range: { since: monthStart, until: today } }),
+      // Every ad, every day: the base of «pul qayerga ketdi».
+      graphAll(`act_${act}/insights`, { level: "ad", fields: AD_FIELDS, time_increment: 1, time_range: range }),
+      graphAll(`act_${act}/insights`, { fields: "spend,impressions,reach,clicks", time_increment: 1, time_range: range }),
+      graphAll(`act_${act}/insights`, { fields: "spend,impressions,clicks,actions", breakdowns: "publisher_platform,platform_position", time_increment: 1, time_range: range }).catch(() => null),
       graphAll(`act_${act}/ads`, { fields: "id,creative{video_id,object_type}" }).catch(() => []),
     ]);
     const currency = acc.currency || "USD";
-    const rate = currency === "UZS" ? 1 : Number(cfg.rate) || DEFAULTS.rate;
+    const dayList = [];
+    for (let d = since; d <= today; d = addDays(d, 1)) dayList.push(d);
+    const rates = currency === "UZS" ? Object.fromEntries(dayList.map((d) => [d, 1])) : await ratesFor(dayList, Number(cfg.rate) || DEFAULTS.rate);
+    const rateOf = (d) => rates[d] || rates[today] || Number(cfg.rate) || DEFAULTS.rate;
+    const rate = rateOf(today);
     const offset = NO_CENTS.has(currency) ? 1 : 100;
     const minorToSom = (minor) => (Number(minor || 0) / offset) * rate;
 
     const days = new Map(); // campaign id → { day: { spend, results } }
-    for (const r of rows) {
+    for (const r of adDaily) {
       const m = days.get(r.campaign_id) || {};
       const { results } = resultsOf(r.actions);
       const d = r.date_start;
-      m[d] = { spend: (m[d]?.spend || 0) + Number(r.spend || 0) * rate, results: (m[d]?.results || 0) + results };
+      m[d] = { spend: (m[d]?.spend || 0) + Number(r.spend || 0) * rateOf(d), results: (m[d]?.results || 0) + results };
       days.set(r.campaign_id, m);
     }
+    const adRowsY = adDaily.filter((r) => r.date_start === yesterday);
+    const adRowsM = adDaily.filter((r) => r.date_start >= monthStart);
+
+    // ads_days: every day of the range, whole.
+    const erp = await erpByDayAd(since).catch(() => ({}));
+    const adBy = SP.byDay(adDaily);
+    const accBy = SP.byDay(accDaily);
+    const placeBy = placeDaily ? SP.byDay(placeDaily) : null;
+    const dayBatch = db.batch();
+    for (const d of dayList) {
+      const doc = SP.buildDay({ day: d, rate: rateOf(d), rows: adBy.get(d) || [], account: (accBy.get(d) || [])[0] || null, placements: placeBy ? placeBy.get(d) || [] : null, erpByAd: erp[d] || {} });
+      dayBatch.set(db.collection("ads_days").doc(d), { ...doc, updated_at: new Date().toISOString() });
+    }
+    await dayBatch.commit();
+    // Reach is people, not a sum of days: asked for each page period.
+    const reachOf = async (from) => {
+      const r = (await graphAll(`act_${act}/insights`, { fields: "reach,impressions", time_range: { since: from, until: today } }).catch(() => []))[0] || {};
+      return { reach: Number(r.reach || 0), impr: Number(r.impressions || 0), from, to: today };
+    };
+    const [r7, r30, rM] = await Promise.all([reachOf(addDays(today, -6)), reachOf(addDays(today, -29)), reachOf(monthStart)]);
+    await db.collection("ads_state").doc("reach").set({ d7: r7, d30: r30, month: rM, at: new Date().toISOString() });
 
     const all = {};
     for (const m of days.values()) for (const [d, v] of Object.entries(m)) all[d] = { spend: (all[d]?.spend || 0) + v.spend, results: (all[d]?.results || 0) + v.results };
@@ -215,6 +345,9 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
       error: null,
       last_sync: new Date().toISOString(),
       account: { name: acc.name || "", currency, status: acc.account_status ?? null, rate },
+      rate,
+      rate_source: currency === "UZS" ? "UZS" : fxCache.has(today) ? "cbu.uz" : "sozlama",
+      usage,
       today: sumDays(all, today, today),
       yesterday: sumDays(all, addDays(today, -1), addDays(today, -1)),
       month,
@@ -232,8 +365,8 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     batch.set(db.collection("ads_state").doc("summary"), summary);
     await batch.commit();
     const videoIds = new Set(ads.filter((a) => a.creative && (a.creative.video_id || a.creative.object_type === "VIDEO")).map((a) => String(a.id)));
-    const adsY = adStats(adRowsY, rate, videoIds);
-    const adsM = adStats(adRowsM, rate, videoIds);
+    const adsY = adStats(adRowsY, rateOf, videoIds);
+    const adsM = adStats(adRowsM, rateOf, videoIds);
     await db.collection("ads_state").doc("ads").set({ day: yesterday, yesterday: adsY.slice(0, 50), month: adsM.slice(0, 50), updated_at: summary.last_sync });
     last = { cfg, list, summary, today, minorToSom, offset, rate, adsY, adsM, currency };
     return last;
@@ -468,7 +601,8 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     if (!last) return;
     const yDay = addDays(last.today, -1);
     const erp = await erpLeadsOn(yDay).catch(() => null);
-    const text = reportText({ ...last, yDay, erp });
+    const dayDoc = (await db.collection("ads_days").doc(yDay).get().catch(() => null))?.data?.() || null;
+    const text = reportText({ ...last, yDay, erp, dayDoc });
     await post(text);
     await emitEvent(db, { agent: "mkt", kind: "report", text: clip(text.split("\n").slice(0, 3).join(" · "), 200), bubble: "Reklama hisoboti 📊", source: "ads" });
   };
@@ -497,10 +631,17 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     running = true;
     try {
       if (CHANGES_ON) watch();
-      const s = await sync();
-      if (CHANGES_ON) {
-        await guard(s);
-        await expireWarnings();
+      if (!last || Date.now() - lastHeavy >= HEAVY_MS) {
+        if (usage >= 95 && last) return; // Meta asks us to slow down
+        const s = await sync();
+        lastHeavy = Date.now();
+        await patchSummary(s.cfg, s.today);
+        if (CHANGES_ON) {
+          await guard(s);
+          await expireWarnings();
+        }
+      } else if (usage < 80) {
+        await fast();
       }
       await daily();
     } catch (err) {
@@ -517,10 +658,10 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
       return;
     }
     await tick();
-    timer = setInterval(() => tick().catch((err) => log.error("Targetolog tick failed", err)), POLL_MS);
+    timer = setInterval(() => tick().catch((err) => log.error("Targetolog tick failed", err)), FAST_MS);
     // Answers and deadlines between syncs.
     if (CHANGES_ON) expiryTimer = setInterval(() => expireWarnings().catch(() => undefined), 60 * 1000);
-    log.log(`Targetolog started (act_${act}, every ${POLL_MS / 60000} min, ${CHANGES_ON ? "may change ads" : "read only"})`);
+    log.log(`Targetolog started (act_${act}, today every ${FAST_MS / 60000} min, all every ${HEAVY_MS / 60000} min, ${CHANGES_ON ? "may change ads" : "read only"})`);
   };
   const stop = () => {
     clearInterval(timer);
@@ -528,12 +669,34 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     if (unwatch) unwatch();
   };
 
-  return { start, stop, tick, handleCallback, enabled, _test: { sync, guard, growth, checkLimits, execute, report, onChange, expireWarnings } };
+  return { start, stop, tick, handleCallback, enabled, _test: { sync, fast, guard, growth, checkLimits, execute, report, onChange, expireWarnings } };
 };
 
 // The report: yesterday's totals, each ad (video), the month so far.
 const usd = (n) => `$${(Math.round(Number(n || 0) * 100) / 100).toFixed(2)}`;
-function reportText({ summary, adsY = [], adsM = [], currency = "USD", yDay, erp = null }) {
+// Where yesterday's money went: by campaign and by placement, with shares.
+const PLACE = { instagram_reels: "Instagram Reels", instagram_stories: "Instagram Stories", feed: "Lenta", facebook_reels: "Facebook Reels", facebook_stories: "Facebook Stories", instagram_explore: "Instagram Explore", instagram_explore_grid_home: "Instagram Explore", instream_video: "Video ichida", rewarded_video: "Audience Network", instagram_search: "Instagram qidiruv", marketplace: "Marketplace" };
+const placeName = (p) => (p.pos === "feed" ? `${p.plat === "instagram" ? "Instagram" : "Facebook"} lenta` : PLACE[p.pos] || `${p.plat} ${p.pos}`);
+function whereText(dayDoc) {
+  if (!dayDoc || !dayDoc.totals || !dayDoc.totals.spend) return [];
+  const total = dayDoc.totals.spend;
+  const pct = (n) => `${Math.round((n / total) * 100)}%`;
+  const camps = new Map();
+  for (const a of dayDoc.ads || []) {
+    const c = camps.get(a.c) || { name: a.cn, spend: 0, leads: 0 };
+    c.spend += a.spend;
+    c.leads += a.leads + a.chats;
+    camps.set(a.c, c);
+  }
+  const lines = ["💸 Pul qayerga ketdi (kecha):"];
+  for (const c of [...camps.values()].sort((a, b) => b.spend - a.spend).slice(0, 8)) lines.push(`• ${clip(c.name, 45)} — ${som(c.spend)} (${pct(c.spend)}) · ${c.leads} lid${c.leads ? ` · ${som(Math.round(c.spend / c.leads))}dan` : " ⚠️"}`);
+  const places = (dayDoc.placements || []).filter((p) => p.spend > 0);
+  if (places.length) lines.push(`📍 Joylashuv: ${places.slice(0, 5).map((p) => `${placeName(p)} ${pct(p.spend)}`).join(" · ")}`);
+  if (dayDoc.rate) lines.push(`💱 Kurs: 1 $ = ${som(dayDoc.rate)} (Markaziy bank)`);
+  return ["", ...lines];
+}
+
+function reportText({ summary, adsY = [], adsM = [], currency = "USD", yDay, erp = null, dayDoc = null }) {
   const y = summary.yesterday;
   const m = summary.month;
   const leadsY = adsY.reduce((s, a) => s + a.leads, 0);
@@ -550,6 +713,7 @@ function reportText({ summary, adsY = [], adsM = [], currency = "USD", yDay, erp
     `📊 Reklama hisoboti — ${yDay.slice(8, 10)}.${yDay.slice(5, 7)}`,
     `Kecha: ${som(y.spend)}${cur(usdY)} sarflandi · ${leadsY} lid${leadsY ? ` · bitta lid ${som(Math.round(y.spend / leadsY))}` : ""}`,
     erp !== null ? `ERP'ga tushgan Facebook lidlari: ${erp}` : "",
+    ...whereText(dayDoc),
     "",
     adsY.length ? "Qaysi reklama nechta lid olib keldi (kecha):" : "Kecha faol reklama bo'lmadi.",
     ...shown.map(adLine),
@@ -562,4 +726,4 @@ function reportText({ summary, adsY = [], adsM = [], currency = "USD", yDay, erp
   return lines.filter((x, i, arr) => x !== "" || (arr[i - 1] !== "" && i > 0)).join("\n").trim();
 }
 
-module.exports = { create, sumDays, DEFAULTS, resultsOf, adStats, reportText };
+module.exports = { create, sumDays, DEFAULTS, resultsOf, adStats, reportText, whereText };

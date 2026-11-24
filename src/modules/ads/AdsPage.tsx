@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, Hand, Megaphone, Settings2, Target, TrendingDown, TrendingUp, Trophy, Wallet } from "lucide-react";
 import { getOne, subscribeAll, subscribeOne, updateOne, upsertOne } from "../../lib/firestoreDb";
 import { useAuth } from "../../lib/AuthContext";
+import SpendWhere from "./SpendWhere";
 import { ADS_DEFAULTS, OPEN_STAGES, cplTone, formatSom, movesFor, type AdsCampaign, type AdsProposal, type AdsSettings, type AdsSummary } from "../../lib/ads";
 
 // Reklama: the Targetolog agent's page (meta-webhook/targetolog.js).
-// Numbers come from Meta every 15 minutes; changes go marketolog → admin.
+// Today's numbers come from Meta every 2 minutes, the rest every 30;
+// changes go marketolog → admin (and are off — read only since 2026-11-13).
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   ACTIVE: { label: "● Faol", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
@@ -130,7 +132,7 @@ export default function AdsPage() {
       {summary && (
         <span className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-xs font-semibold lg:self-auto ${summary.ok === false ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300" : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"}`}>
           <span className={`h-2 w-2 rounded-full ${summary.ok === false ? "bg-rose-500" : "bg-emerald-500"}`} />
-          {summary.ok === false ? "Meta bilan xato" : `Meta · ${summary.account?.name || ""} · ${hm(summary.last_sync)} da yangilandi`}
+          {summary.ok === false ? "Meta bilan xato" : `Meta · ${summary.account?.name || ""} · ${hm([summary.last_sync, summary.last_fast].filter(Boolean).sort().pop())} da yangilandi`}
         </span>
       )}
     </div>
@@ -157,7 +159,10 @@ export default function AdsPage() {
   const month = summary.month;
   const prev = summary.prev_month_same_days;
   const growth = prev && prev.results ? ((month.results - prev.results) / prev.results) * 100 : null;
-  const usedPct = Math.min(100, (month.spend / Math.max(1, settings.monthly_limit)) * 100);
+  // The real share — over 100% when the limit is passed (it used to stop at 100%).
+  const realPct = (month.spend / Math.max(1, settings.monthly_limit)) * 100;
+  const usedPct = Math.min(100, realPct);
+  const over = realPct > 100;
   const today = summary.today || { spend: 0, results: 0, cpl: null };
 
   return (
@@ -171,15 +176,18 @@ export default function AdsPage() {
       )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <div className="col-span-2 rounded-3xl bg-gradient-to-br from-brand-600 via-blue-600 to-indigo-600 p-5 text-white shadow-lg shadow-blue-600/20">
+        <div className={`col-span-2 rounded-3xl bg-gradient-to-br p-5 text-white shadow-lg ${over ? "from-rose-600 via-red-600 to-rose-700 shadow-rose-600/20" : "from-brand-600 via-blue-600 to-indigo-600 shadow-blue-600/20"}`}>
           <div className="flex items-center justify-between">
             <div className="text-xs font-semibold uppercase tracking-wider text-white/70">Oylik byudjet</div>
-            <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold">{Math.round(usedPct)}%</span>
+            <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold">{(Math.round(realPct * 10) / 10).toString().replace(".", ",")}%</span>
           </div>
           <div className="mt-1 font-display text-4xl font-extrabold tabular-nums">
             {formatSom(month.spend)} <span className="text-base font-semibold text-white/75">so'm</span>
           </div>
-          <div className="text-xs text-white/75">{formatSom(settings.monthly_limit)} so'm chegaradan</div>
+          <div className="text-xs text-white/75">
+            {formatSom(settings.monthly_limit)} so'm chegaradan{over ? ` · ortiqcha ${formatSom(month.spend - settings.monthly_limit)} so'm` : ""}
+            {summary.rate ? ` · 1 $ = ${formatSom(summary.rate)} (${summary.rate_source === "cbu.uz" ? "Markaziy bank" : "sozlama"})` : ""}
+          </div>
           <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/20">
             <div className="h-full rounded-full bg-white" style={{ width: `${usedPct}%` }} />
           </div>
@@ -205,6 +213,8 @@ export default function AdsPage() {
         <Kpi label="Bitta natija narxi" value={month.cpl ? formatSom(month.cpl) : "—"} icon={<Wallet className="h-4 w-4" />} hint={avg ? `30 kunlik o'rtacha ${formatSom(avg)} so'm` : "so'm"} />
         <Kpi label="Bugun" value={formatSom(today.spend)} icon={<Clock3 className="h-4 w-4" />} hint={`so'm · ${today.results} natija · ${summary.active_campaigns ?? 0} ta faol reklama`} />
       </div>
+
+      <SpendWhere avgCpl={avg} />
 
       <Card>
         <Title
@@ -247,7 +257,7 @@ export default function AdsPage() {
               </div>
             );
           })}
-          {!open.length && <div className="rounded-2xl bg-ink-50/60 p-4 text-sm text-ink-500">Hozircha taklif yo'q. Agent har 15 daqiqada reklamalarni tekshiradi, ertalab hisobot va takliflar yuboradi.</div>}
+          {!open.length && <div className="rounded-2xl bg-ink-50/60 p-4 text-sm text-ink-500">Hozircha taklif yo'q. Agent faqat o'qiydi: bugungi sarf 2 daqiqada yangilanadi, limit oshsa Telegram'ga xabar beradi, ertalab hisobot yuboradi. Budjetga tegmaydi.</div>}
           {recent.map((p) => (
             <div key={p.id} className="flex items-center justify-between gap-3 px-1 text-xs text-ink-500">
               <span className="truncate">{p.title}</span>
@@ -379,7 +389,7 @@ function SettingsCard({ settings, onSaved }: { settings: AdsSettings; onSaved: (
         {field("monthly_limit", "Oylik chegara, so'm", "oy oxirigacha bashorat bilan")}
         {field("stop_multiplier", "To'xtatish, × o'rtacha", "lid narxi shuncha marta oshsa")}
         {field("grace_minutes", "Kutish, daqiqa", "ogohlantirishdan keyin")}
-        {field("rate", "Kurs, so'm / $", "hisob dollarda bo'lsa")}
+        {field("rate", "Zaxira kurs, so'm / $", "kurs Markaziy bankdan avtomatik olinadi; bu faqat cbu.uz javob bermasa")}
         {field("report_hour", "Hisobot soati", "Toshkent vaqti")}
       </div>
       <div className="mt-4 flex items-center justify-end gap-3">

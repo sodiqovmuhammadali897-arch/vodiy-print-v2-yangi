@@ -67,6 +67,21 @@ jobs:
               console.log("API usage headers (last 3):");
               for (const u of usage.slice(-3)) console.log("    " + u.slice(0, 400));
               try {
+                const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+                admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+                const db = admin.firestore();
+                const s = (await db.collection("ads_state").doc("summary").get()).data() || {};
+                console.log("ERP summary:", JSON.stringify({ today: s.today, month: s.month, rate: s.rate, rate_source: s.rate_source, last_sync: s.last_sync, last_fast: s.last_fast, usage: s.usage, limit: s.monthly_limit, active_daily: s.active_daily_budget }));
+                const d = (await db.collection("ads_days").doc(today).get()).data();
+                console.log("ERP ads_days today:", d ? JSON.stringify({ rate: d.rate, totals: d.totals, ads: d.ads.length, placements: (d.placements || []).length, updated_at: d.updated_at }) : "none");
+                const n = (await db.collection("ads_days").get()).size;
+                const fx = (await db.collection("ads_fx").get()).size;
+                const al = (await db.collection("ads_alerts").doc(today).get()).data();
+                console.log(`ERP ads_days: ${n} days, ads_fx: ${fx} days, alerts today: ${al ? Object.keys(al.sent || {}).join(",") : "none"}`);
+              } catch (e) {
+                console.log("ERP read failed:", e.message);
+              }
+              try {
                 const r = await fetch("https://cbu.uz/uz/arkhiv-kursov-valyut/json/USD/");
                 const j = await r.json();
                 console.log("CBU USD:", j[0] && `${j[0].Rate} so'm, date ${j[0].Date}`);
@@ -75,4 +90,4 @@ jobs:
               }
             })().catch((e) => console.log("failed:", e.message));
             JS
-            node /tmp/vp-probe.js; rm -f /tmp/vp-probe.js
+            NODE_PATH=/opt/meta-webhook/node_modules node /tmp/vp-probe.js; rm -f /tmp/vp-probe.js

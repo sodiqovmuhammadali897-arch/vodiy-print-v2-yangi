@@ -288,6 +288,10 @@ export const subscribeWhere = <T>(
   );
 };
 
+// Live rows whose `field` is ≥ `from` (e.g. ads_days since a day).
+export const subscribeSince = <T>(name: string, field: string, from: string, onData: (rows: WithId<T>[]) => void): Unsubscribe =>
+  onSnapshot(query(collection(db, name), where(field, ">=", from)), (snap) => onData(snap.docs.map((d) => mapDoc<T>(d))));
+
 export const subscribeOne = <T>(
   name: string,
   id: string,

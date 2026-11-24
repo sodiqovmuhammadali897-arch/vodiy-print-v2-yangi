@@ -455,6 +455,31 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   month so far. Leads = the largest of Meta's lead counters, not their sum
   (the old code summed «lead» + «leadgen_grouped» + … — 2–3× too many).
   `meta-check.yml` prints a report preview.
+- **Reklama 2.0, phase 1 — 2026-11-24** (owner's PDF «Targetolog Agent 2.0
+  TZ», 15 pages; «har bir sent qadrli»; «har 2 minutda»; «kursni o'zing
+  avtomatik ol»). Still READ ONLY (never changes budgets).
+  - `meta-webhook/adsSpend.js` + targetolog.js: today every 2 min (2 insight
+    calls: ad level + account), everything every 30 min (`ADS_FAST_MIN`,
+    `ADS_HEAVY_MIN`); fast ticks wait when Meta's usage header ≥ 80%
+    (development tier, ~1%/call). `ads_days/{day}` = every ad's spend that
+    day (campaign → ad set → ad, usd + so'm, impressions, clicks, Meta
+    results, ERP leads by `leads.ad_id`), account reach, placements.
+    `ads_state/reach` = reach for 7d/30d/month. Summary today/month are
+    summed from ads_days.
+  - Dollar rate = Central Bank (cbu.uz) per day in `ads_fx/{day}`; the
+    settings rate is only a fallback. Real on 2026-11-24: 12 002,93 (the old
+    fixed 12 800 overstated so'm by ~6.6%). The account is in USD.
+  - Limit alerts to 🎯 Reklama once a day each (`ads_alerts/{day}`): month
+    over, month forecast, today over, active budgets over the daily limit.
+    The page's monthly card now shows the real % (was capped at 100%).
+  - Page: Reklama → «Har bir so'm qayerga ketdi» (`SpendWhere.tsx`, logic
+    `src/lib/adsSpend.ts`): periods, KPIs (reach, CTR, CPM, CPC), the
+    expandable tree, placements. 10:00 report adds «💸 Pul qayerga ketdi».
+  - `ads-probe.yml` (read only): what Meta gives (all breakdowns and video
+    metrics work), usage headers, CBU rate, what the server wrote.
+  - Next phases (approved): 2 — video retention + age/gender/region/hour;
+    3 — lead → order (phone, 60 days) → sales/profit per ad, ROAS/ROMI/CAC;
+    4 — alert-only agent triggers (CPL jump, CTR drop, frequency, no sales).
 - **Which deals have no task — 2026-11-14** (owner: «zadachasiz lid deyapti,
   qaysiligini ko'rsatib turadigan qilish kerak, amoda ko'rinmayapti»): the
   count now opens the deals (`src/components/amo/NoTaskLeads.tsx`, from

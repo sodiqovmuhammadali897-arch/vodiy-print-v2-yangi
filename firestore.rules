@@ -372,6 +372,20 @@ service cloud.firestore {
       allow read: if can('ads', 'view');
       allow write: if false;
     }
+    // Reklama 2.0: every ad's spend per day, the Central Bank dollar rate
+    // per day, and which limit alerts went out (meta-webhook/adsSpend.js).
+    match /ads_days/{id} {
+      allow read: if can('ads', 'view');
+      allow write: if false;
+    }
+    match /ads_fx/{id} {
+      allow read: if can('ads', 'view');
+      allow write: if false;
+    }
+    match /ads_alerts/{id} {
+      allow read: if can('ads', 'view');
+      allow write: if false;
+    }
     match /ads_log/{id} {
       allow read: if can('ads', 'view');
       allow write: if false;

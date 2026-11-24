@@ -14,6 +14,12 @@ export type AdsSummary = {
   month?: AdsPeriod;
   prev_month_same_days?: AdsPeriod;
   avg_cpl?: number | null;
+  // Today's Central Bank dollar rate (meta-webhook/adsSpend.js), or the
+  // settings rate when cbu.uz didn't answer.
+  rate?: number | null;
+  rate_source?: string;
+  last_fast?: string;
+  usage?: number;
   active_daily_budget?: number;
   daily_limit?: number;
   monthly_limit?: number;
