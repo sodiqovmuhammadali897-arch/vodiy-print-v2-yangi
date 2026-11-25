@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Coins } from "lucide-react";
 import AdsBreakdowns from "./AdsBreakdowns";
+import AdsMoney from "./AdsMoney";
+import { useAuth } from "../../lib/AuthContext";
 import { subscribeOne, subscribeSince } from "../../lib/firestoreDb";
-import { PERIODS, addDays, aggregate, metrics, pct, pctLabel, periodSpan, type AdsDay, type Node, type PeriodKey } from "../../lib/adsSpend";
+import { PERIODS, addDays, aggregate, aggregateMoney, metrics, pct, pctLabel, periodSpan, type AdsDay, type AttrRow, type Node, type PeriodKey } from "../../lib/adsSpend";
 import { formatSom } from "../../lib/ads";
 
 // «Har bir so'm qayerga ketdi» (the owner, 2026-11-24: «kunlik hamma
@@ -36,9 +38,18 @@ export default function SpendWhere({ avgCpl }: { avgCpl: number | null }) {
 
   useEffect(() => subscribeSince<AdsDay>("ads_days", "day", addDays(today, -62), (rows) => setDays(rows)), [today]);
   useEffect(() => subscribeOne<{ d7?: Reach; d30?: Reach; month?: Reach }>("ads_state", "reach", setReach), []);
+  // Phase 3 — orders and money per ad: cost data, so the owner only (like Marja).
+  const { isAdmin, isManagerAccount } = useAuth();
+  const canMoney = isAdmin && !isManagerAccount;
+  const [attr, setAttr] = useState<AttrRow[]>([]);
+  useEffect(() => {
+    if (!canMoney) return;
+    return subscribeSince<{ rows?: AttrRow[] }>("ads_attr", "month", addDays(today, -62).slice(0, 7), (docs) => setAttr(docs.flatMap((d) => d.rows || [])));
+  }, [canMoney, today]);
 
   const span = periodSpan(period, today, custom);
   const agg = useMemo(() => aggregate(days || [], span.from, span.to), [days, span.from, span.to]);
+  const money = useMemo(() => aggregateMoney(attr, span.from, span.to), [attr, span.from, span.to]);
   const m = metrics(agg.totals);
   const periodReach = period === "today" || period === "yesterday" ? (agg.reach ? { reach: agg.reach, impr: agg.totals.impr } : null) : period === "d7" ? reach?.d7 : period === "d30" ? reach?.d30 : period === "month" ? reach?.month : null;
   const total = agg.totals.spend;
@@ -94,6 +105,20 @@ export default function SpendWhere({ avgCpl }: { avgCpl: number | null }) {
             <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${cplCls(mm.cpl, n.spend)}`}>{mm.cpl ? n0(mm.cpl) : n.spend > 0 ? "lidsiz" : "—"}</span>
           </td>
           <td className="pl-2 text-right tabular-nums">{n.erp || "—"}</td>
+          {canMoney &&
+            (() => {
+              const mo = money.by.get(`${depth === 0 ? "c" : depth === 1 ? "s" : "a"}:${n.id}`);
+              const roas = mo && n.spend > 0 ? Math.round((mo.revenue / n.spend) * 10) / 10 : null;
+              return (
+                <>
+                  <td className="pl-3 text-right tabular-nums">{mo?.orders || "—"}</td>
+                  <td className="pl-3 text-right tabular-nums">
+                    {mo?.revenue ? n0(mo.revenue) : "—"}
+                    {roas !== null && mo?.revenue ? <div className={`text-[10px] font-semibold ${roas >= 1 ? "text-emerald-600" : "text-rose-600"}`}>{String(roas).replace(".", ",")}x</div> : null}
+                  </td>
+                </>
+              );
+            })()}
         </tr>
         {open && n.children.map((c) => row(c, depth + 1))}
       </Fragment>
@@ -144,8 +169,10 @@ export default function SpendWhere({ avgCpl }: { avgCpl: number | null }) {
             <Stat label="Klik · CTR · CPM" value={`${n0(agg.totals.link)} klik`} hint={`CTR ${m.ctr === null ? "—" : pctLabel(m.ctr)} · CPM ${m.cpm === null ? "—" : n0(m.cpm)} · CPC ${m.cpc === null ? "—" : n0(m.cpc)} so'm`} />
           </div>
 
+          {canMoney && attr.length > 0 && <AdsMoney money={money.total} spend={total} first={money.first} from={span.from} />}
+
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className={`w-full text-sm ${canMoney ? "min-w-[940px]" : "min-w-[760px]"}`}>
               <thead>
                 <tr className="text-[10.5px] uppercase tracking-wider text-ink-500">
                   <th className="pb-2 text-left font-semibold">Nomi</th>
@@ -156,13 +183,15 @@ export default function SpendWhere({ avgCpl }: { avgCpl: number | null }) {
                   <th className="px-2 pb-2 text-right font-semibold">Natija</th>
                   <th className="px-2 pb-2 text-right font-semibold">Natija narxi</th>
                   <th className="pb-2 pl-2 text-right font-semibold">ERP lid</th>
+                  {canMoney && <th className="pb-2 pl-3 text-right font-semibold">Buyurtma</th>}
+                  {canMoney && <th className="pb-2 pl-3 text-right font-semibold">Savdo · ROAS</th>}
                 </tr>
               </thead>
               <tbody>
                 {agg.tree.map((c) => row(c, 0))}
                 {!agg.tree.length && (
                   <tr>
-                    <td colSpan={8} className="py-6 text-center text-ink-500">
+                    <td colSpan={canMoney ? 10 : 8} className="py-6 text-center text-ink-500">
                       Bu davrda sarf yo'q{oldest && span.from < oldest ? ` (ma'lumot ${oldest} dan bor)` : ""}.
                     </td>
                   </tr>

@@ -77,6 +77,11 @@ jobs:
                 if (d) console.log("ERP phase 2 today:", JSON.stringify({ aud: d.aud ? Object.fromEntries(Object.entries(d.aud).map(([k, v]) => [k, v.length])) : null, video: d.video ? d.video.length : null, aud_at: d.aud_at || null }));
                 const cr = (await db.collection("ads_state").doc("creatives").get()).data();
                 console.log("ERP creatives:", cr ? `${Object.keys(cr.map || {}).length} ads, with picture ${Object.values(cr.map || {}).filter((x) => x.thumb).length}` : "none");
+                for (const a of (await db.collection("ads_attr").get()).docs) {
+                  const r = a.data().rows || [];
+                  const sum = (k) => r.reduce((x, y) => x + (Number(y[k]) || 0), 0);
+                  console.log(`ERP ads_attr ${a.id}: leads ${r.length}, found ${r.filter((x) => x.found).length}, ordered ${r.filter((x) => x.orders).length}, orders ${sum("orders")}, revenue ${sum("revenue")}, paid ${sum("paid")}, cost ${sum("cost")} on ${sum("cost_rev")}, new ${r.filter((x) => x.new).length}, with ad id ${r.filter((x) => x.a).length}, first ${r.map((x) => x.day).sort()[0]}, at ${a.data().updated_at}`);
+                }
                 const n = (await db.collection("ads_days").get()).size;
                 const fx = (await db.collection("ads_fx").get()).size;
                 const al = (await db.collection("ads_alerts").doc(today).get()).data();

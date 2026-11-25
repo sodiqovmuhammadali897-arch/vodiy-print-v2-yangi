@@ -485,8 +485,20 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     Joylashuv, Video (one row per video id, retention chips, hints from
     `videoHints`), Auditoriya (age·gender, region, device), Soatlar (24 bars,
     night 00–06 flagged). The 10:00 report adds night spend and top audiences.
-  - Next phases (approved): 3 — lead → order (phone, 60 days) → sales/profit per ad, ROAS/ROMI/CAC;
-    4 — alert-only agent triggers (CPL jump, CTR drop, frequency, no sales).
+  - **Phase 3 — built 2026-11-25:** `meta-webhook/adsAttr.js` every 2 h
+    (`ADS_ATTR_MIN`; reads all customers, orders, payments, order_costs):
+    each ERP Facebook/Instagram lead (they keep campaign/adset/ad ids) →
+    customers by phone (last 9 digits) or `converted_order_id` → their sale
+    orders from the day before to 60 days after (one order → one lead, the
+    earliest) → `ads_attr/{lead month}.rows` (ids and sums only: orders,
+    revenue, paid, typed cost + the sales it covers, new customer, open).
+    Rules: like order_costs (admin, not a manager account). Page (owner
+    only): «Pul → savdo → foyda» card (`AdsMoney.tsx`; ROAS, ROMI, CAC, new
+    vs repeat; uncosted sales get the costed ones' margin → «taxminiy») and
+    «Buyurtma» + «Savdo · ROAS» columns in the tree. The 10:00 report adds
+    the month's orders and sales from ad leads (no cost/profit — the topic
+    is not admin-only). ERP has ad leads only from 2026-11-13 (leadPoll).
+  - Next phase (approved): 4 — alert-only agent triggers (CPL jump, CTR drop, frequency, no sales).
 - **Which deals have no task — 2026-11-14** (owner: «zadachasiz lid deyapti,
   qaysiligini ko'rsatib turadigan qilish kerak, amoda ko'rinmayapti»): the
   count now opens the deals (`src/components/amo/NoTaskLeads.tsx`, from

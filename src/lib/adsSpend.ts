@@ -282,3 +282,61 @@ export const ageLabel = (k: string) => {
 };
 const DEVICE: Record<string, string> = { mobile_app: "Telefon (ilova)", mobile_web: "Telefon (brauzer)", desktop: "Kompyuter", unknown: "Noma'lum" };
 export const deviceLabel = (k: string) => DEVICE[k] || k;
+
+// ── Phase 3: lead → order → money (meta-webhook/adsAttr.js) ───────────
+export type AttrRow = { id: string; day: string; c: string; s: string; a: string; found: boolean; orders: number; revenue: number; paid: number; cost: number; cost_rev: number; new: boolean; first: string | null; open: boolean };
+export type Money = { leads: number; found: number; ordered: number; orders: number; revenue: number; paid: number; cost: number; cost_rev: number; newCustomers: number; open: number };
+const zeroMoney = (): Money => ({ leads: 0, found: 0, ordered: 0, orders: 0, revenue: 0, paid: 0, cost: 0, cost_rev: 0, newCustomers: 0, open: 0 });
+const addRow = (m: Money, r: AttrRow) => {
+  m.leads++;
+  if (r.found) m.found++;
+  if (r.orders) m.ordered++;
+  m.orders += r.orders;
+  m.revenue += r.revenue;
+  m.paid += r.paid;
+  m.cost += r.cost;
+  m.cost_rev += r.cost_rev;
+  if (r.new) m.newCustomers++;
+  if (r.open) m.open++;
+};
+
+// Leads that came in the period (by lead day), summed for the whole period
+// and per campaign / ad set / ad id.
+export function aggregateMoney(rows: AttrRow[], from: string, to: string) {
+  const total = zeroMoney();
+  const by = new Map<string, Money>();
+  const bump = (k: string, r: AttrRow) => {
+    if (!by.has(k)) by.set(k, zeroMoney());
+    addRow(by.get(k)!, r);
+  };
+  for (const r of rows) {
+    if (r.day < from || r.day > to) continue;
+    addRow(total, r);
+    if (r.c) bump(`c:${r.c}`, r);
+    if (r.s) bump(`s:${r.s}`, r);
+    if (r.a) bump(`a:${r.a}`, r);
+  }
+  const first = rows.map((r) => r.day).sort()[0] || null;
+  return { total, by, first };
+}
+
+// Money after the ads: sales − cost − ad spend. Cost is what was typed on
+// the Marja page; sales without a typed cost get the same margin as the
+// typed ones (then `estimated`).
+export function profitOf(m: Money, spend: number) {
+  const ratio = m.cost_rev > 0 ? m.cost / m.cost_rev : null;
+  const uncosted = m.revenue - m.cost_rev;
+  const cost = ratio === null ? (m.revenue > 0 ? null : 0) : m.cost + uncosted * ratio;
+  const gross = cost === null ? null : m.revenue - cost;
+  const profit = gross === null ? null : gross - spend;
+  return {
+    cost: cost === null ? null : Math.round(cost),
+    gross: gross === null ? null : Math.round(gross),
+    profit: profit === null ? null : Math.round(profit),
+    estimated: uncosted > 0 && ratio !== null,
+    roas: spend > 0 ? Math.round((m.revenue / spend) * 100) / 100 : null,
+    romi: spend > 0 && profit !== null ? Math.round((profit / spend) * 1000) / 10 : null,
+    cac: m.newCustomers ? Math.round(spend / m.newCustomers) : null,
+    conv: m.leads ? Math.round((m.ordered / m.leads) * 1000) / 10 : null,
+  };
+}

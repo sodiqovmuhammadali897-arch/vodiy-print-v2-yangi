@@ -378,6 +378,12 @@ service cloud.firestore {
       allow read: if can('ads', 'view');
       allow write: if false;
     }
+    // Phase 3: ERP Facebook leads → orders → money, by lead month (ids and
+    // sums only). Holds cost, so like order_costs: admins only.
+    match /ads_attr/{id} {
+      allow read: if isAdmin() && !isManagerAccount();
+      allow write: if false;
+    }
     match /ads_fx/{id} {
       allow read: if can('ads', 'view');
       allow write: if false;

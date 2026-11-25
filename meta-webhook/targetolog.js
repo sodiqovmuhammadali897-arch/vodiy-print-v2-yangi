@@ -32,6 +32,9 @@ const FAST_MS = Math.max(1, Number(process.env.ADS_FAST_MIN || 2)) * 60 * 1000;
 const HEAVY_MS = Math.max(5, Number(process.env.ADS_HEAVY_MIN || 30)) * 60 * 1000;
 const SP = require("./adsSpend");
 // Phase 2 (age/gender, region, hour, device, video) — heavier, hourly.
+// Phase 3 (lead → order → money): reads all orders and customers, so every 2 h.
+const ATTR_MS = Math.max(15, Number(process.env.ADS_ATTR_MIN || 120)) * 60 * 1000;
+const AT = require("./adsAttr");
 const AUD_MS = Math.max(15, Number(process.env.ADS_AUDIENCE_MIN || 60)) * 60 * 1000;
 const DEFAULTS = { daily_limit: 200000, monthly_limit: 6000000, stop_multiplier: 3, grace_minutes: 120, rate: 12800, report_hour: 10 };
 const CHANGES_ON = process.env.ADS_CHANGES === "on";
@@ -102,7 +105,8 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
   let usage = 0; // Meta's latest usage share, 0–100
   let lastHeavy = 0;
   let lastAud = 0;
-  let audFullDay = ""; // the day the 30-day audience backfill last ran
+  let audFullDay = "";
+  let lastAttr = 0; // the day the 30-day audience backfill last ran
 
   // ── Graph API ──────────────────────────────────────────────────────
   const graph = async (path, params = {}, method = "GET") => {
@@ -194,6 +198,20 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
   };
 
   const AD_FIELDS = "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,inline_link_clicks,actions";
+
+  // ── phase 3: which ad brought which orders and money ────────────────
+  const attribution = async () => {
+    const all = async (name) => (await db.collection(name).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+    const leadSnap = await db.collection("leads").where("source", "in", [...AT.AD_SOURCES]).get();
+    const leads = leadSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const [customers, orders, payments, costs] = await Promise.all([all("customers"), all("orders"), all("order_payments").catch(() => []), all("order_costs").catch(() => [])]);
+    const rows = AT.attribute({ leads, customers, orders, payments, costs, today: dayOf() });
+    const batch = db.batch();
+    for (const [month, list] of AT.byMonth(rows)) batch.set(db.collection("ads_attr").doc(month), { month, rows: list, window_days: 60, updated_at: new Date().toISOString() });
+    await batch.commit();
+    lastAttr = Date.now();
+    return rows.length;
+  };
 
   // ── fast: today only, every 2 minutes ───────────────────────────────
   const fast = async () => {
@@ -642,7 +660,12 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     const yDay = addDays(last.today, -1);
     const erp = await erpLeadsOn(yDay).catch(() => null);
     const dayDoc = (await db.collection("ads_days").doc(yDay).get().catch(() => null))?.data?.() || null;
-    const text = reportText({ ...last, yDay, erp, dayDoc });
+    // Month so far: orders and sales from this month's ad leads (no cost or
+    // profit here — the topic isn't admin-only).
+    const attrDoc = (await db.collection("ads_attr").doc(last.today.slice(0, 7)).get().catch(() => null))?.data?.() || null;
+    const rowsM = (attrDoc && attrDoc.rows) || [];
+    const money = rowsM.length ? { leads: rowsM.length, ordered: rowsM.filter((r) => r.orders).length, orders: rowsM.reduce((x, r) => x + r.orders, 0), revenue: rowsM.reduce((x, r) => x + r.revenue, 0), from: rowsM.map((r) => r.day).sort()[0] } : null;
+    const text = reportText({ ...last, yDay, erp, dayDoc, money });
     await post(text);
     await emitEvent(db, { agent: "mkt", kind: "report", text: clip(text.split("\n").slice(0, 3).join(" · "), 200), bubble: "Reklama hisoboti 📊", source: "ads" });
   };
@@ -683,6 +706,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
       } else if (usage < 80) {
         await fast();
       }
+      if (Date.now() - lastAttr >= ATTR_MS) await attribution().catch((err) => log.error("Ads attribution failed", err.message));
       await daily();
     } catch (err) {
       log.error("Targetolog sync failed", err.message || err);
@@ -709,7 +733,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     if (unwatch) unwatch();
   };
 
-  return { start, stop, tick, handleCallback, enabled, _test: { sync, fast, guard, growth, checkLimits, execute, report, onChange, expireWarnings } };
+  return { start, stop, tick, handleCallback, enabled, _test: { sync, fast, attribution, guard, growth, checkLimits, execute, report, onChange, expireWarnings } };
 };
 
 // The report: yesterday's totals, each ad (video), the month so far.
@@ -751,7 +775,7 @@ function whereText(dayDoc) {
   return ["", ...lines];
 }
 
-function reportText({ summary, adsY = [], adsM = [], currency = "USD", yDay, erp = null, dayDoc = null }) {
+function reportText({ summary, adsY = [], adsM = [], currency = "USD", yDay, erp = null, dayDoc = null, money = null }) {
   const y = summary.yesterday;
   const m = summary.month;
   const leadsY = adsY.reduce((s, a) => s + a.leads, 0);
@@ -777,6 +801,9 @@ function reportText({ summary, adsY = [], adsM = [], currency = "USD", yDay, erp
     "",
     `Oy boshidan: ${som(m.spend)}${cur(usdM)} · ${leadsM} lid${leadsM ? ` · bitta lid ${som(Math.round(m.spend / leadsM))}` : ""}`,
     adsM.length ? `Oyning eng yaxshilari: ${adsM.slice(0, 3).map((a) => `${clip(a.name, 30)} (${a.leads})`).join(", ")}` : "",
+    money && money.leads
+      ? `💰 Shu oyning reklama lidlaridan: ${money.ordered} tasi buyurtma berdi (${money.orders} ta buyurtma) · ${som(money.revenue)} savdo${m.spend && !(money.from > `${yDay.slice(0, 7)}-01`) ? ` · ROAS ${String(Math.round((money.revenue / m.spend) * 10) / 10).replace(".", ",")}x` : money.from ? ` (lidlar ${money.from.slice(8, 10)}.${money.from.slice(5, 7)} dan)` : ""}`
+      : "",
   ];
   return lines.filter((x, i, arr) => x !== "" || (arr[i - 1] !== "" && i > 0)).join("\n").trim();
 }
