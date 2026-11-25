@@ -384,6 +384,11 @@ service cloud.firestore {
       allow read: if isAdmin() && !isManagerAccount();
       allow write: if false;
     }
+    // Phase 4: which agent alerts went out and when (cooldowns).
+    match /ads_signals/{id} {
+      allow read: if can('ads', 'view');
+      allow write: if false;
+    }
     match /ads_fx/{id} {
       allow read: if can('ads', 'view');
       allow write: if false;

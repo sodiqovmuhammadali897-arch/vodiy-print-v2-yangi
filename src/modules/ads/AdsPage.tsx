@@ -3,6 +3,7 @@ import { AlertTriangle, Clock3, Hand, Megaphone, Settings2, Target, TrendingDown
 import { getOne, subscribeAll, subscribeOne, updateOne, upsertOne } from "../../lib/firestoreDb";
 import { useAuth } from "../../lib/AuthContext";
 import SpendWhere from "./SpendWhere";
+import AdsSignals from "./AdsSignals";
 import { ADS_DEFAULTS, OPEN_STAGES, cplTone, formatSom, movesFor, type AdsCampaign, type AdsProposal, type AdsSettings, type AdsSummary } from "../../lib/ads";
 
 // Reklama: the Targetolog agent's page (meta-webhook/targetolog.js).
@@ -213,6 +214,8 @@ export default function AdsPage() {
         <Kpi label="Bitta natija narxi" value={month.cpl ? formatSom(month.cpl) : "—"} icon={<Wallet className="h-4 w-4" />} hint={avg ? `30 kunlik o'rtacha ${formatSom(avg)} so'm` : "so'm"} />
         <Kpi label="Bugun" value={formatSom(today.spend)} icon={<Clock3 className="h-4 w-4" />} hint={`so'm · ${today.results} natija · ${summary.active_campaigns ?? 0} ta faol reklama`} />
       </div>
+
+      <AdsSignals />
 
       <SpendWhere avgCpl={avg} />
 

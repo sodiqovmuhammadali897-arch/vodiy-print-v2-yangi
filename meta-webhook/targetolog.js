@@ -35,6 +35,7 @@ const SP = require("./adsSpend");
 // Phase 3 (lead → order → money): reads all orders and customers, so every 2 h.
 const ATTR_MS = Math.max(15, Number(process.env.ADS_ATTR_MIN || 120)) * 60 * 1000;
 const AT = require("./adsAttr");
+const SG = require("./adsSignals");
 const AUD_MS = Math.max(15, Number(process.env.ADS_AUDIENCE_MIN || 60)) * 60 * 1000;
 const DEFAULTS = { daily_limit: 200000, monthly_limit: 6000000, stop_multiplier: 3, grace_minutes: 120, rate: 12800, report_hour: 10 };
 const CHANGES_ON = process.env.ADS_CHANGES === "on";
@@ -106,7 +107,8 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
   let lastHeavy = 0;
   let lastAud = 0;
   let audFullDay = "";
-  let lastAttr = 0; // the day the 30-day audience backfill last ran
+  let lastAttr = 0;
+  let failures = 0; // syncs in a row that failed // the day the 30-day audience backfill last ran
 
   // ── Graph API ──────────────────────────────────────────────────────
   const graph = async (path, params = {}, method = "GET") => {
@@ -213,6 +215,40 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     return rows.length;
   };
 
+  // ── phase 4: the agent's watch (alerts only) ────────────────────────
+  const sendable = (hour) => hour >= 8 && hour < 22;
+  const fire = async (list) => {
+    const now = Date.now();
+    const fresh = [];
+    for (const sg of list) {
+      const ref = db.collection("ads_signals").doc(sg.key.replace(/\//g, "_"));
+      const prev = (await ref.get()).data();
+      const cool = (SG.COOLDOWN_H[sg.kind] || 24) * 3600e3;
+      if (prev && prev.sent_at && now - Date.parse(prev.sent_at) < cool) continue;
+      fresh.push({ sg, ref });
+    }
+    if (!fresh.length || !sendable(tashkent().getUTCHours())) return 0;
+    await post(SG.signalsText(fresh.map((f) => f.sg)).slice(0, 4000));
+    for (const f of fresh) await f.ref.set({ ...f.sg, sent_at: new Date().toISOString() });
+    await addLog(`Agent kuzatuvi: ${fresh.length} ta ogohlantirish`).catch(() => undefined);
+    return fresh.length;
+  };
+  const runSignals = async (s) => {
+    const today = s.today;
+    const daySnap = await db.collection("ads_days").where("day", ">=", addDays(today, -29)).get();
+    const days = daySnap.docs.map((d) => d.data()).filter((d) => d.day <= today);
+    const months = [addDays(today, -60).slice(0, 7), today.slice(0, 7)];
+    const attr = [];
+    for (const m of [...new Set(months)]) {
+      const a = (await db.collection("ads_attr").doc(m).get()).data();
+      if (a && a.rows) attr.push(...a.rows);
+    }
+    const reach = (await db.collection("ads_state").doc("reach").get()).data() || null;
+    const list = SG.signals({ days, attr, reach, adsStatus: s.adsStatus || [], today });
+    await db.collection("ads_state").doc("signals").set({ items: list, at: new Date().toISOString() });
+    return fire(list);
+  };
+
   // ── fast: today only, every 2 minutes ───────────────────────────────
   const fast = async () => {
     const cfg = await settings();
@@ -281,7 +317,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
       graphAll(`act_${act}/insights`, { level: "ad", fields: AD_FIELDS, time_increment: 1, time_range: range }),
       graphAll(`act_${act}/insights`, { fields: "spend,impressions,reach,clicks", time_increment: 1, time_range: range }),
       graphAll(`act_${act}/insights`, { fields: "spend,impressions,clicks,actions", breakdowns: "publisher_platform,platform_position", time_increment: 1, time_range: range }).catch(() => null),
-      graphAll(`act_${act}/ads`, { fields: "id,name,creative{video_id,object_type,thumbnail_url}" }).catch(() => []),
+      graphAll(`act_${act}/ads`, { fields: "id,name,effective_status,adset_id,creative{video_id,object_type,thumbnail_url}" }).catch(() => []),
     ]);
     const currency = acc.currency || "USD";
     const dayList = [];
@@ -426,7 +462,9 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     const adsY = adStats(adRowsY, rateOf, videoIds);
     const adsM = adStats(adRowsM, rateOf, videoIds);
     await db.collection("ads_state").doc("ads").set({ day: yesterday, yesterday: adsY.slice(0, 50), month: adsM.slice(0, 50), updated_at: summary.last_sync });
-    last = { cfg, list, summary, today, minorToSom, offset, rate, adsY, adsM, currency };
+    const liveSets = new Set(adsets.filter((a) => a.effective_status === "ACTIVE").map((a) => String(a.id)));
+    const adsStatus = ads.filter((a) => liveSets.has(String(a.adset_id))).map((a) => ({ id: String(a.id), name: a.name || "", effective_status: a.effective_status || "" }));
+    last = { cfg, list, summary, today, minorToSom, offset, rate, adsY, adsM, currency, adsStatus };
     return last;
   };
 
@@ -699,6 +737,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
         const s = await sync();
         lastHeavy = Date.now();
         await patchSummary(s.cfg, s.today);
+        await runSignals(s).catch((err) => log.error("Ads signals failed", err.message));
         if (CHANGES_ON) {
           await guard(s);
           await expireWarnings();
@@ -708,8 +747,12 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
       }
       if (Date.now() - lastAttr >= ATTR_MS) await attribution().catch((err) => log.error("Ads attribution failed", err.message));
       await daily();
+      failures = 0;
     } catch (err) {
       log.error("Targetolog sync failed", err.message || err);
+      failures++;
+      if (failures === 3)
+        await fire([{ key: "api", kind: "api", level: "bad", title: "Meta'dan ma'lumot olib bo'lmayapti", evidence: `Ketma-ket 3 marta xato: ${String(err.message || err).slice(0, 200)}`, advice: "Token yoki ruxsatlar o'zgargan bo'lishi mumkin — meta-check.yml ni ishga tushiring." }]).catch(() => undefined);
       await db.collection("ads_state").doc("summary").set({ ok: false, error: String(err.message || err).slice(0, 300), last_error_at: new Date().toISOString() }, { merge: true }).catch(() => undefined);
     } finally {
       running = false;
@@ -733,7 +776,7 @@ const create = (db, { route, token = process.env.META_ADS_TOKEN, account = proce
     if (unwatch) unwatch();
   };
 
-  return { start, stop, tick, handleCallback, enabled, _test: { sync, fast, attribution, guard, growth, checkLimits, execute, report, onChange, expireWarnings } };
+  return { start, stop, tick, handleCallback, enabled, _test: { sync, fast, attribution, runSignals, guard, growth, checkLimits, execute, report, onChange, expireWarnings } };
 };
 
 // The report: yesterday's totals, each ad (video), the month so far.

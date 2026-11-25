@@ -498,7 +498,17 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     «Buyurtma» + «Savdo · ROAS» columns in the tree. The 10:00 report adds
     the month's orders and sales from ad leads (no cost/profit — the topic
     is not admin-only). ERP has ad leads only from 2026-11-13 (leadPoll).
-  - Next phase (approved): 4 — alert-only agent triggers (CPL jump, CTR drop, frequency, no sales).
+  - **Phase 4 — built 2026-11-25:** `meta-webhook/adsSignals.js`, after
+    every full sync (30 min), alerts only: money without results today (ad
+    set, ≥ max(2× avg CPL, 50 000)), lead price jump (campaign, last 3 days
+    ≥ 2× its earlier CPL and ≥ 1.5× account avg; names the costliest video),
+    CTR drop (ad, last 3 vs previous 7 days, −35%, ≥ 3 000 impressions),
+    tired audience (7-day frequency ≥ 2.5 and CPL ≥ 1.3× avg), leads
+    without sales (≥ 10 ERP leads 14–60 days old, no order), working well
+    (ad set ROAS ≥ 5 with ≥ 2 buyers), Meta rejected / issues (ads in active
+    ad sets), 3 failed syncs in a row. `ads_state/signals` = the current
+    list (page card «Agent kuzatuvi», `AdsSignals.tsx`); new ones go to
+    🎯 Reklama 08:00–22:00 with per-kind cooldowns (`ads_signals/{key}`).
 - **Which deals have no task — 2026-11-14** (owner: «zadachasiz lid deyapti,
   qaysiligini ko'rsatib turadigan qilish kerak, amoda ko'rinmayapti»): the
   count now opens the deals (`src/components/amo/NoTaskLeads.tsx`, from
