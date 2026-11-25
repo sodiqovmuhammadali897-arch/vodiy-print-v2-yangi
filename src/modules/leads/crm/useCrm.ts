@@ -7,7 +7,9 @@ import type { Actor } from "../../../lib/crmService";
 
 // Live leads, lead tasks (own, or everyone's for an admin), the orders the
 // converted leads point to, and the sellers a lead can be given to.
-export function useCrm() {
+// `enabled` false: no subscriptions (the caller got the data from a parent —
+// Sotuv bo'limi reads it once for all its sections).
+export function useCrm(enabled = true) {
   const auth = useAuth();
   const email = (auth.user?.email || "").toLowerCase();
   const [leads, setLeads] = useState<Lead[] | null>(null);
@@ -17,6 +19,7 @@ export function useCrm() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     const onErr = (e: Error) => setError(e.message);
     const offLeads = subscribeAll<Lead>("leads", (rows) => setLeads(rows), undefined);
     const offTasks = auth.isAdmin
@@ -31,7 +34,7 @@ export function useCrm() {
       offTasks();
       offOrders();
     };
-  }, [auth.isAdmin, email]);
+  }, [auth.isAdmin, email, enabled]);
 
   const actor: Actor = useMemo(() => ({ email, name: auth.staff?.full_name || email }), [email, auth.staff?.full_name]);
   // Who can own a lead: sellers (linked to Managerlar or allowed to edit leads).
@@ -45,3 +48,4 @@ export function useCrm() {
   );
   return { leads, tasks, orders, sellers, actor, isAdmin: auth.isAdmin, email, error };
 }
+export type CrmData = ReturnType<typeof useCrm>;

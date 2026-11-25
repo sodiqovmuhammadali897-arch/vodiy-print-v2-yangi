@@ -23,7 +23,7 @@ import {
 } from "../../../lib/crm";
 import { claimLead, moveToColumn } from "../../../lib/crmService";
 import type { Lead } from "../../../lib/types";
-import { useCrm } from "./useCrm";
+import { useCrm, type CrmData } from "./useCrm";
 import NewLeadModal from "./NewLeadModal";
 import LostModal from "./LostModal";
 import TaskList from "./TaskList";
@@ -39,11 +39,15 @@ const initials = (n: string) =>
     .map((w) => w[0]!.toUpperCase())
     .join("") || "—";
 
-export default function LeadsBoard() {
+// `mode` (Sotuv bo'limi's left menu, 2026-11-25): only the board or only
+// the tasks, without the old switcher; `crm` = the data read once above.
+export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; crm?: CrmData } = {}) {
   const navigate = useNavigate();
+  const own = useCrm(!crm);
   const { leads, tasks, orders, sellers, actor, isAdmin, email, error } =
-    useCrm();
-  const [view, setView] = useState<"home" | "board" | "tasks">("home");
+    crm || own;
+  const [ownView, setView] = useState<"home" | "board" | "tasks">("home");
+  const view = mode || ownView;
   const [q, setQ] = useState("");
   const [owner, setOwner] = useState<string>(isAdmin ? "" : email);
   const [problems, setProblems] = useState(false);
@@ -161,7 +165,7 @@ export default function LeadsBoard() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink-900">
-            {view === "home" ? "Sotuv — bosh sahifa" : "Lidlar"}
+            {view === "home" ? "Sotuv — bosh sahifa" : view === "tasks" && mode ? "Zadachalar" : "Lidlar"}
           </h1>
           <p className="text-sm text-ink-500">
             {view === "home"
@@ -170,7 +174,7 @@ export default function LeadsBoard() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="inline-flex rounded-xl border border-ink-200 bg-surface p-1">
+          <div className={`${mode ? "hidden" : "inline-flex"} rounded-xl border border-ink-200 bg-surface p-1`}>
             <button
               type="button"
               onClick={() => setView("home")}

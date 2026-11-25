@@ -588,6 +588,19 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   sync (history kept). Open: managers see it at once or after the owner's
   test; keep the «Fon» picture or a plain light look; SMS needs a working
   Mois Zvonki API key.
+- **Sotuv bo'limi rebuild, step 1 — 2026-11-25** (owner: «endi ketma-ketlikda
+  sotuv bo'limini quramiz»): admins get `SalesShell.tsx` — a left menu
+  (a scrolling row on phones) with Bosh sahifa (CrmHome, ERP data),
+  Lidlar (LeadsBoard `mode="board"`), Zadachalar (`mode="tasks"`),
+  Qo'ng'iroqlar (`CallsLog.tsx`, logic `src/lib/callsLog.ts`: a day of
+  Mois Zvonki `calls`, who/talk/recording/lead, missed and not returned)
+  and Tahlil (the amoCRM reports as inner tabs: Voronka, Yo'qotilganlar,
+  Menejerlar kuni = old Nazorat, amoCRM hisobotlari; badge «amoCRM ma'lumoti
+  · o'tish oyida»). URLs `?v=home|lidlar|zadachalar|qongiroqlar|tahlil&t=…`;
+  old `?v=voronka|yutqazilgan|amo|control` land in Tahlil (`sectionOf`).
+  `useCrm(enabled)` + `CrmData`: the data is read once in the shell. Managers
+  still see only their amoCRM view (opens to them in week 3). Next: step 2
+  (lead card in a right panel).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
