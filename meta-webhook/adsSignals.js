@@ -72,7 +72,7 @@ function signals({ days = [], attr = [], reach = null, adsStatus = [], today }) 
         // What inside it got worse: the costliest video without results.
         const ads = [...sums(days, addDays(today, -2), today, "a").values()].filter((a) => a.cn === r.name).sort((x, y) => (y.results ? y.spend / y.results : y.spend * 10) - (x.results ? x.spend / x.results : x.spend * 10));
         const worst = ads[0];
-        add({ key: `cpl:${r.id}`, kind: "cpl", level: "bad", title: `Lid narxi keskin oshdi: «${clip(r.name)}»`, evidence: `Oxirgi 3 kun: ${rCpl === null ? `${som(r.spend)}, lid yo'q` : `bitta lid ${som(rCpl)}`} — oldingi kunlarda ${som(bCpl)} edi (${rCpl === null ? "∞" : `${Math.round((rCpl / bCpl) * 10) / 10}×`}).`, advice: `${worst ? `Eng qimmat video: «${clip(worst.name, 40)}» (${som(worst.spend)}, ${worst.results} lid). ` : ""}Video, joylashuv va auditoriyani tekshiring; lidlar sifatini Sotuv bo'limida ko'ring.` });
+        add({ key: `cpl:${r.id}`, kind: "cpl", level: "bad", title: `Lid narxi keskin oshdi: «${clip(r.name)}»`, evidence: `Oxirgi 3 kun: ${rCpl === null ? `${som(r.spend)}, lid yo'q` : `bitta lid ${som(rCpl)}`} — oldingi kunlarda ${som(bCpl)} edi (${rCpl === null ? "∞" : `${String(Math.round((rCpl / bCpl) * 10) / 10).replace(".", ",")}×`}).`, advice: `${worst ? `Eng qimmat video: «${clip(worst.name, 40)}» (${som(worst.spend)}, ${worst.results} lid). ` : ""}Video, joylashuv va auditoriyani tekshiring; lidlar sifatini Sotuv bo'limida ko'ring.` });
       }
     }
   }
