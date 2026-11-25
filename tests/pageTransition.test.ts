@@ -25,9 +25,11 @@ describe("navKind", () => {
     expect(navKind("/settings", "/orders", "PUSH", tabs, false)).toBe("fade");
   });
 
-  it("always fades on a computer", () => {
-    expect(navKind("/dashboard", "/orders", "PUSH", tabs, true)).toBe("fade");
-    expect(navKind("/orders", "/orders/12", "PUSH", tabs, true)).toBe("fade");
+  it("opens like an iPhone app on a computer; deeper pages slide", () => {
+    expect(navKind("/dashboard", "/orders", "PUSH", tabs, true)).toBe("open");
+    expect(navKind("/orders", "/orders/12", "PUSH", tabs, true)).toBe("push");
+    expect(navKind("/orders/12", "/orders", "POP", tabs, true)).toBe("pop");
+    expect(navKind("/orders/12", "/orders", "PUSH", tabs, true)).toBe("pop");
   });
 });
 

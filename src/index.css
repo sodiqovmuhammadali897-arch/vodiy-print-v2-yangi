@@ -165,11 +165,14 @@ body {
 .tab-pop {
   animation: tabPop 0.38s cubic-bezier(0.3, 1.4, 0.6, 1);
 }
-@media (prefers-reduced-motion: reduce) {
-  .page-enter,
-  .tab-pop {
-    animation: none;
-  }
+/* Animations off only by the person's choice (lib/motion.ts sets
+   html.no-motion) — not by Windows' animation switch on its own. */
+html.no-motion .page-enter,
+html.no-motion .tab-pop,
+html.no-motion .animate-fade-in,
+html.no-motion .modal-pop,
+html.no-motion .modal-backdrop {
+  animation: none;
 }
 
 /* Page changes with View Transitions (TransitionRouter.tsx): only the page
@@ -221,6 +224,12 @@ html[data-nav="pop"]::view-transition-old(page) { animation-name: vtOutRight; z-
 html[data-nav="pop"]::view-transition-new(page) { animation-name: vtComeForward; }
 html[data-nav="fade"]::view-transition-old(page) { animation: vtFadeOut 0.28s ease-out both; }
 html[data-nav="fade"]::view-transition-new(page) { animation: vtRise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s both; }
+/* Computers: another section opens like an iPhone app — the old page
+   sinks back and fades, the new one rises from 94% with a soft spring. */
+html[data-nav="open"]::view-transition-old(page) { animation: vtSink 0.26s cubic-bezier(0.4, 0, 1, 1) both; }
+html[data-nav="open"]::view-transition-new(page) { animation: vtOpen 0.52s cubic-bezier(0.22, 1.12, 0.36, 1) both; }
+@keyframes vtSink { to { opacity: 0; transform: scale(0.97); } }
+@keyframes vtOpen { from { opacity: 0; transform: scale(0.94) translateY(12px); } 60% { opacity: 1; } }
 @keyframes vtInRight { from { transform: translateX(100%); } }
 @keyframes vtInLeft { from { transform: translateX(-100%); } }
 @keyframes vtOutLeft { to { transform: translateX(-100%); } }
@@ -236,6 +245,20 @@ html[data-nav="fade"]::view-transition-new(page) { animation: vtRise 0.5s cubic-
 }
 .animate-fade-in {
   animation: fadeIn 0.35s ease-out both;
+}
+/* Windows (Modal.tsx) open like an iPhone sheet: a soft spring from 92%,
+   the dimmed background fades in. */
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.92) translateY(10px); }
+  60% { opacity: 1; }
+  to { opacity: 1; transform: none; }
+}
+.modal-pop {
+  animation: modalPop 0.42s cubic-bezier(0.22, 1.15, 0.36, 1) both;
+}
+@keyframes backdropIn { from { opacity: 0; } }
+.modal-backdrop {
+  animation: backdropIn 0.25s ease-out both;
 }
 
 /* html2canvas (PNG/PDF export) finds the text baseline by measuring this

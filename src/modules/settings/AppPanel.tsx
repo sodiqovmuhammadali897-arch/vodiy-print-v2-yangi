@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Database, Download, Loader, RefreshCw, Smartphone, Trash2 } from "lucide-react";
+import { CheckCircle2, Database, Download, Loader, RefreshCw, Smartphone, Sparkles, Trash2 } from "lucide-react";
+import { motionPref, setMotionPref, type MotionPref } from "../../lib/motion";
 import { checkForUpdate, clearDeviceCache, storageInfo, type StorageInfo } from "../../lib/appUpdate";
 import { clearLocalData } from "../../lib/firebase";
 
@@ -22,6 +23,7 @@ export default function AppPanel() {
   const [update, setUpdate] = useState<"idle" | "checking" | "latest" | "new" | "unknown">("idle");
   const [store, setStore] = useState<StorageInfo | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [motion, setMotion] = useState<MotionPref>(motionPref());
 
   useEffect(() => {
     void storageInfo().then(setStore);
@@ -43,6 +45,36 @@ export default function AppPanel() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
+      <div className="card p-5">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-lg font-bold text-ink-900">Animatsiyalar</h2>
+            <p className="mt-0.5 text-sm text-ink-500">Sahifalar yumshoq ochilishi va raqamlarning sanab chiqishi. Faqat shu qurilmada saqlanadi.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {([
+                ["on", "Yoqilgan"],
+                ["system", "Kompyuter sozlamasi bo'yicha"],
+                ["off", "O'chirilgan"],
+              ] as [MotionPref, string][]).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => {
+                    setMotionPref(k);
+                    setMotion(k);
+                  }}
+                  className={`rounded-xl px-3 py-1.5 text-sm font-semibold ${motion === k ? "bg-brand-600 text-white" : "border border-ink-200 text-ink-700 hover:bg-ink-50"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
       <div className="card p-5">
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">

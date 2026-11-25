@@ -1,3 +1,4 @@
+import { motionOn } from "./motion";
 // Count-up for stat numbers: splits a formatted value ("52.3 mln",
 // "1 234 567 so'm", "−4.0 ming", 17) into the text around the number and
 // the number itself, so the number can run while "mln" / "so'm" stay put.
@@ -73,5 +74,6 @@ export const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
 
 export const COUNT_UP_MS = 1000;
 
-export const prefersReducedMotion = () =>
-  typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+// True when count-ups should not run: the person's choice (lib/motion.ts),
+// no longer Windows' animation switch alone.
+export const prefersReducedMotion = () => typeof window !== "undefined" && !motionOn();

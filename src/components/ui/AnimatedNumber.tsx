@@ -37,5 +37,6 @@ export default function AnimatedNumber({ value }: { value: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return <>{shown ?? value}</>;
+  // data-motion: the page-wide count-up (lib/countUpDom.ts) leaves it alone.
+  return <span data-motion="">{shown ?? value}</span>;
 }

@@ -1,3 +1,5 @@
+import { applyMotion } from "./lib/motion";
+import { startCountUps } from "./lib/countUpDom";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
@@ -13,6 +15,10 @@ import "./index.css";
 // public/sw.js. Not in development, where files change all the time.
 if (import.meta.env.PROD) void registerServiceWorker();
 
+// Animations follow the person's choice (Sozlamalar), not Windows' switch.
+applyMotion();
+// Big numbers on every panel count up (lib/countUpDom.ts).
+startCountUps();
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 
 if (!isFirebaseConfigured) {

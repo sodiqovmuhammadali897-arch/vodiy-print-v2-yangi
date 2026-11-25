@@ -3,6 +3,7 @@
 // agent_events record into visible movement — the Hisobchi robot walking
 // to a colleague, a report flying to the Telegram screen, the warehouse
 // agent carrying a box to the shelf. Plain three.js, no React inside.
+import { motionOn } from "../../lib/motion";
 import * as THREE from "three";
 
 export type AgentId = "it" | "sales" | "fin" | "prod" | "wh" | "bot" | "hr" | "ig" | "mkt" | "chief";
@@ -101,7 +102,7 @@ export class OfficeScene {
   private raf = 0;
   private ro: ResizeObserver;
   private drag: { x: number; y: number } | null = null;
-  private reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  private reduced = !motionOn();
   private disposed = false;
   private proj = new THREE.Vector3();
 

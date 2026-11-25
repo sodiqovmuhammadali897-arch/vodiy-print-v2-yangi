@@ -1,3 +1,4 @@
+import { finishCountUps } from "./countUpDom";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { captureOptions } from "./exportPng";
@@ -16,7 +17,8 @@ export const exportNodeToPdf = async (node: HTMLElement, fileBase: string): Prom
   try {
     // See exportPng.ts — capturing before web fonts finish loading can
     // shift text metrics enough to change how content wraps.
-    await document.fonts.ready;
+    finishCountUps(); // numbers at their final value, not half-way
+  await document.fonts.ready;
     // 2.5× and JPEG pages: see htmlToPdf.ts (much faster, same look).
     canvas = await html2canvas(node, { ...captureOptions(node), scale: 2.5 });
   } finally {

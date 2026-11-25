@@ -43,11 +43,11 @@ export default function Modal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"
+        className="modal-backdrop absolute inset-0 bg-ink-900/40 backdrop-blur-sm"
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${sizeMap[size]} animate-fade-in overflow-hidden rounded-2xl bg-surface shadow-pop`}
+        className={`relative w-full ${sizeMap[size]} modal-pop overflow-hidden rounded-2xl bg-surface shadow-pop`}
       >
         <div className="flex items-start justify-between border-b border-ink-100 px-6 py-4">
           <div>

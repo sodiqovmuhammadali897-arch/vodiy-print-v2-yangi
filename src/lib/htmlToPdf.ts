@@ -1,3 +1,4 @@
+import { finishCountUps } from "./countUpDom";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { captureOptions } from "./exportPng";
@@ -5,6 +6,7 @@ import { captureOptions } from "./exportPng";
 const capture = async (node: HTMLElement) => {
   // See exportPng.ts — capturing before web fonts finish loading can shift
   // text metrics enough to change how content wraps.
+  finishCountUps(); // numbers at their final value, not half-way
   await document.fonts.ready;
   // 2.5× (~200 DPI on A4) is sharp in print and on screen; pages go in as
   // JPEG — jsPDF re-compresses a PNG in JavaScript, which took most of the

@@ -557,6 +557,23 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   and amo on); on start the server writes that once onto staff without
   bot_tasks (`migrate`). From now on change who gets what in Xodimlar,
   not RECALL_MANAGERS. The web claim button isn't gated (CRM is admin-only).
+- **Motion everywhere — 2026-11-25** (owner: «hamma panelda raqamlar
+  dinamika bo'yicha ishlasin, panellar yumshoq, iPhone stilda ochilsin»).
+  Cause found: Windows' «animation effects» off (prefers-reduced-motion)
+  silently disabled page transitions and count-ups, and count-up ran only
+  in StatCard. Now:
+  - `src/lib/motion.ts`: on by default, per device choice in Sozlamalar →
+    Ilova va yangilanish → «Animatsiyalar» (Yoqilgan / Kompyuter sozlamasi
+    bo'yicha / O'chirilgan; localStorage `vp_motion`; `html.no-motion`).
+  - `src/lib/countUpDom.ts` (started in main.tsx): one MutationObserver
+    counts up every big number (font-display + text-xl…6xl + bold, or
+    `[data-count]`) when it comes into view, and from the old value when it
+    changes. Skips letters-before-number ("VP-1201"), `.force-light`
+    documents, `[data-no-count]`, AnimatedNumber (`[data-motion]`). PNG/PDF
+    exports call `finishCountUps()` first.
+  - Computers: another section opens like an iPhone app (`data-nav="open"`,
+    scale 0.94 → 1 spring), deeper pages slide (push/pop) like on phones.
+    Modals pop with a spring (`.modal-pop`, `.modal-backdrop`).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

@@ -1,3 +1,4 @@
+import { finishCountUps } from "./countUpDom";
 import html2canvas from "html2canvas";
 
 // PNGs go to customers (usually over Telegram), so small text and thin
@@ -30,6 +31,7 @@ export const captureHighResCanvas = async (node: HTMLElement): Promise<HTMLCanva
   // to a system font with different metrics — text sits at different
   // widths than what's on screen, which can even push flex-wrapped content
   // onto a different line than the live page shows.
+  finishCountUps(); // numbers at their final value, not half-way
   await document.fonts.ready;
   const width = Math.max(1, node.scrollWidth || node.offsetWidth);
   const height = Math.max(1, node.scrollHeight || node.offsetHeight);
