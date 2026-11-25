@@ -574,6 +574,20 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   - Computers: another section opens like an iPhone app (`data-nav="open"`,
     scale 0.94 → 1 spring), deeper pages slide (push/pop) like on phones.
     Modals pop with a spring (`.modal-pop`, `.modal-backdrop`).
+- **DECISION 2026-11-25 — leave amoCRM for the ERP within one month**
+  (owner: «amodan to'liq 1 oy ichida ERPga o'tamiz»), after the deck
+  «Sotuv bo'limi — yangi tartib» (5 sections in a left menu: Bosh sahifa,
+  Lidlar with the card in a right-side panel, Zadachalar, Qo'ng'iroqlar,
+  Tahlil; one place for each thing). Dashboards and analysis will read ERP
+  leads, not amoCRM. Proposed 4 weeks (plan sent, waiting for «boshla»):
+  1) new section shell + ERP-based Bosh sahifa/Tahlil + import of amoCRM's
+  open leads (server job started from the app, never via Actions logs);
+  2) tasks with Telegram reminders, outgoing calls on leads; 3) open to
+  managers, KPI's task condition and the 09:00/10:00/15:00 messages from
+  ERP tasks; 4) a week in parallel, compare counts, then stop the amoCRM
+  sync (history kept). Open: managers see it at once or after the owner's
+  test; keep the «Fon» picture or a plain light look; SMS needs a working
+  Mois Zvonki API key.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
