@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useLeadHref } from "./crm/leadLink";
 import { ChevronLeft, ChevronRight, PhoneIncoming, PhoneMissed, PhoneOutgoing } from "lucide-react";
 import { listRange } from "../../lib/firestoreDb";
 import { talkLabel, talkSeconds, type CallRow } from "../../lib/crmDash";
@@ -16,6 +17,7 @@ const KINDS: [CallKind, string][] = [
 ];
 
 export default function CallsLog({ sellers }: { sellers: { email: string; name: string }[] }) {
+  const leadHref = useLeadHref();
   const today = tashkentDay();
   const [day, setDay] = useState(today);
   const [kind, setKind] = useState<CallKind>("all");
@@ -114,7 +116,7 @@ export default function CallsLog({ sellers }: { sellers: { email: string; name: 
                   </span>
                   {notReturned.has(c.id) && <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">qayta qo'ng'iroq qiling</span>}
                   {c.lead_id && (
-                    <Link to={`/leads/${c.lead_id}`} className="rounded-lg border border-ink-200 px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">
+                    <Link to={leadHref(c.lead_id)} className="rounded-lg border border-ink-200 px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">
                       Lid
                     </Link>
                   )}

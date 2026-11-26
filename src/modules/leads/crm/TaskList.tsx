@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useLeadHref } from "./leadLink";
 import { CheckCircle2 } from "lucide-react";
 import { dueLabel, taskDueAt, taskState, taskTypeInfo } from "../../../lib/crm";
 import { completeLeadTask, type Actor } from "../../../lib/crmService";
@@ -39,6 +40,7 @@ export default function TaskList({ tasks, leads, actor }: { tasks: LeadTask[]; l
 }
 
 export function TaskRow({ task, lead, actor, late, compact }: { task: LeadTask; lead?: Lead; actor: Actor; late?: boolean; compact?: boolean }) {
+  const leadHref = useLeadHref();
   const [closing, setClosing] = useState(false);
   const [result, setResult] = useState("");
   const [saving, setSaving] = useState(false);
@@ -62,7 +64,7 @@ export function TaskRow({ task, lead, actor, late, compact }: { task: LeadTask; 
         </span>
         <span className={`text-xs font-semibold ${late ? "text-rose-600" : "text-emerald-700"}`}>{dueLabel(task)}</span>
         {!compact && lead && (
-          <Link to={`/leads/${lead.id}`} className="text-sm text-brand-700 hover:underline">
+          <Link to={leadHref(lead.id)} className="text-sm text-brand-700 hover:underline">
             {lead.brand || lead.full_name || lead.phone} {lead.lead_number ? `· ${lead.lead_number}` : ""}
           </Link>
         )}

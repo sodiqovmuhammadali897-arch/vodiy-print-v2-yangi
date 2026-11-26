@@ -171,7 +171,8 @@ html.no-motion .page-enter,
 html.no-motion .tab-pop,
 html.no-motion .animate-fade-in,
 html.no-motion .modal-pop,
-html.no-motion .modal-backdrop {
+html.no-motion .modal-backdrop,
+html.no-motion .drawer-in {
   animation: none;
 }
 
@@ -257,6 +258,11 @@ html[data-nav="open"]::view-transition-new(page) { animation: vtOpen 0.52s cubic
   animation: modalPop 0.42s cubic-bezier(0.22, 1.15, 0.36, 1) both;
 }
 @keyframes backdropIn { from { opacity: 0; } }
+/* Sotuv bo'limi's lead panel (LeadDrawer.tsx) slides in from the right. */
+@keyframes drawerIn { from { transform: translateX(100%); } }
+.drawer-in {
+  animation: drawerIn 0.42s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
 .modal-backdrop {
   animation: backdropIn 0.25s ease-out both;
 }

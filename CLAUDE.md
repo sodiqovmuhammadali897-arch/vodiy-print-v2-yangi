@@ -599,8 +599,15 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   · o'tish oyida»). URLs `?v=home|lidlar|zadachalar|qongiroqlar|tahlil&t=…`;
   old `?v=voronka|yutqazilgan|amo|control` land in Tahlil (`sectionOf`).
   `useCrm(enabled)` + `CrmData`: the data is read once in the shell. Managers
-  still see only their amoCRM view (opens to them in week 3). Next: step 2
-  (lead card in a right panel).
+  still see only their amoCRM view (opens to them in week 3).
+- **Step 2 — built 2026-11-26:** the lead card opens in a right-side panel
+  over Sotuv bo'limi (`crm/LeadDrawer.tsx`, `?lead=ID` in the address next to
+  the section; slides in, Esc / dimmed side / «orqaga» close it). LeadPage.tsx
+  now exports `LeadCard({id, crm, panel, onClose})` — panel layout: fields
+  left, tasks + history right; `/leads/:id` still renders it as a page.
+  `crm/leadLink.ts useLeadHref` decides where a lead opens (in /leads → the
+  panel, elsewhere → its page) for the board, tasks, home and calls.
+  Next: step 3 (task columns, Telegram task reminders, outgoing calls).
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an

@@ -24,6 +24,7 @@ import {
 import { claimLead, moveToColumn } from "../../../lib/crmService";
 import type { Lead } from "../../../lib/types";
 import { useCrm, type CrmData } from "./useCrm";
+import { useLeadHref } from "./leadLink";
 import NewLeadModal from "./NewLeadModal";
 import LostModal from "./LostModal";
 import TaskList from "./TaskList";
@@ -43,6 +44,7 @@ const initials = (n: string) =>
 // the tasks, without the old switcher; `crm` = the data read once above.
 export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; crm?: CrmData } = {}) {
   const navigate = useNavigate();
+  const leadHref = useLeadHref();
   const own = useCrm(!crm);
   const { leads, tasks, orders, sellers, actor, isAdmin, email, error } =
     crm || own;
@@ -345,7 +347,7 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
                               draggable
                               onDragStart={() => setDragId(l.id)}
                               onDragEnd={() => setDragId(null)}
-                              onClick={() => navigate(`/leads/${l.id}`)}
+                              onClick={() => navigate(leadHref(l.id))}
                               className={`fon-solid cursor-pointer rounded-xl bg-surface p-2.5 text-xs shadow-sm ring-1 ring-ink-100 transition hover:ring-brand-300 dark:ring-ink-700 ${dragId === l.id ? "opacity-50" : ""} ${busy === l.id ? "animate-pulse" : ""}`}
                             >
                               <div className="truncate text-[13px] font-bold text-ink-900">
@@ -454,7 +456,7 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
           sellers={sellers}
           actor={actor}
           isAdmin={isAdmin}
-          onCreated={(id) => navigate(`/leads/${id}`)}
+          onCreated={(id) => navigate(leadHref(id))}
         />
       )}
       {lost && (

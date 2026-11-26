@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
+  X,
   CheckCircle2,
   Loader2,
   Phone,
@@ -38,7 +39,7 @@ import {
   updateCrmLead,
 } from "../../../lib/crmService";
 import type { Lead, LeadActivity } from "../../../lib/types";
-import { useCrm } from "./useCrm";
+import { useCrm, type CrmData } from "./useCrm";
 import LostModal from "./LostModal";
 import { TaskRow } from "./TaskList";
 import { useSalesFon } from "../SalesFon";
@@ -66,11 +67,20 @@ const FIELDS: (keyof Lead)[] = [
   "note",
 ];
 
+// /leads/:id — the lead on its own page (old links, Telegram).
 export default function LeadPage() {
   const { id = "" } = useParams();
-  const navigate = useNavigate();
-  const { tasks, orders, sellers, actor, isAdmin } = useCrm();
   useSalesFon(); // the same picture as Sotuv bo'limi
+  return <LeadCard id={id} />;
+}
+
+// The lead card. `panel`: inside Sotuv bo'limi's right-side panel
+// (LeadDrawer.tsx, 2026-11-26 — like amoCRM): fields on the left, tasks and
+// the history on the right, a close button instead of «← Lidlar».
+export function LeadCard({ id, crm, panel = false, onClose }: { id: string; crm?: CrmData; panel?: boolean; onClose?: () => void }) {
+  const navigate = useNavigate();
+  const own = useCrm(!crm);
+  const { tasks, orders, sellers, actor, isAdmin } = crm || own;
   const [lead, setLead] = useState<Lead | null | undefined>(undefined);
   const [acts, setActs] = useState<LeadActivity[]>([]);
   const [form, setForm] = useState<Partial<Lead>>({});
@@ -193,12 +203,16 @@ export default function LeadPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link
-            to="/leads?v=lidlar"
-            className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900"
-          >
-            <ArrowLeft className="h-4 w-4" /> Lidlar · {lead.lead_number}
-          </Link>
+          {panel ? (
+            <div className="text-sm text-ink-500">{lead.lead_number}</div>
+          ) : (
+            <Link
+              to="/leads?v=lidlar"
+              className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900"
+            >
+              <ArrowLeft className="h-4 w-4" /> Lidlar · {lead.lead_number}
+            </Link>
+          )}
           <h1 className="mt-0.5 truncate font-display text-2xl font-bold text-ink-900">
             {title}
             {lead.interested_product_name && (
@@ -208,7 +222,7 @@ export default function LeadPage() {
             )}
           </h1>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!lead.assigned_to_email && lead.status !== "lost" && (
             <button
               type="button"
@@ -276,6 +290,11 @@ export default function LeadPage() {
               </button>
             )
           )}
+          {panel && onClose && (
+            <button type="button" onClick={onClose} aria-label="Yopish" title="Yopish (Esc)" className="rounded-xl p-2 text-ink-500 hover:bg-ink-100 hover:text-ink-900">
+              <X className="h-5 w-5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -313,8 +332,8 @@ export default function LeadPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_1fr_330px]">
-        <section className="card space-y-2.5 p-4">
+      <div className={panel ? "grid grid-cols-1 gap-4 md:grid-cols-[330px_minmax(0,1fr)] md:grid-rows-[auto_1fr]" : "grid grid-cols-1 gap-4 xl:grid-cols-[340px_1fr_330px]"}>
+        <section className={`card space-y-2.5 p-4 ${panel ? "md:col-start-1 md:row-span-2 md:row-start-1" : ""}`}>
           <div className="flex items-center justify-between">
             <h3 className="font-display text-sm font-bold text-ink-900">
               Mijoz va lid
@@ -450,7 +469,7 @@ export default function LeadPage() {
           )}
         </section>
 
-        <section className="card p-4">
+        <section className={`card p-4 ${panel ? "md:col-start-2 md:row-start-2" : ""}`}>
           <h3 className="mb-2 font-display text-sm font-bold text-ink-900">
             Tarix
           </h3>
@@ -506,7 +525,7 @@ export default function LeadPage() {
           </div>
         </section>
 
-        <section className="order-first space-y-3 xl:order-none">
+        <section className={`order-first space-y-3 ${panel ? "md:order-none md:col-start-2 md:row-start-1" : "xl:order-none"}`}>
           {needsTask(col) && !open.length && (
             <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs text-orange-900 dark:border-orange-900/50 dark:bg-orange-900/20 dark:text-orange-200">
               ⚠ Bu lidda zadacha yo'q. Har bir ochiq lidda keyingi qadam

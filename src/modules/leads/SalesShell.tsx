@@ -5,6 +5,7 @@ import { useCrm } from "./crm/useCrm";
 import CrmHome from "./crm/CrmHome";
 import LeadsBoard from "./crm/LeadsBoard";
 import CallsLog from "./CallsLog";
+import LeadDrawer from "./crm/LeadDrawer";
 import SalesControl from "./SalesControl";
 import SalesFunnel from "./SalesFunnel";
 import LostDeals from "./LostDeals";
@@ -55,6 +56,18 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
     const row = el?.parentElement;
     if (el && row && row.scrollWidth > row.clientWidth) row.scrollTo({ left: el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2, behavior: "smooth" });
   }, [section]);
+  // ?lead=ID: the lead's card in the right-side panel (step 2).
+  const leadId = params.get("lead");
+  const closeLead = () => {
+    // Opened by a click (history has it): go back, so the phone's «orqaga» and
+    // the close button do the same; a pasted link just drops the parameter.
+    if (window.history.state && window.history.state.idx > 0) window.history.back();
+    else {
+      const p = new URLSearchParams(params);
+      p.delete("lead");
+      setParams(p, { replace: true });
+    }
+  };
   const go = (s: SalesSection, nextTab?: TahlilTab) => setParams(s === "home" ? {} : nextTab ? { v: s, t: nextTab } : { v: s }, { replace: true });
 
   // Badges: new leads nobody took, tasks late or due today.
@@ -123,6 +136,7 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
         <div className="shrink-0 lg:mt-2 lg:border-t lg:border-ink-100 lg:pt-2">{fonButton}</div>
       </nav>
       <div className="min-w-0 flex-1">{body}</div>
+      {leadId && <LeadDrawer id={leadId} crm={crm} onClose={closeLead} />}
     </div>
   );
 }

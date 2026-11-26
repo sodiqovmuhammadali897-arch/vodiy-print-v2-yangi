@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useLeadHref } from "./leadLink";
 import {
   AlarmClock,
   AlertTriangle,
@@ -96,6 +97,7 @@ export default function CrmHome({
   isAdmin,
   email,
 }: Props) {
+  const leadHref = useLeadHref();
   const [period, setPeriod] = useState<PeriodKind>("today");
   const [custom, setCustom] = useState({
     from: ymd(Date.now() - 6 * 86400e3),
@@ -558,7 +560,7 @@ export default function CrmHome({
                         </span>
                         {lead ? (
                           <Link
-                            to={`/leads/${lead.id}`}
+                            to={leadHref(lead.id)}
                             onClick={() => setDrawer(null)}
                             className="font-semibold text-brand-700 hover:underline"
                           >
@@ -874,6 +876,7 @@ function LeadLine({
   onGo: () => void;
   small?: boolean;
 }) {
+  const leadHref = useLeadHref();
   if (!lead)
     return small ? null : (
       <div className="text-sm text-ink-400">Lid topilmadi</div>
@@ -882,7 +885,7 @@ function LeadLine({
   const nt = nextTask(tasks, lead.id);
   return (
     <Link
-      to={`/leads/${lead.id}`}
+      to={leadHref(lead.id)}
       onClick={onGo}
       className={`flex flex-wrap items-center gap-x-3 gap-y-0.5 ${small ? "mb-1 px-1 text-xs" : "rounded-xl border border-ink-200 px-3 py-2 text-sm hover:border-brand-300"}`}
     >
