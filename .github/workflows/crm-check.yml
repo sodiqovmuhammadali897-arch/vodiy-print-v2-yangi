@@ -53,6 +53,24 @@ jobs:
               const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
               console.log(`== open tasks: ${tasks.length}; from amoCRM ${tasks.filter((t) => t.amo_task_id).length}; overdue ${tasks.filter((t) => t.due_date < today).length}, today ${tasks.filter((t) => t.due_date === today).length}, later ${tasks.filter((t) => t.due_date > today).length}`);
               console.log(`   by seller ${JSON.stringify(count(tasks, (t) => nameOf(t.assigned_to_email)))}`);
+              // Doubles: two open leads of one amoCRM deal or one phone; one lead
+              // with two open tasks at the same day and time.
+              const openIds = new Set((await db.collection("leads").get()).docs.filter((d) => d.data().status !== "lost" && !d.data().converted_order_id).map((d) => d.id));
+              const byDeal = {}; const byPhone = {};
+              for (const d of (await db.collection("leads").get()).docs) {
+                const l = d.data();
+                if (!openIds.has(d.id)) continue;
+                for (const a of new Set([l.amo_id, ...(l.amo_ids || [])].filter(Boolean))) byDeal[a] = (byDeal[a] || 0) + 1;
+                const ph = String(l.phone || "").replace(/\D/g, "").slice(-9);
+                if (ph.length === 9) byPhone[ph] = (byPhone[ph] || 0) + 1;
+              }
+              console.log(`   doubles: deals with 2+ open leads ${Object.values(byDeal).filter((n) => n > 1).length}; phones with 2+ open leads ${Object.values(byPhone).filter((n) => n > 1).length}`);
+              const sig = {};
+              for (const t of tasks) { const k = `${t.lead_id}|${t.due_date}|${t.due_time}`; sig[k] = (sig[k] || 0) + 1; }
+              console.log(`   doubles: same lead+day+time open tasks ${Object.values(sig).filter((n) => n > 1).reduce((s, n) => s + n - 1, 0)} extra; open tasks on closed leads ${tasks.filter((t) => !openIds.has(t.lead_id)).length}`);
+              const perLead = {};
+              for (const t of tasks) perLead[t.lead_id] = (perLead[t.lead_id] || 0) + 1;
+              console.log(`   open leads without an open task ${[...openIds].filter((id) => !perLead[id]).length}; leads with 3+ open tasks ${Object.values(perLead).filter((n) => n >= 3).length}`);
               const cancelled = (await db.collection("lead_tasks").where("cancelled", "==", true).get()).size;
               console.log(`   cancelled by switchover ${cancelled}`);
               const base = (await db.collection("crm_base").get()).docs.map((d) => d.data());
