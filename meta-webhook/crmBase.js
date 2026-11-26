@@ -194,16 +194,30 @@ const create = (db, { amo, log = console } = {}) => {
     const staffByAmo = new Map(staff.filter((s) => s.amo_user_id).map((s) => [Number(s.amo_user_id), s]));
     // Who is who in notes: the staff name when linked, else amoCRM's user.
     const people = new Map([...io.users.entries()].map(([id, u]) => [id, { name: (staffByAmo.get(id) || {}).full_name || u.name }]));
+    // Notes are read per deal / contact (50 ids a request): reading the whole
+    // notes list stopped at old ones (2026-11-26: newest call 17.09).
+    let failed = 0;
+    const notesOf = async (entity, ids, types) => {
+      const out = [];
+      for (let i = 0; i < ids.length; i += 50) {
+        try {
+          out.push(...(await io.pageAll(`${entity}/notes`, { "filter[entity_id][]": ids.slice(i, i + 50), "filter[note_type][]": types }, "notes")));
+        } catch {
+          failed++;
+        }
+      }
+      return out;
+    };
+    const dealIdList = deals.map((d) => Number(d.id));
+    const contactIdList = [...contacts.keys()];
     // Managers' text notes on these deals.
-    const dealIds = new Set(deals.map((d) => Number(d.id)));
     const notesByDeal = new Map();
-    for (const n of await io.pageAll("leads/notes", { "filter[note_type][]": ["common"] }, "notes").catch(() => [])) {
+    for (const n of await notesOf("leads", dealIdList, ["common"])) {
       const id = Number(n.entity_id);
-      if (!dealIds.has(id)) continue;
       if (!notesByDeal.has(id)) notesByDeal.set(id, []);
       notesByDeal.get(id).push(amoNote(n, people));
     }
-    // Every call (Mois Zvonki notes on deals and contacts), by the phone.
+    // Every call (Mois Zvonki notes on the deals and their contacts), by phone.
     const dealPhone = new Map();
     const contactPhone = new Map([...contacts.entries()].map(([id, c]) => [id, digitsOf(c.phone)]));
     for (const d of deals) {
@@ -213,8 +227,8 @@ const create = (db, { amo, log = console } = {}) => {
     }
     const callsByPhone = new Map();
     const seen = new Set();
-    for (const entity of ["leads", "contacts"]) {
-      for (const n of await io.pageAll(`${entity}/notes`, { "filter[note_type][]": ["call_in", "call_out"] }, "notes").catch(() => [])) {
+    for (const [entity, ids] of [["leads", dealIdList], ["contacts", contactIdList]]) {
+      for (const n of await notesOf(entity, ids, ["call_in", "call_out"])) {
         const c = amoCall({ ...n, entity_type: entity[0] }, people);
         if (seen.has(c.id)) continue;
         seen.add(c.id);
@@ -224,13 +238,14 @@ const create = (db, { amo, log = console } = {}) => {
         callsByPhone.get(ph).push(c);
       }
     }
+    if (failed) log.log(`crm_base: ${failed} note request(s) failed`);
     const rows = deals.map((deal) => {
       const cs = (deal._embedded || {}).contacts || [];
       const main = cs.find((c) => c.is_main) || cs[0];
       const s = staffByAmo.get(Number(deal.responsible_user_id));
       return { deal, contact: main ? contacts.get(Number(main.id)) || null : null, user: s ? s.full_name || s.email : (io.users.get(Number(deal.responsible_user_id)) || {}).name || "", staffEmail: s ? s.email : "" };
     });
-    return { rows, callsByPhone, notesByDeal };
+    return { rows, callsByPhone, notesByDeal, failed };
   };
 
   const preview = async () => {
@@ -265,7 +280,7 @@ const create = (db, { amo, log = console } = {}) => {
         done++;
       }
       if (inBatch) await batch.commit();
-      const result = { customers: total, deals: counts.withPhone, noPhone: counts.noPhone, won: counts.won, lost: counts.lost, calls: counts.calls, recorded: counts.recorded, notes: counts.notes };
+      const result = { customers: total, deals: counts.withPhone, noPhone: counts.noPhone, won: counts.won, lost: counts.lost, calls: counts.calls, recorded: counts.recorded, notes: counts.notes, failed: f.failed };
       await META.set({ state: "done", finished_at: new Date().toISOString(), progress: { done, total }, result, preview: null }, { merge: true });
       log.log(`crm_base amo import: ${JSON.stringify(result)}`);
       return result;
