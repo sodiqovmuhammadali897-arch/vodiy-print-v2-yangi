@@ -75,6 +75,8 @@ jobs:
             (async () => {
               const st = (await db.collection("crm_meta").doc("meta_poll").get()).data();
               console.log(`== form poll: ${st ? `since ${new Date(st.since * 1000).toISOString()}; last run ${st.last_run || "—"}; last count ${st.last_count ?? "—"}; last error ${st.last_error || "—"}` : "not started"}`);
+              const pb = (await db.collection("crm_meta").doc("portrait_backfill").get()).data();
+              console.log(`== portrait backfill (counts only): ${pb ? JSON.stringify(pb) : "not run yet"}`);
               const day = new Date(Date.now() - 24 * 3600e3).toISOString();
               const ml = (await db.collection("meta_leads").where("at", ">=", day).get()).docs.map((d) => d.data());
               console.log(`meta_leads last 24h: ${ml.length} (webhook ${ml.filter((x) => x.via === "webhook").length}, poll ${ml.filter((x) => x.via === "poll").length})`);
