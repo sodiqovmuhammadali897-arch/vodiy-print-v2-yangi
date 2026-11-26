@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { BarChart3, CheckSquare, LayoutDashboard, Phone, Rows3 } from "lucide-react";
+import { BarChart3, CheckSquare, LayoutDashboard, Phone, Rows3, Users } from "lucide-react";
 import { useCrm } from "./crm/useCrm";
 import CrmHome from "./crm/CrmHome";
 import LeadsBoard from "./crm/LeadsBoard";
 import CallsLog from "./CallsLog";
+import CrmAnalysis from "./crm/CrmAnalysis";
+import AmoImportCard from "./crm/AmoImportCard";
+import { useAuth } from "../../lib/AuthContext";
+import { setCrmOpen, useCrmOpen } from "./crm/crmOpen";
 import LeadDrawer from "./crm/LeadDrawer";
 import SalesControl from "./SalesControl";
 import SalesFunnel from "./SalesFunnel";
@@ -17,7 +21,7 @@ import { boardStats, isOldLead } from "../../lib/crm";
 // tasks and calls are read once here for every section. «Tahlil» keeps
 // the amoCRM reports for the month of the move.
 export type SalesSection = "home" | "lidlar" | "zadachalar" | "qongiroqlar" | "tahlil";
-type TahlilTab = "voronka" | "yutqazilgan" | "nazorat" | "amo";
+type TahlilTab = "erp" | "voronka" | "yutqazilgan" | "nazorat" | "amo";
 
 const SECTIONS: { key: SalesSection; label: string; icon: ReactNode }[] = [
   { key: "home", label: "Bosh sahifa", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -27,19 +31,20 @@ const SECTIONS: { key: SalesSection; label: string; icon: ReactNode }[] = [
   { key: "tahlil", label: "Tahlil", icon: <BarChart3 className="h-4 w-4" /> },
 ];
 const TAHLIL: { key: TahlilTab; label: string }[] = [
-  { key: "voronka", label: "Voronka" },
-  { key: "yutqazilgan", label: "Yo'qotilganlar" },
+  { key: "erp", label: "ERP tahlili" },
+  { key: "voronka", label: "Voronka (amo)" },
+  { key: "yutqazilgan", label: "Yo'qotilganlar (amo)" },
   { key: "nazorat", label: "Menejerlar kuni" },
   { key: "amo", label: "amoCRM hisobotlari" },
 ];
 
 // Old links (?v=voronka …) land in the new place.
 export function sectionOf(v: string | null): { section: SalesSection; tab: TahlilTab } {
-  if (v === "lidlar" || v === "zadachalar" || v === "qongiroqlar" || v === "home") return { section: v, tab: "voronka" };
+  if (v === "lidlar" || v === "zadachalar" || v === "qongiroqlar" || v === "home") return { section: v, tab: "erp" };
   if (v === "voronka" || v === "yutqazilgan" || v === "nazorat" || v === "amo") return { section: "tahlil", tab: v };
   if (v === "control") return { section: "tahlil", tab: "nazorat" };
-  if (v === "tahlil") return { section: "tahlil", tab: "voronka" };
-  return { section: "home", tab: "voronka" };
+  if (v === "tahlil") return { section: "tahlil", tab: "erp" };
+  return { section: "home", tab: "erp" };
 }
 
 export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButton: ReactNode }) {
@@ -47,8 +52,21 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
   const v = params.get("v");
   const t = params.get("t");
   const { section, tab: fromV } = sectionOf(v);
-  const tab = (TAHLIL.find((x) => x.key === t)?.key || fromV) as TahlilTab;
+  const wanted = (TAHLIL.find((x) => x.key === t)?.key || fromV) as TahlilTab;
   const crm = useCrm();
+  const auth = useAuth();
+  // The owner (an admin who is not a manager's account) moves amoCRM's deals.
+  const isOwner = auth.isAdmin && !auth.staff?.report_manager_id;
+  const openToManagers = useCrmOpen();
+  // Managers see the ERP analysis and their own amoCRM numbers (the other
+  // amoCRM reports are admin-only data).
+  const tabs = crm.isAdmin ? TAHLIL : TAHLIL.filter((x) => x.key === "erp" || x.key === "amo");
+  const tab: TahlilTab = tabs.some((x) => x.key === wanted) ? wanted : "erp";
+  const toggleManagers = async () => {
+    const next = !openToManagers;
+    if (!window.confirm(next ? "Yangi Sotuv bo'limi managerlarga ochilsinmi? Ular o'z lidlari, zadachalari va qo'ng'iroqlarini shu yerda ko'radi (19:00 dan keyin, yangi versiya bilan)." : "Managerlarga yopilsinmi? Ular yana faqat amoCRM ko'rsatkichlarini ko'radi.")) return;
+    await setCrmOpen(next, auth.staff?.full_name || crm.email).catch((e) => window.alert(e instanceof Error ? e.message : "Bo'lmadi"));
+  };
   // Phones: the menu is a row that scrolls — keep the chosen item in view.
   const activeRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -89,7 +107,10 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
         <div className="h-40 animate-pulse rounded-3xl bg-ink-100/70" />
       )
     ) : section === "lidlar" ? (
-      <LeadsBoard mode="board" crm={crm} />
+      <div className="space-y-4">
+        {isOwner && <AmoImportCard />}
+        <LeadsBoard mode="board" crm={crm} />
+      </div>
     ) : section === "zadachalar" ? (
       <LeadsBoard mode="tasks" crm={crm} />
     ) : section === "qongiroqlar" ? (
@@ -99,15 +120,15 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="mr-2 font-display text-2xl font-bold text-ink-900">Tahlil</h1>
           <div className="inline-flex max-w-full overflow-x-auto rounded-xl border border-ink-200 bg-surface p-1">
-            {TAHLIL.map((x) => (
+            {tabs.map((x) => (
               <button key={x.key} type="button" onClick={() => go("tahlil", x.key)} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === x.key ? "bg-brand-600 text-white shadow-sm" : "text-ink-500 hover:text-ink-900"}`}>
                 {x.label}
               </button>
             ))}
           </div>
-          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">amoCRM ma'lumoti · o'tish oyida</span>
+          {tab !== "erp" && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">amoCRM ma'lumoti · o'tish oyida</span>}
         </div>
-        {tab === "voronka" ? <SalesFunnel /> : tab === "yutqazilgan" ? <LostDeals /> : tab === "nazorat" ? <SalesControl /> : amo}
+        {tab === "erp" ? <CrmAnalysis crm={crm} /> : tab === "voronka" ? <SalesFunnel /> : tab === "yutqazilgan" ? <LostDeals /> : tab === "nazorat" ? <SalesControl /> : amo}
       </div>
     );
 
@@ -133,7 +154,14 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
             </button>
           );
         })}
-        <div className="shrink-0 lg:mt-2 lg:border-t lg:border-ink-100 lg:pt-2">{fonButton}</div>
+        <div className="flex shrink-0 gap-1 lg:mt-2 lg:flex-col lg:border-t lg:border-ink-100 lg:pt-2">
+          {fonButton}
+          {isOwner && openToManagers !== null && (
+            <button type="button" onClick={() => void toggleManagers()} title="Yangi Sotuv bo'limi managerlarga ham ko'rinsinmi" className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-semibold ${openToManagers ? "border-emerald-300 text-emerald-700 dark:text-emerald-300" : "border-ink-200 text-ink-500"}`}>
+              <Users className="h-4 w-4" /> Managerlar: {openToManagers ? "ochiq" : "yopiq"}
+            </button>
+          )}
+        </div>
       </nav>
       <div className="min-w-0 flex-1">{body}</div>
       {leadId && <LeadDrawer id={leadId} crm={crm} onClose={closeLead} />}

@@ -19,7 +19,7 @@ function pickOpenLead(leads, phone, orderStatus = {}) {
     (l) =>
       normalizePhone(l.phone) === target &&
       l.status !== "lost" &&
-      String(l.created_at || "") >= CRM_START &&
+      (String(l.created_at || "") >= CRM_START || Boolean(l.amo_id)) &&
       !(l.converted_order_id && CLOSED_ORDER.has(orderStatus[l.converted_order_id])),
   );
   open.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));

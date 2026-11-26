@@ -1169,7 +1169,9 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   };
   const stop = () => clearInterval(timer);
 
-  return { start, stop, tick, enabled, handleCallback, _test: { leads, calls, users, statuses, tasks, misses } };
+  // amoImport.js (step 4): read-only access for moving open deals to the ERP.
+  const importApi = () => ({ pageAll, loadMeta, statuses, users, sources });
+  return { start, stop, tick, enabled, handleCallback, importApi, _test: { leads, calls, users, statuses, tasks, misses } };
 };
 
 module.exports = { create, computeStats, hostOf, toLead, toCall, lossOf };

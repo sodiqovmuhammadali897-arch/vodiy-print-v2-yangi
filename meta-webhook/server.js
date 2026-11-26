@@ -85,6 +85,8 @@ const salesKpi = require("./salesKpi").create(db, { notify: Boolean(process.env.
 const guideFacts = require("./guideFacts").create(db);
 // amoCRM, read only — see amocrm.js; feeds the "amoCRM tahlil" tab.
 const amocrm = require("./amocrm").create(db, { notify: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null });
+// amoCRM's open deals → ERP leads, started by the owner from the app (amoImport.js).
+require("./amoImport").create(db, { amo: amocrm }).register(app);
 // Targetolog — Meta ads with marketolog → admin approval; see targetolog.js.
 const targetolog = groups ? require("./targetolog").create(db, { route: groups.route }) : null;
 // Marketolog video tahlili — see content.js (bot + site upload).

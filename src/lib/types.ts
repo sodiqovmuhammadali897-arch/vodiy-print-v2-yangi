@@ -790,6 +790,9 @@ export type Lead = {
   ready_date?: string | null;
   address?: string;
   tags?: string[];
+  // Moved over from amoCRM (step 4, meta-webhook/amoImport.js): its deal id.
+  amo_id?: number | null;
+  amo_ids?: number[]; // every amoCRM deal joined to this lead (same phone)
 };
 
 export type LeadTaskType =

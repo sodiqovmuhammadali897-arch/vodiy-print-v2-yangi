@@ -355,6 +355,13 @@ service cloud.firestore {
     match /amo_task_misses/{id} {
       allow read, write: if false;
     }
+    // Sotuv bo'limi switches (step 4, 2026-11-26): open_to_managers — the
+    // new section for managers too. Everyone reads, the owner sets.
+    match /crm_settings/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
     match /amo_meta/{id} {
       allow read: if isStaff();
       allow write: if false;

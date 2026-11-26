@@ -623,6 +623,34 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   (`tasksDoneByTalk`) with «📞 Gaplashildi (N daq) — … qo'ng'iroq», and adds
   Qayta aloqa tomorrow 10:00 if nothing stays open. Outgoing calls were
   already put on the lead's timeline.
+- **Step 4 — built 2026-11-26** (owner: «4-qadamni boshla»):
+  - **Tahlil → «ERP tahlili»** (first tab; amoCRM tabs renamed «(amo)»):
+    `src/lib/crmAnalysis.ts` + `crm/CrmAnalysis.tsx` — the period's lead
+    cohort (Bu oy / O'tgan oy / 30 / 90 kun, by created_at): leads, turned
+    into orders (conversion), sales, lost; funnel «reached stage» (a lost
+    lead counts only in the first bar — its last stage isn't kept); loss
+    reasons; sources and managers tables. Every number opens its leads.
+  - **amoCRM → ERP import** (`meta-webhook/amoImport.js`; owner only — admin
+    and not a manager account): Lidlar → «amoCRM'dan ko'chirish» card
+    (`crm/AmoImportCard.tsx`). `POST /webhooks/crm/amo-import/preview`
+    (counts only, written to `crm_meta/amo_import.preview`) and `/run`
+    (background, progress in `crm_meta/amo_import`). Open deals (all
+    statuses but 142/143) with main contact name/phone, stage → ERP status,
+    responsible → staff by `amo_user_id`, custom fields by name, Cyrillic →
+    Latin (`latin`), price, tags; open amoCRM tasks → lead_tasks; Dizayn /
+    Ishlab chiqarish deals matched to the phone's ERP order. Leads keep
+    `amo_id` + `amo_ids` (other deals of the same phone joined to it), so
+    pressing again adds only new deals. A phone with an open ERP lead →
+    linked, blanks filled. `isOldLead` and `callLeads.pickOpenLead` treat
+    `amo_id` leads as current although created before CRM_START. amoCRM is
+    never written to. `amocrm.js importApi()` exposes pageAll/loadMeta.
+  - **Managers switch:** `crm_settings/main.open_to_managers` (rules: staff
+    read, admin write; `crm/crmOpen.ts`), the owner's button «Managerlar:
+    yopiq/ochiq» under «Fon». On → managers get SalesShell with their own
+    leads/tasks/calls; Tahlil shows them only «ERP tahlili» and «amoCRM
+    hisobotlari»; `/leads/:id` lets them in. Default OFF.
+  - Not yet (step 5): KPI's task condition and the 09:00/10:00/15:00
+    messages from ERP tasks; a week in parallel, then stop the amoCRM sync.
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an

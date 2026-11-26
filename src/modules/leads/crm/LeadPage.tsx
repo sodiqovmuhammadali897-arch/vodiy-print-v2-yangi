@@ -42,6 +42,7 @@ import type { Lead, LeadActivity } from "../../../lib/types";
 import { useCrm, type CrmData } from "./useCrm";
 import LostModal from "./LostModal";
 import { TaskRow } from "./TaskList";
+import { useCrmOpen } from "./crmOpen";
 import { useSalesFon } from "../SalesFon";
 
 // One lead: its stage, fields (amoCRM's), timeline and tasks.
@@ -81,6 +82,7 @@ export function LeadCard({ id, crm, panel = false, onClose }: { id: string; crm?
   const navigate = useNavigate();
   const own = useCrm(!crm);
   const { tasks, orders, sellers, actor, isAdmin } = crm || own;
+  const openToManagers = useCrmOpen();
   const [lead, setLead] = useState<Lead | null | undefined>(undefined);
   const [acts, setActs] = useState<LeadActivity[]>([]);
   const [form, setForm] = useState<Partial<Lead>>({});
@@ -138,8 +140,8 @@ export function LeadCard({ id, crm, panel = false, onClose }: { id: string; crm?
     [acts],
   );
 
-  // Only the owner uses the ERP CRM for now.
-  if (!isAdmin) return <Navigate to="/leads" replace />;
+  // Managers only once the owner opened the section (crmOpen.ts).
+  if (!isAdmin && openToManagers === false) return <Navigate to="/leads" replace />;
   if (lead === undefined)
     return (
       <div className="flex justify-center py-16 text-ink-500">
