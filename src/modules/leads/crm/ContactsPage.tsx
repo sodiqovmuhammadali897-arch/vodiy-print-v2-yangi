@@ -6,6 +6,7 @@ import { CONTACT_TYPES, contactProblem, contactType, phoneDigits, type ContactTy
 import { markCrmLost, type Actor } from "../../../lib/crmService";
 import type { CrmData } from "./useCrm";
 import { useContacts } from "./useContacts";
+import { sectionLabel } from "../../../lib/crmSettings";
 
 // Sotuv bo'limi → Kontaktlar (2026-11-26; the owner: «ishxona nomerlari,
 // shaxsiy kontaktlarni kirgizib qo'ysak, u nomerlar zadacha yoki yangi
@@ -123,7 +124,7 @@ export default function ContactsPage({ crm }: { crm: CrmData }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">Kontaktlar</h1>
+          <h1 className="font-display text-2xl font-bold text-ink-900">{sectionLabel("kontaktlar")}</h1>
           <p className="max-w-3xl text-sm text-ink-500">Bu raqamlar lid emas: qo'ng'iroq kelsa ham yangi lid ochilmaydi, zadacha qo'yilmaydi, «qaytarilmagan» ro'yxatiga va gaplashgan vaqtga qo'shilmaydi.</p>
         </div>
         <button type="button" className="btn-primary" onClick={() => setModal({ editing: null })}>

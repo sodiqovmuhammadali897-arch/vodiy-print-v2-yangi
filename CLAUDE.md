@@ -741,6 +741,25 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   «📇 Name · type · kontakt», keeps them out of the tiles and «qayta
   qo'ng'iroq qiling», and has «📇 Kontaktga qo'shish» on other numbers;
   Bosh sahifa's Bugungi sotuv counts no contact calls (talk time included).
+- **Sotuv bo'limi → Sozlamalar — 2026-11-26** (admins; owner: «etablarni
+  almashtira olishim kerak, nomlarini; qo'ng'iroqlar, zadachalar nomini ham;
+  kontaktlardagi turlarni ham nomini o'zgartirish, qo'shish»):
+  `crm/CrmSettings.tsx` saves `crm_settings/main` {stages [{key,label,
+  color}], sections {lidlar…sozlamalar}, task_types [{key,label,icon}],
+  contact_types [...]}; `src/lib/crmSettings.ts applyCrmSettings` (run by
+  `useCrm` on every change; `settingsVersion` re-renders) rewrites in place
+  `CRM_COLUMNS`/`MANUAL_COLUMNS` (`applyStages`: «new» first, built-in
+  manual stages always kept, added ones `st_*` anywhere after it; advance /
+  production / delivered last — names and colours only), `CRM_TASK_TYPES`
+  (`applyTaskTypes`), `CONTACT_TYPES` (`applyContactTypes`) and the section
+  names (`sectionLabel`, used by the menu and the page titles).
+  `CrmColumn` is now a string; `columnOf` takes any manual stage, sends a
+  removed stage's leftovers to «accepted»; `moveToColumn` uses
+  MANUAL_COLUMNS. Built-in stages/types are renamed, not removed; removing an
+  added stage asks where its leads go (moved on save). Server: erpTasks
+  `needsTask` = not lost, no order, not a later status (so added stages
+  count); task names in Telegram follow `task_types` (`leadTaskBot
+  setTaskTypes/typeInfo`, refreshed by erpTasks each minute).
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an

@@ -28,6 +28,7 @@ import { useLeadHref } from "./leadLink";
 import NewLeadModal from "./NewLeadModal";
 import LostModal from "./LostModal";
 import TaskList from "./TaskList";
+import { sectionLabel } from "../../../lib/crmSettings";
 import CrmHome from "./CrmHome";
 
 // Sotuv bo'limi → «Lidlar»: the ERP's own amoCRM-like board — a column per
@@ -46,7 +47,7 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
   const navigate = useNavigate();
   const leadHref = useLeadHref();
   const own = useCrm(!crm);
-  const { leads, tasks, orders, sellers, actor, isAdmin, email, error } =
+  const { leads, tasks, orders, sellers, actor, isAdmin, email, error, settingsVersion } =
     crm || own;
   const [ownView, setView] = useState<"home" | "board" | "tasks">("home");
   const view = mode || ownView;
@@ -101,7 +102,7 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
         ),
       );
     return m;
-  }, [mine, myTasks, orders, problems]);
+  }, [mine, myTasks, orders, problems, settingsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // «✅ Qabul qildim» on an unassigned card: the lead becomes mine.
   const claim = async (lead: Lead) => {
@@ -167,7 +168,7 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink-900">
-            {view === "home" ? "Sotuv — bosh sahifa" : view === "tasks" && mode ? "Zadachalar" : "Lidlar"}
+            {view === "home" ? "Sotuv — bosh sahifa" : view === "tasks" && mode ? sectionLabel("zadachalar") : sectionLabel("lidlar")}
           </h1>
           <p className="text-sm text-ink-500">
             {view === "home"

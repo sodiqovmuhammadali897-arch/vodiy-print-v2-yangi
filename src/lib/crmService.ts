@@ -5,7 +5,7 @@ import { logLeadActivity } from "./leadActivity";
 import { convertLeadToCustomer } from "./leadConversion";
 import { changeOrderStatus } from "./orderStatus";
 import { nextLeadNumber } from "./numbering";
-import { columnLabel, taskTypeInfo, type CrmColumn } from "./crm";
+import { MANUAL_COLUMNS, columnLabel, taskTypeInfo, type CrmColumn } from "./crm";
 import type { Lead, LeadTask } from "./types";
 
 export type Actor = { email: string; name: string };
@@ -75,7 +75,7 @@ export async function updateCrmLead(id: string, patch: Partial<Lead>): Promise<v
 // (lib/leadConversion); later columns move the order's status.
 export async function moveToColumn(lead: Lead, col: CrmColumn, actor: Actor): Promise<{ orderId?: string }> {
   const t = now();
-  if (col === "new" || col === "accepted" || col === "info_given" || col === "offer") {
+  if (MANUAL_COLUMNS.includes(col)) {
     if (lead.converted_order_id) throw new Error("Bu lid buyurtmaga aylangan — bosqichi buyurtma holatidan olinadi.");
     if (lead.status === col) return {};
     await updateOne("leads", lead.id, { status: col, last_contact_at: t, first_contact_at: lead.first_contact_at || (col !== "new" ? t : null), updated_at: t });

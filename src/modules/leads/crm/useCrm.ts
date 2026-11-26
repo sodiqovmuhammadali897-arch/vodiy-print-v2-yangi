@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { listAll, subscribeAll, subscribeWhere } from "../../../lib/firestoreDb";
+import { listAll, subscribeAll, subscribeOne, subscribeWhere } from "../../../lib/firestoreDb";
+import { applyCrmSettings, type CrmSettingsDoc } from "../../../lib/crmSettings";
 import { useAuth } from "../../../lib/AuthContext";
 import type { Staff } from "../../../lib/permissions";
 import type { Lead, LeadTask, Order } from "../../../lib/types";
@@ -17,6 +18,17 @@ export function useCrm(enabled = true) {
   const [orders, setOrders] = useState<Record<string, Pick<Order, "status" | "order_number" | "total_amount" | "created_at">>>({});
   const [staff, setStaff] = useState<Staff[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Sotuv bo'limi → Sozlamalar: stages, names, types (crmSettings.ts). A new
+  // version re-renders every CRM screen with the owner's names.
+  const [settingsVersion, setSettingsVersion] = useState(0);
+  useEffect(
+    () =>
+      subscribeOne<CrmSettingsDoc>("crm_settings", "main", (d) => {
+        applyCrmSettings(d);
+        setSettingsVersion((v) => v + 1);
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!enabled) return;
@@ -49,7 +61,7 @@ export function useCrm(enabled = true) {
         .sort((a, b) => a.name.localeCompare(b.name)),
     [staff],
   );
-  return { leads, tasks, orders, sellers, actor, isAdmin: auth.isAdmin, email, error };
+  return { leads, tasks, orders, sellers, actor, isAdmin: auth.isAdmin, email, error, settingsVersion };
 }
 export type CrmData = ReturnType<typeof useCrm>;
 

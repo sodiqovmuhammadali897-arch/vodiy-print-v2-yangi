@@ -12,7 +12,12 @@ export const CRM_START = "2026-11-12";
 // are never «old».
 export const isOldLead = (l: { created_at: string; amo_id?: number | null }) => !l.amo_id && String(l.created_at || "") < CRM_START;
 
-export type CrmColumn = "new" | "accepted" | "info_given" | "offer" | "advance" | "production" | "delivered";
+// A stage's key: the built-in ones below, or one the owner added in Sotuv
+// bo'limi → Sozlamalar (2026-11-26; crmSettings.ts applies the saved order,
+// names and colours to these lists at run time).
+export type CrmColumn = string;
+export const ORDER_STAGE_KEYS = ["advance", "production", "delivered"];
+export const BUILTIN_MANUAL_KEYS = ["new", "accepted", "info_given", "offer"];
 
 // amoCRM: Неразобранное → Қабул Қилинди → маълумот берилди → Таклиф Юборилди
 // → Дизайн/аванс → ишлаб чикариш → етказилди (+ Муваффақиятсиз).
@@ -29,7 +34,26 @@ export const columnLabel = (c: CrmColumn) => CRM_COLUMNS.find((x) => x.key === c
 
 // The stages a manager sets by hand; from «Dizayn / avans» on the lead has
 // an order and its column follows the order's status.
-export const MANUAL_COLUMNS: CrmColumn[] = ["new", "accepted", "info_given", "offer"];
+export const MANUAL_COLUMNS: CrmColumn[] = [...BUILTIN_MANUAL_KEYS];
+export const DEFAULT_STAGES = CRM_COLUMNS.map((c) => ({ ...c }));
+
+// The owner's saved stages → CRM_COLUMNS and MANUAL_COLUMNS (in place, so
+// every importer sees them): «Yangi» first, then the manual ones in the
+// saved order (the built-in ones always kept), then the three that follow
+// the order — their names and colours only.
+export function applyStages(saved?: { key: string; label?: string; color?: string }[] | null) {
+  const base = new Map(DEFAULT_STAGES.map((c) => [c.key, c]));
+  const list = (saved || []).filter((x) => x && x.key);
+  const pick = (k: string) => {
+    const x = list.find((y) => y.key === k) || base.get(k) || { key: k, label: k, color: "#94a3b8" };
+    return { key: k, label: String(x.label || base.get(k)?.label || k), color: String(x.color || base.get(k)?.color || "#94a3b8") };
+  };
+  const manual = list.map((x) => x.key).filter((k) => k !== "new" && !ORDER_STAGE_KEYS.includes(k));
+  for (const k of BUILTIN_MANUAL_KEYS) if (k !== "new" && !manual.includes(k)) manual.push(k);
+  const keys = ["new", ...new Set(manual)];
+  CRM_COLUMNS.splice(0, CRM_COLUMNS.length, ...keys.map(pick), ...ORDER_STAGE_KEYS.map(pick));
+  MANUAL_COLUMNS.splice(0, MANUAL_COLUMNS.length, ...keys);
+}
 
 const fromOrder = (s: OrderStatus): CrmColumn => {
   if (s === "sent_to_production" || s === "production" || s === "quality_control" || s === "ready" || s === "ready_to_deliver") return "production";
@@ -39,7 +63,7 @@ const fromOrder = (s: OrderStatus): CrmColumn => {
 
 // Where a lead sits on the board; null = lost or its order was cancelled.
 export function columnOf(lead: Pick<Lead, "status" | "converted_order_id">, orders: Record<string, Pick<Order, "status">>): CrmColumn | null {
-  const s: LeadStatus = lead.status;
+  const s: string = lead.status as LeadStatus;
   if (s === "lost") return null;
   if (lead.converted_order_id) {
     const o = orders[lead.converted_order_id];
@@ -48,8 +72,10 @@ export function columnOf(lead: Pick<Lead, "status" | "converted_order_id">, orde
     return fromOrder(o.status);
   }
   if (s === "telegram") return "info_given"; // the first version's stage
-  if (s === "new" || s === "accepted" || s === "info_given" || s === "offer") return s;
-  return "advance";
+  if (MANUAL_COLUMNS.includes(s)) return s;
+  // the first version's later stages (design, production …) without an order
+  if (["advance", "design", "production", "ready", "delivered"].includes(s)) return "advance";
+  return "accepted"; // a stage that was removed
 }
 
 // A task's due moment in Tashkent (UTC+5), as an epoch.
@@ -162,7 +188,13 @@ export const CRM_TASK_TYPES: { key: string; label: string; icon: string }[] = [
   { key: "follow_up", label: "Qayta aloqa", icon: "🔁" },
   { key: "other", label: "Boshqa", icon: "•" },
 ];
-export const taskTypeInfo = (k: string) => CRM_TASK_TYPES.find((t) => t.key === k) || CRM_TASK_TYPES[CRM_TASK_TYPES.length - 1];
+export const DEFAULT_TASK_TYPES = CRM_TASK_TYPES.map((t) => ({ ...t }));
+export const taskTypeInfo = (k: string) => CRM_TASK_TYPES.find((t) => t.key === k) || DEFAULT_TASK_TYPES.find((t) => t.key === k) || { key: k, label: k === "other" ? "Boshqa" : "Zadacha", icon: "•" };
+// The owner's task types (Sozlamalar) → CRM_TASK_TYPES, in place.
+export function applyTaskTypes(saved?: { key: string; label?: string; icon?: string }[] | null) {
+  const list = (saved || []).filter((x) => x && x.key && x.label);
+  CRM_TASK_TYPES.splice(0, CRM_TASK_TYPES.length, ...(list.length ? list.map((x) => ({ key: x.key, label: String(x.label), icon: String(x.icon || "•") })) : DEFAULT_TASK_TYPES.map((t) => ({ ...t }))));
+}
 
 // Search across name, brand, phone digits and LID number.
 export function matchesLead(l: Pick<Lead, "full_name" | "brand" | "phone" | "lead_number">, q: string): boolean {

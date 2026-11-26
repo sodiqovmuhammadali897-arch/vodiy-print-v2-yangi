@@ -27,8 +27,12 @@ const GRACE = 60e3;
 const STALE_DAYS = 3;
 const STATS_EVERY = 30 * 60e3;
 const SITE = process.env.SITE_URL || "https://printvodiy.uz";
-const TYPES = { call: "Qo'ng'iroq qilish", telegram: "Telegramdan yozish", send_price: "Narx / taklif yuborish", design_approval: "Maket tasdiqlatish", advance_reminder: "Avansni eslatish", follow_up: "Qayta aloqa", ready_notice: "Tayyorligini aytish", other: "Zadacha" };
-const MANUAL = new Set(["new", "accepted", "info_given", "offer", "telegram"]);
+// Task names: the owner's (Sozlamalar), else the built-in ones (leadTaskBot.js).
+const taskName = (k) => require("./leadTaskBot").typeInfo(k)[1];
+// Statuses that mean the lead went on to an order (the first version's too);
+// every other status — the built-in stages and the ones the owner added in
+// Sozlamalar — is a stage the seller moves by hand.
+const LATER = new Set(["advance", "design", "production", "ready", "delivered", "lost"]);
 
 const dayOf = (ms) => new Date(ms + TZ).toISOString().slice(0, 10);
 const hmOf = (ms) => new Date(ms + TZ).toISOString().slice(11, 16);
@@ -37,7 +41,7 @@ const dueAt = (t) => Date.parse(`${t.due_date}T${/^\d{2}:\d{2}$/.test(t.due_time
 const isOld = (l) => !l.amo_id && String(l.created_at || "") < CRM_START;
 const key = (e) => String(e || "").trim().toLowerCase();
 // An open lead whose next step is the seller's: not lost, no order yet.
-const needsTask = (l) => l && !isOld(l) && l.status !== "lost" && !l.converted_order_id && MANUAL.has(l.status || "new");
+const needsTask = (l) => l && !isOld(l) && !l.converted_order_id && !LATER.has(l.status || "new");
 
 const empty = () => ({ due: 0, on_time: 0, late: 0, pct: null, overdue_open: 0, past_open: 0, today_due: 0, today_open: 0, tomorrow_due: 0, postponed_today: 0, no_task_leads: 0 });
 
@@ -124,7 +128,7 @@ function dealLists(leads, tasks, now) {
 
 const mln = (n) => (n >= 1e6 ? ` — ${String(Math.round(n / 1e5) / 10).replace(".", ",")} mln` : n ? ` — ${Math.round(n / 1000)} ming` : "");
 const link = (id) => `${SITE}/leads?v=lidlar&lead=${id}`;
-const taskLine = (t, lead) => `• ${t.due_time && t.due_time !== "23:59" ? `${t.due_time} ` : ""}${TYPES[t.type] || "Zadacha"} — «${(lead && (lead.brand || lead.full_name)) || t.lead_name || "lid"}»${t.note ? ` (${t.note})` : ""}`;
+const taskLine = (t, lead) => `• ${t.due_time && t.due_time !== "23:59" ? `${t.due_time} ` : ""}${taskName(t.type)} — «${(lead && (lead.brand || lead.full_name)) || t.lead_name || "lid"}»${t.note ? ` (${t.note})` : ""}`;
 const cut = (lines, max) => (lines.length > max ? [...lines.slice(0, max), `… yana ${lines.length - max} ta`] : lines);
 
 // 09:00 — today's tasks, the overdue ones, leads without a task.
@@ -190,6 +194,7 @@ const create = (db, { telegram = null } = {}) => {
     if (Date.now() - mainAt < 60e3) return main;
     const d = (await db.collection("crm_settings").doc("main").get()).data() || {};
     main = d.task_source === "erp";
+    require("./leadTaskBot").setTaskTypes(d.task_types);
     mainAt = Date.now();
     return main;
   };

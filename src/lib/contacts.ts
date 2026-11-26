@@ -7,7 +7,9 @@
 // (meta-webhook/contacts.js).
 import type { CallRow } from "./crmDash";
 
-export type ContactType = "office" | "staff" | "supplier" | "personal";
+// Built-in: office, staff, supplier, personal; the owner may add more and
+// rename them (Sotuv bo'limi → Sozlamalar).
+export type ContactType = string;
 export type CrmContact = {
   id: string;
   name: string;
@@ -28,7 +30,15 @@ export const CONTACT_TYPES: { key: ContactType; label: string; icon: string; cls
   { key: "supplier", label: "Yetkazib beruvchi / kuryer", icon: "🚚", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200" },
   { key: "personal", label: "Shaxsiy", icon: "🏠", cls: "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200" },
 ];
-export const contactType = (k: string) => CONTACT_TYPES.find((t) => t.key === k) || CONTACT_TYPES[0];
+const TYPE_COLORS = ["bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200", "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200", "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200", "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200", "bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200", "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200"];
+export const DEFAULT_CONTACT_TYPES = CONTACT_TYPES.map((t) => ({ ...t }));
+export const contactType = (k: string) => CONTACT_TYPES.find((t) => t.key === k) || { key: k, label: "Boshqa", icon: "📇", cls: TYPE_COLORS[0] };
+// The owner's contact types (Sozlamalar) → CONTACT_TYPES, in place.
+export function applyContactTypes(saved?: { key: string; label?: string; icon?: string }[] | null) {
+  const list = (saved || []).filter((x) => x && x.key && x.label);
+  const src = list.length ? list : DEFAULT_CONTACT_TYPES;
+  CONTACT_TYPES.splice(0, CONTACT_TYPES.length, ...src.map((x, i) => ({ key: x.key, label: String(x.label), icon: String(x.icon || "📇"), cls: TYPE_COLORS[i % TYPE_COLORS.length] })));
+}
 
 export const phoneDigits = (p: string | null | undefined) => String(p || "").replace(/\D/g, "").slice(-9);
 

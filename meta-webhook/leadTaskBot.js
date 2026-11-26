@@ -29,7 +29,13 @@ const TYPES = {
   ready_notice: ["📦", "Tayyorligini aytish"],
   other: ["•", "Boshqa"],
 };
-const typeInfo = (k) => TYPES[k] || TYPES.other;
+// The owner's names from Sotuv bo'limi → Sozlamalar (crm_settings/main
+// .task_types), set by erpTasks.js when it reads the settings.
+let custom = null;
+const setTaskTypes = (list) => {
+  custom = Array.isArray(list) && list.length ? new Map(list.filter((t) => t && t.key && t.label).map((t) => [t.key, [t.icon || "•", t.label]])) : null;
+};
+const typeInfo = (k) => (custom && custom.get(k)) || TYPES[k] || (custom ? ["•", "Zadacha"] : TYPES.other);
 
 const hasTime = (t) => /^\d{2}:\d{2}$/.test(String(t.due_time || ""));
 // When to remind: the due time; a task with no time — 09:00 that day.
@@ -199,4 +205,4 @@ const create = (db, { telegram = require("./telegram").telegram, on = process.en
   return { tick, handleCallback, start };
 };
 
-module.exports = { create, reminderNow, reminderText, plan, nextCallSlot, remindAt, buttons };
+module.exports = { create, reminderNow, reminderText, plan, nextCallSlot, remindAt, buttons, typeInfo, setTaskTypes };

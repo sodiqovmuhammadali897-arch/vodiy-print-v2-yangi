@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { BarChart3, BookUser, CheckSquare, Phone, Rows3, Users } from "lucide-react";
+import { BarChart3, BookUser, CheckSquare, Phone, Rows3, Settings, Users } from "lucide-react";
 import { useCrm } from "./crm/useCrm";
 import LeadsBoard from "./crm/LeadsBoard";
 import CallsLog from "./CallsLog";
 import CrmAnalysis from "./crm/CrmAnalysis";
 import AmoImportCard from "./crm/AmoImportCard";
 import ContactsPage from "./crm/ContactsPage";
+import CrmSettings from "./crm/CrmSettings";
+import { sectionLabel } from "../../lib/crmSettings";
 import SwitchCard from "./crm/SwitchCard";
 import { useAuth } from "../../lib/AuthContext";
 import { setCrmOpen, useAmoSync, useCrmOpen } from "./crm/crmOpen";
@@ -23,7 +25,7 @@ import { boardStats, isOldLead } from "../../lib/crm";
 // the amoCRM reports for the month of the move.
 // «Bosh sahifa» moved to the main Bosh sahifa (2026-11-26, the owner: «sotuv
 // bo'limidan bosh sahifani olib tashla») — dashboard/SalesToday.tsx.
-export type SalesSection = "lidlar" | "zadachalar" | "qongiroqlar" | "tahlil" | "kontaktlar";
+export type SalesSection = "lidlar" | "zadachalar" | "qongiroqlar" | "tahlil" | "kontaktlar" | "sozlamalar";
 type TahlilTab = "erp" | "otish" | "voronka" | "yutqazilgan" | "nazorat" | "amo";
 
 const SECTIONS: { key: SalesSection; label: string; icon: ReactNode }[] = [
@@ -32,6 +34,8 @@ const SECTIONS: { key: SalesSection; label: string; icon: ReactNode }[] = [
   { key: "qongiroqlar", label: "Qo'ng'iroqlar", icon: <Phone className="h-4 w-4" /> },
   { key: "tahlil", label: "Tahlil", icon: <BarChart3 className="h-4 w-4" /> },
   { key: "kontaktlar", label: "Kontaktlar", icon: <BookUser className="h-4 w-4" /> },
+  // Admins only (crm/CrmSettings.tsx).
+  { key: "sozlamalar", label: "Sozlamalar", icon: <Settings className="h-4 w-4" /> },
 ];
 const TAHLIL: { key: TahlilTab; label: string }[] = [
   { key: "erp", label: "ERP tahlili" },
@@ -44,7 +48,7 @@ const TAHLIL: { key: TahlilTab; label: string }[] = [
 
 // Old links (?v=voronka …) land in the new place.
 export function sectionOf(v: string | null): { section: SalesSection; tab: TahlilTab } {
-  if (v === "lidlar" || v === "zadachalar" || v === "qongiroqlar" || v === "kontaktlar") return { section: v, tab: "erp" };
+  if (v === "lidlar" || v === "zadachalar" || v === "qongiroqlar" || v === "kontaktlar" || v === "sozlamalar") return { section: v, tab: "erp" };
   if (v === "voronka" || v === "yutqazilgan" || v === "nazorat" || v === "amo" || v === "otish") return { section: "tahlil", tab: v };
   if (v === "control") return { section: "tahlil", tab: "nazorat" };
   if (v === "tahlil") return { section: "tahlil", tab: "erp" };
@@ -111,10 +115,12 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
       <CallsLog sellers={crm.sellers} me={crm.isAdmin ? "" : crm.email} leads={crm.leads || []} crm={crm} />
     ) : section === "kontaktlar" ? (
       <ContactsPage crm={crm} />
+    ) : section === "sozlamalar" && crm.isAdmin ? (
+      <CrmSettings key={crm.settingsVersion > 0 ? "ready" : "wait"} crm={crm} />
     ) : (
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="mr-2 font-display text-2xl font-bold text-ink-900">Tahlil</h1>
+          <h1 className="mr-2 font-display text-2xl font-bold text-ink-900">{sectionLabel("tahlil")}</h1>
           <div className="inline-flex max-w-full overflow-x-auto rounded-xl border border-ink-200 bg-surface p-1">
             {tabs.map((x) => (
               <button key={x.key} type="button" onClick={() => go("tahlil", x.key)} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold ${tab === x.key ? "bg-brand-600 text-white shadow-sm" : "text-ink-500 hover:text-ink-900"}`}>
@@ -132,7 +138,7 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
       <nav className="-mx-1 flex shrink-0 gap-1 overflow-x-auto px-1 lg:sticky lg:top-4 lg:mx-0 lg:w-48 lg:flex-col lg:overflow-visible lg:rounded-2xl lg:border lg:border-ink-100 lg:bg-surface lg:p-2 lg:shadow-sm" aria-label="Sotuv bo'limi">
         <div className="hidden px-3 pb-1 pt-1.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-400 lg:block">Sotuv bo'limi</div>
-        {SECTIONS.map((s) => {
+        {SECTIONS.filter((s) => s.key !== "sozlamalar" || crm.isAdmin).map((s) => {
           const on = s.key === section;
           const n = badge[s.key] || 0;
           return (
@@ -145,7 +151,7 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
               className={`flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition ${on ? "bg-brand-600 text-white shadow-sm" : "bg-surface text-ink-600 hover:bg-ink-50 hover:text-ink-900 lg:bg-transparent"}`}
             >
               {s.icon}
-              <span>{s.label}</span>
+              <span>{sectionLabel(s.key)}</span>
               {n > 0 && <span className={`ml-auto rounded-full px-1.5 text-[11px] font-bold ${on ? "bg-white/25 text-white" : "bg-rose-500 text-white"}`}>{n}</span>}
             </button>
           );

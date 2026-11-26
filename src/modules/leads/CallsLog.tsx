@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLeadHref } from "./crm/leadLink";
 import { useContacts } from "./crm/useContacts";
+import { sectionLabel } from "../../lib/crmSettings";
 import { ContactModal } from "./crm/ContactsPage";
 import type { CrmData } from "./crm/useCrm";
 import { contactOfCall, contactType, salesCalls } from "../../lib/contacts";
@@ -70,7 +71,7 @@ export default function CallsLog({ sellers, me = "", leads = [], crm }: { seller
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-2 font-display text-2xl font-bold text-ink-900">Qo'ng'iroqlar</h1>
+        <h1 className="mr-2 font-display text-2xl font-bold text-ink-900">{sectionLabel("qongiroqlar")}</h1>
         <div className="inline-flex items-center rounded-xl border border-ink-200 bg-surface">
           <button type="button" aria-label="Oldingi kun" className="px-2 py-1.5 text-ink-500 hover:text-ink-900" onClick={() => setDay(shiftDay(day, -1))}>
             <ChevronLeft className="h-4 w-4" />

@@ -18,7 +18,7 @@ export default function CrmAnalysis({ crm }: { crm: CrmData }) {
   const [period, setPeriod] = useState<AnalysisPeriod>("month");
   const [owner, setOwner] = useState(crm.isAdmin ? "" : crm.email);
   const [list, setList] = useState<{ title: string; leads: Lead[] } | null>(null);
-  const a = useMemo(() => crmAnalysis({ leads: crm.leads || [], orders: crm.orders, span: analysisSpan(period), owner }), [crm.leads, crm.orders, period, owner]);
+  const a = useMemo(() => crmAnalysis({ leads: crm.leads || [], orders: crm.orders, span: analysisSpan(period), owner }), [crm.leads, crm.orders, period, owner, crm.settingsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const open = (title: string, pick: (l: Lead) => boolean) => setList({ title, leads: a.cohort.filter(pick) });
   const t = a.total;
   const max = Math.max(1, a.funnel[0]?.n || 0);
