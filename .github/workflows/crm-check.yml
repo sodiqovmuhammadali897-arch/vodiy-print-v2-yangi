@@ -39,7 +39,15 @@ jobs:
                 if (d.preview) console.log(`   preview=${strip({ ...d.preview, byUser: undefined, byStage: undefined })}`);
                 if (d.error) console.log(`   error=${strip({ error: d.error })}`);
               }
-              const staff = (await db.collection("staff").get()).docs.map((d) => ({ email: d.id.toLowerCase(), name: d.data().full_name || "?" }));
+              const set = (await db.collection("crm_settings").doc("main").get()).data() || {};
+              console.log(`== switches: main system=${set.task_source || "amo"}; amoCRM sync=${set.amo_sync === false ? "off" : "on"}; managers see it=${set.open_to_managers ? "yes" : "no"}; talk target=${set.talk_target_min || "—"} min`);
+              const sdocs = (await db.collection("staff").get()).docs;
+              for (const d of sdocs) {
+                const x = d.data(), bt = x.bot_tasks || {};
+                if (!x.amo_user_id && !bt.tasks && !bt.amo) continue;
+                console.log(`   ${x.full_name || "?"}: task reminders=${bt.tasks ? "yes" : "no"}, daily messages=${bt.amo === false ? "no" : "yes"}, telegram=${x.telegram_chat_id ? "linked" : "no"}`);
+              }
+              const staff = sdocs.map((d) => ({ email: d.id.toLowerCase(), name: d.data().full_name || "?" }));
               const nameOf = (e) => (staff.find((s) => s.email === String(e || "").toLowerCase()) || {}).name || (e ? "boshqa" : "mas'ulsiz");
               const leads = (await db.collection("leads").get()).docs.map((d) => d.data());
               const cut = "2026-11-24T19:00:00.000Z";
