@@ -1,0 +1,140 @@
+name: Sotuv bo'limi fix after switchover (writer — owner's approval)
+
+# Approved by the owner on 2026-11-26 («ha, uchalasini qil»):
+#   1. the open leads (and their open tasks) of «Jamila» — Maryam's old
+#      amoCRM account «Menejer 2» — shared evenly between Muhammaddiyor and
+#      Nuriddin (oldest first, in turn);
+#   2. open tasks with nobody on them → the lead's manager;
+#   3. doubles: two open leads of one phone → the one with more open tasks
+#      stays, the other is closed «Takror lid (birlashtirildi)» and its open
+#      tasks cancelled; two open tasks of one lead at the same day and time
+#      → one stays; open tasks on closed leads → cancelled.
+# mode=preview writes nothing. Prints counts only — no names of customers,
+# no phones.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preview or apply"
+        default: "preview"
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fix
+        uses: appleboy/ssh-action@v1
+        env:
+          MODE: ${{ inputs.mode }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: MODE
+          command_timeout: 10m
+          script: |
+            cat > /tmp/vp-fix.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const APPLY = process.env.MODE === "apply";
+            const now = () => new Date().toISOString();
+            const digits = (p) => String(p || "").replace(/\D/g, "").slice(-9);
+            (async () => {
+              const staff = (await db.collection("staff").get()).docs.map((d) => ({ email: d.id.toLowerCase(), name: d.data().full_name || "" }));
+              const one = (re) => staff.filter((s) => re.test(s.name));
+              const jam = one(/^jamila/i), muh = one(/^muhammad+iyor/i), nur = one(/^nuriddin/i);
+              console.log(`staff found: Jamila ${jam.length}, Muhammaddiyor ${muh.length}, Nuriddin ${nur.length}`);
+              if (jam.length !== 1 || muh.length !== 1 || nur.length !== 1) return console.log("STOP: staff not found exactly once");
+              const J = jam[0].email, sellers = [muh[0], nur[0]];
+              const leads = (await db.collection("leads").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+              const tasks = (await db.collection("lead_tasks").where("status", "==", "open").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+              const leadById = new Map(leads.map((l) => [l.id, l]));
+              const isOpen = (l) => l && l.status !== "lost" && !l.converted_order_id;
+              const ops = []; // [ref, data, kind]
+              const leadPatch = new Map(), taskPatch = new Map(), notes = [];
+              const patchLead = (id, p) => leadPatch.set(id, { ...(leadPatch.get(id) || {}), ...p });
+              const patchTask = (id, p) => taskPatch.set(id, { ...(taskPatch.get(id) || {}), ...p });
+              const cancel = (t, why) => patchTask(t.id, { status: "done", cancelled: true, completed_at: now(), result: `Bekor: ${why}` });
+              const n = { jamilaLeads: 0, toMuh: 0, toNur: 0, jamilaTasks: 0, unassignedTasks: 0, unassignedLeft: 0, doubleLeadsClosed: 0, doubleTasks: 0, tasksOnClosed: 0, doubleLeadTasksCancelled: 0 };
+
+              // 3a. doubles by phone first (so Jamila's share counts only the kept ones).
+              const byPhone = new Map();
+              for (const l of leads.filter(isOpen)) {
+                const d = digits(l.phone);
+                if (d.length < 9) continue;
+                if (!byPhone.has(d)) byPhone.set(d, []);
+                byPhone.get(d).push(l);
+              }
+              const openTasksOf = (id) => tasks.filter((t) => t.lead_id === id && !taskPatch.has(t.id));
+              const closed = new Set();
+              for (const group of byPhone.values()) {
+                if (group.length < 2) continue;
+                group.sort((a, b) => openTasksOf(b.id).length - openTasksOf(a.id).length || openTasksOf(b.id).filter((t) => t.amo_task_id).length - openTasksOf(a.id).filter((t) => t.amo_task_id).length || String(a.created_at).localeCompare(String(b.created_at)));
+                const keep = group[0];
+                for (const l of group.slice(1)) {
+                  patchLead(l.id, { status: "lost", lost_reason: "Takror lid (birlashtirildi)", lost_comment: `${keep.lead_number || keep.id} bilan bir raqam`, lost_at: now(), updated_at: now() });
+                  notes.push({ lead_id: l.id, text: `🔗 Takror lid — ${keep.lead_number || ""} bilan birlashtirildi, yopildi` });
+                  closed.add(l.id);
+                  n.doubleLeadsClosed++;
+                  for (const t of openTasksOf(l.id)) { cancel(t, "takror lid yopildi"); n.doubleLeadTasksCancelled++; }
+                }
+              }
+              // 3b. same lead + day + time.
+              const sig = new Map();
+              for (const t of tasks) {
+                if (taskPatch.has(t.id)) continue;
+                const k = `${t.lead_id}|${t.due_date}|${t.due_time}`;
+                if (!sig.has(k)) sig.set(k, []);
+                sig.get(k).push(t);
+              }
+              for (const list of sig.values()) {
+                if (list.length < 2) continue;
+                list.sort((a, b) => (b.amo_task_id ? 1 : 0) - (a.amo_task_id ? 1 : 0));
+                for (const t of list.slice(1)) { cancel(t, "takror zadacha"); n.doubleTasks++; }
+              }
+              // 3c. open tasks on closed leads.
+              for (const t of tasks) {
+                if (taskPatch.has(t.id)) continue;
+                if (!isOpen(leadById.get(t.lead_id))) { cancel(t, "lid yopilgan"); n.tasksOnClosed++; }
+              }
+              // 1. Jamila's open leads, oldest first, in turn.
+              const jl = leads.filter((l) => isOpen(l) && !closed.has(l.id) && String(l.assigned_to_email || "").toLowerCase() === J).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+              const newOwner = new Map();
+              jl.forEach((l, i) => {
+                const s = sellers[i % 2];
+                newOwner.set(l.id, s);
+                patchLead(l.id, { assigned_to_email: s.email, assigned_to_name: s.name, updated_at: now() });
+                notes.push({ lead_id: l.id, text: `👤 Mas'ul o'zgardi: Jamila (amoCRM «Menejer 2») → ${s.name}` });
+                n.jamilaLeads++;
+                if (i % 2) n.toNur++; else n.toMuh++;
+              });
+              // 1 + 2. tasks: Jamila's or nobody's → the lead's (new) manager.
+              for (const t of tasks) {
+                if (taskPatch.has(t.id)) continue;
+                const l = leadById.get(t.lead_id);
+                const owner = newOwner.get(t.lead_id) || (l && l.assigned_to_email ? { email: l.assigned_to_email, name: l.assigned_to_name || "" } : null);
+                const mine = String(t.assigned_to_email || "").toLowerCase();
+                if (mine === J) {
+                  if (owner && owner.email.toLowerCase() !== J) { patchTask(t.id, { assigned_to_email: owner.email, assigned_to_name: owner.name }); n.jamilaTasks++; }
+                } else if (!mine) {
+                  if (owner) { patchTask(t.id, { assigned_to_email: owner.email, assigned_to_name: owner.name }); n.unassignedTasks++; }
+                  else n.unassignedLeft++;
+                } else if (newOwner.has(t.lead_id)) {
+                  // another seller's task on Jamila's lead stays with that seller
+                }
+              }
+              console.log(`${APPLY ? "APPLY" : "PREVIEW"}: ${JSON.stringify(n)}; lead updates ${leadPatch.size}, task updates ${taskPatch.size}`);
+              if (!APPLY) return;
+              let batch = db.batch(), k = 0;
+              const add = async (fn) => { fn(batch); if (++k >= 400) { await batch.commit(); batch = db.batch(); k = 0; } };
+              for (const [id, p] of leadPatch) await add((b) => b.update(db.collection("leads").doc(id), p));
+              for (const [id, p] of taskPatch) await add((b) => b.update(db.collection("lead_tasks").doc(id), p));
+              for (const x of notes) await add((b) => b.set(db.collection("lead_activities").doc(), { ...x, actor_email: "", actor_name: "Tizim (rahbar tasdig'i)", created_at: now() }));
+              if (k) await batch.commit();
+              await db.collection("data_fixes").add({ kind: "crm_switchover_fix", at: now(), counts: n, approved: "owner 2026-11-26 «ha, uchalasini qil»" });
+              console.log("done");
+            })().catch((e) => console.log("failed:", e.message));
+            JS
+            cd /opt/meta-webhook && node /tmp/vp-fix.js; rm -f /tmp/vp-fix.js
