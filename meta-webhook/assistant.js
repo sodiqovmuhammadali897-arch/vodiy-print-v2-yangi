@@ -600,6 +600,10 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
     }
     if (!msg || !text || msg.from?.is_bot) return;
     // Linking a work group: "/ulash CODE" from any group (the code is the lock).
+    if (groups && /^\/ulash_sotuv\b/i.test(text)) {
+      await groups.handleSalesLinkCommand(msg).catch((err) => console.error("Managers group link failed", err));
+      return;
+    }
     if (groups && /^\/ulash\b/i.test(text)) {
       await groups.handleLinkCommand(msg).catch((err) => console.error("Group link failed", err));
       return;

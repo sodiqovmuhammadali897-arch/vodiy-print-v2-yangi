@@ -28,15 +28,39 @@ function claimPatch(lead, who, now) {
   };
 }
 
-const create = (db, { route = null } = {}) => {
-  // A new lead with the button, in the work group's Sotuv topic.
-  const announce = async (leadId, text) => {
-    if (!route) return;
-    try {
-      await telegram("sendMessage", { ...(await route("sales")), text, reply_markup: button(leadId), link_preview_options: { is_disabled: true } });
-    } catch (err) {
-      console.error("Lead announce failed", err.message);
+const create = (db, { route = null, salesTargets = null, managersTarget = null } = {}) => {
+  // Every message that carries a lead's button, so taking it in one group
+  // updates the others (lead_posts/{leadId}.posts: chat, message, text).
+  const record = async (leadId, posts) => {
+    if (!leadId || !posts.length) return;
+    const ref = db.collection("lead_posts").doc(String(leadId));
+    const prev = ((await ref.get()).data() || {}).posts || [];
+    await ref.set({ posts: [...prev, ...posts], updated_at: new Date().toISOString() });
+  };
+  const sendTo = async (leadId, text, targets) => {
+    const posts = [];
+    for (const t of targets) {
+      try {
+        const r = await telegram("sendMessage", { ...t, text, reply_markup: button(leadId), link_preview_options: { is_disabled: true } });
+        if (r && r.ok && r.result) posts.push({ chat_id: t.chat_id, message_id: r.result.message_id, text });
+      } catch (err) {
+        console.error("Lead announce failed", err.message);
+      }
     }
+    await record(leadId, posts).catch(() => undefined);
+    return posts;
+  };
+  // A new lead with the button: the work group's Sotuv topic and the
+  // managers' group (groups.js salesTargets).
+  const announce = async (leadId, text) => {
+    const targets = salesTargets ? await salesTargets() : route ? [await route("sales")] : [];
+    return sendTo(leadId, text, targets);
+  };
+  // Only the managers' group (for leads whose main message went elsewhere —
+  // Instagram's own topic, the site form with its file).
+  const toManagers = async (leadId, text) => {
+    const t = managersTarget ? await managersTarget() : null;
+    return t ? sendTo(leadId, text, [t]) : [];
   };
 
   // Takes the lead for `who` ({email, name}); safe when two press at once.
@@ -72,8 +96,15 @@ const create = (db, { route = null } = {}) => {
     const who = { email: String(s.id).toLowerCase(), name: s.full_name || s.id };
     const r = await claim(m[1], who);
     const msg = cq.message;
-    const edit = (line) =>
-      msg && telegram("editMessageText", { chat_id: msg.chat.id, message_id: msg.message_id, text: `${msg.text || ""}\n\n${line}`, link_preview_options: { is_disabled: true } }).catch(() => {});
+    // The pressed message and every other copy of this lead (other group).
+    const edit = async (line) => {
+      const posts = ((await db.collection("lead_posts").doc(m[1]).get().catch(() => null))?.data?.() || {}).posts || [];
+      const all = [...posts];
+      if (msg && !all.some((p) => String(p.chat_id) === String(msg.chat.id) && p.message_id === msg.message_id)) all.push({ chat_id: msg.chat.id, message_id: msg.message_id, text: msg.text || msg.caption || "", caption: !msg.text && Boolean(msg.caption) });
+      for (const p of all)
+        if (p.caption) await telegram("editMessageCaption", { chat_id: p.chat_id, message_id: p.message_id, caption: `${p.text || ""}\n\n${line}`.slice(0, 1024) }).catch(() => {});
+        else await telegram("editMessageText", { chat_id: p.chat_id, message_id: p.message_id, text: `${p.text || ""}\n\n${line}`, link_preview_options: { is_disabled: true } }).catch(() => {});
+    };
     if (r.ok) {
       await answer();
       await edit(takenLine(who.name, r.at));
@@ -87,7 +118,7 @@ const create = (db, { route = null } = {}) => {
     await answer(r.error || "Bo'lmadi");
   };
 
-  return { announce, claim, handleCallback, button };
+  return { announce, toManagers, record, claim, handleCallback, button };
 };
 
 module.exports = { create, claimPatch, button, takenLine };

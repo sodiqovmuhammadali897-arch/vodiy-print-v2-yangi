@@ -60,6 +60,22 @@ const create = (db, { fallbackChatId }) => {
     return Boolean(c.group_chat_id && String(chatId) === String(c.group_chat_id));
   };
 
+  // The managers' own group (the owner, 2026-11-26: «sotuv agentni alohida
+  // managerlar bor guruh ochaman, lidni o'sha yerga ham, umumiy guruhga ham
+  // yuborsin»): telegram_config/main.sales_group {chat_id, title}. No topics
+  // needed; it gets new leads only — it is NOT a work chat, so the Hisobchi
+  // never answers there (no money talk in front of everyone).
+  const managersTarget = async () => {
+    const g = (await config()).sales_group;
+    return g && g.chat_id ? { chat_id: g.chat_id } : null;
+  };
+  // Where a new lead goes: the work group's Sotuv topic and the managers' group.
+  const salesTargets = async () => {
+    const main = await route("sales");
+    const m = await managersTarget();
+    return m && String(m.chat_id) !== String(main.chat_id) ? [main, m] : [main];
+  };
+
   const botTopic = async () => (await config()).topics?.bot || null;
   const topicId = async (key) => (await config()).topics?.[key] || null;
 
@@ -70,7 +86,15 @@ const create = (db, { fallbackChatId }) => {
       const code = crypto.randomBytes(4).toString("hex").toUpperCase();
       await db.collection("tg_group_codes").doc(code).set({ email: who.email, created_at: new Date().toISOString() });
       const me = await telegram("getMe", {});
-      res.json({ command: `/ulash ${code}`, bot: me?.result?.username || "", expires_minutes: CODE_TTL_MS / 60000 });
+      res.json({ command: `/ulash ${code}`, sales_command: `/ulash_sotuv ${code}`, bot: me?.result?.username || "", expires_minutes: CODE_TTL_MS / 60000 });
+    });
+    app.post("/webhooks/tg-group/unlink-sales", async (req, res) => {
+      const who = await staffFromRequest(db, req);
+      if (!who || who.role !== "admin") return res.status(403).json({ error: "Faqat admin" });
+      const { FieldValue } = require("firebase-admin/firestore");
+      await db.collection("telegram_config").doc("main").set({ sales_group: FieldValue.delete() }, { merge: true });
+      cached = null;
+      res.json({ ok: true });
     });
   };
 
@@ -156,7 +180,34 @@ const create = (db, { fallbackChatId }) => {
     return true;
   };
 
-  return { route, isWorkChat, isGroup, botTopic, topicId, register, handleLinkCommand, ensureTopics, config, TOPICS };
+  // "/ulash_sotuv CODE" posted in the managers' group (same one-time code).
+  const handleSalesLinkCommand = async (msg) => {
+    const m = /^\/ulash_sotuv(?:@\w+)?\s+([A-F0-9]{8})\s*$/i.exec((msg.text || "").trim());
+    if (!m) return false;
+    const ref = db.collection("tg_group_codes").doc(m[1].toUpperCase());
+    const link = (await ref.get()).data();
+    if (!link || Date.now() - Date.parse(link.created_at) > CODE_TTL_MS) {
+      await reply(msg, "❌ Kod noto'g'ri yoki eskirgan. Saytdan (Sozlamalar → Telegram guruh → Managerlar guruhi) yangi kod oling.");
+      return true;
+    }
+    if (msg.chat.type === "private") {
+      await reply(msg, "⚠️ Bu buyruq managerlar guruhida yozilishi kerak.");
+      return true;
+    }
+    const c = await config();
+    if (String(c.group_chat_id) === String(msg.chat.id)) {
+      await reply(msg, "⚠️ Bu — ish guruhi. Managerlar uchun alohida guruh oching va kodni o'sha yerga yozing.");
+      return true;
+    }
+    await ref.delete();
+    await db.collection("telegram_config").doc("main").set({ sales_group: { chat_id: msg.chat.id, title: msg.chat.title || "", linked_at: new Date().toISOString(), linked_by: link.email } }, { merge: true });
+    cached = null;
+    await reply(msg, "✅ Managerlar guruhi ulandi. Endi har bir yangi lid shu yerga ham keladi — «✅ Qabul qildim» ni birinchi bosgan menejer oladi.");
+    console.log(`Managers group linked: ${msg.chat.id} (${msg.chat.title}) by ${link.email}`);
+    return true;
+  };
+
+  return { route, salesTargets, managersTarget, isWorkChat, isGroup, botTopic, topicId, register, handleLinkCommand, handleSalesLinkCommand, ensureTopics, config, TOPICS };
 };
 
 module.exports = { create, TOPICS };

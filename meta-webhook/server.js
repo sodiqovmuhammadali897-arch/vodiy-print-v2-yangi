@@ -64,7 +64,7 @@ const reportChannel = (process.env.ASSISTANT_CHAT_IDS || "").split(",")[0].trim(
 const groups = process.env.TELEGRAM_BOT_TOKEN ? require("./groups").create(db, { fallbackChatId: reportChannel }) : null;
 if (groups) groups.register(app);
 // «✅ Qabul qildim» on new internet leads — see leadClaim.js.
-const claims = require("./leadClaim").create(db, { route: groups ? groups.route : null });
+const claims = require("./leadClaim").create(db, { route: groups ? groups.route : null, salesTargets: groups ? groups.salesTargets : null, managersTarget: groups ? groups.managersTarget : null });
 // Kompaniya sayti (website/) → ariza → Sotuv topic — see siteLeads.js.
 require("./siteLeads").create(db, { route: groups ? groups.route : null, claims }).register(app);
 const hr = groups ? require("./hr").create(db, { route: groups.route }) : null;
@@ -122,6 +122,24 @@ const fieldValue = (fieldData, ...names) => {
 };
 
 // Best-effort — a failed name lookup should never block lead creation.
+// A form's questions (key → label, choice key → text), cached per form —
+// so the lead message shows the answers as the customer filled them.
+const formQuestions = new Map();
+const { metaLeadText } = require("./leadText");
+const graphQuestions = async (formId) => {
+  if (!formId) return [];
+  if (formQuestions.has(formId)) return formQuestions.get(formId);
+  try {
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${formId}?fields=questions&access_token=${PAGE_ACCESS_TOKEN}`);
+    const data = await res.json();
+    const qs = Array.isArray(data.questions) ? data.questions : [];
+    formQuestions.set(formId, qs);
+    return qs;
+  } catch {
+    return [];
+  }
+};
+
 const graphName = async (id) => {
   if (!id) return "";
   try {
@@ -194,12 +212,22 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId, prefetch
   const { lead_number } = created;
   const owner = await startLead(db, { id: created.id, full_name: fullName }, { text: `Lid ochildi — ${source}${formName ? ` («${formName}»)` : ""}`, actor: "Meta forma", assign: true });
   // Unassigned: the managers see it with «✅ Qabul qildim» (leadClaim.js).
+  // The owner's format (2026-11-26): form name, every answer as filled,
+  // source, time — then the LID and the «✅ Qabul qildim» button (leadClaim.js).
   if (!owner)
     await claims.announce(
       created.id,
-      [`🆕 Yangi lid ${created.lead_number} — ${source}`, `👤 ${fullName}`, phone ? `📞 ${phone}` : "", formName ? `📝 Forma: ${formName}` : "", campaignName ? `📣 Reklama: ${campaignName}` : "", "https://printvodiy.uz/leads"]
-        .filter(Boolean)
-        .join("\n"),
+      metaLeadText({
+        formName,
+        fieldData,
+        questions: await graphQuestions(formId),
+        platform: lead.platform,
+        createdTime: lead.created_time,
+        leadNumber: created.lead_number,
+        campaignName,
+        adName,
+        url: "https://printvodiy.uz/leads",
+      }),
     );
 
   if (campaignName) {

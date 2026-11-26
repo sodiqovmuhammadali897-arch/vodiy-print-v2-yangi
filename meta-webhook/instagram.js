@@ -135,11 +135,14 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
   };
 
   const notify = async (text, extra = {}) => {
-    if (!route) return;
+    if (!route) return null;
     try {
-      await telegram("sendMessage", { ...(await route("ig")), text, link_preview_options: { is_disabled: true }, ...extra });
+      const target = await route("ig");
+      const r = await telegram("sendMessage", { ...target, text, link_preview_options: { is_disabled: true }, ...extra });
+      return r && r.ok && r.result ? { chat_id: target.chat_id, message_id: r.result.message_id, text } : null;
     } catch (err) {
       console.error("Instagram → Telegram notify failed", err.message);
+      return null;
     }
   };
 
@@ -220,8 +223,7 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
       },
       { merge: true },
     );
-    await notify(
-      [
+    const leadText = [
         !lead ? `${icon} ${source}: mijoz raqam qoldirdi` : isNew ? `✅ Yangi lid ${lead.lead_number} — ${source}` : `🔁 ${source}: mavjud lid ${lead.lead_number || ""} qayta yozdi`,
         `👤 ${display}${convo.username ? ` (@${convo.username})` : ""}`,
         `📞 ${phone}`,
@@ -230,10 +232,15 @@ const create = (db, { graphVersion, pageToken, appSecret, verifyToken, callbackB
         lead ? LEADS_URL : "",
       ]
         .filter(Boolean)
-        .join("\n"),
-      // A new unassigned lead: the first manager to press takes it (leadClaim.js).
-      isNew && !owner && claims ? { reply_markup: claims.button(lead.id) } : {},
-    );
+        .join("\n");
+    // A new unassigned lead: the first manager to press takes it — in the
+    // Instagram topic and in the managers' group (leadClaim.js).
+    const claimable = isNew && !owner && claims;
+    const post = await notify(leadText, claimable ? { reply_markup: claims.button(lead.id) } : {});
+    if (claimable) {
+      if (post) await claims.record(lead.id, [post]).catch(() => undefined);
+      await claims.toManagers(lead.id, leadText).catch(() => undefined);
+    }
     await emitEvent(db, {
       agent: "ig",
       kind: "report",

@@ -9,6 +9,8 @@ type TelegramConfig = {
   group_title?: string;
   topics?: Record<string, number>;
   linked_at?: string;
+  // The managers' own group: new leads go there too (groups.js).
+  sales_group?: { chat_id: number; title?: string; linked_at?: string };
 };
 
 const TOPIC_LABELS: Record<string, string> = {
@@ -31,6 +33,8 @@ export default function TelegramGroupPanel() {
   const { user } = useAuth();
   const [config, setConfig] = useState<TelegramConfig | null>(null);
   const [command, setCommand] = useState<string | null>(null);
+  const [salesCommand, setSalesCommand] = useState<string | null>(null);
+  const [salesCopied, setSalesCopied] = useState(false);
   const [bot, setBot] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -48,7 +52,22 @@ export default function TelegramGroupPanel() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.command) throw new Error(data.error || "Kod olinmadi");
       setCommand(data.command);
+      setSalesCommand(data.sales_command || null);
       setBot(data.bot || "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Xatolik");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unlinkSales = async () => {
+    if (!window.confirm("Managerlar guruhi uzilsinmi? Yangi lidlar u yerga bormaydi.")) return;
+    setBusy(true);
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch("/webhooks/tg-group/unlink-sales", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Uzib bo'lmadi");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Xatolik");
     } finally {
@@ -125,6 +144,59 @@ export default function TelegramGroupPanel() {
       </div>
       {command && <p className="text-xs text-ink-500">Kod 30 daqiqa amal qiladi va bir marta ishlatiladi. Shu matnni guruhga (istalgan mavzuga) yuboring.</p>}
       {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+
+      <div className="space-y-3 border-t border-ink-100 pt-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-display text-base font-bold text-ink-900">Managerlar guruhi</h3>
+            <p className="text-sm text-ink-500">Faqat menejerlar bor alohida guruh. Har bir yangi lid ish guruhiga ham, shu guruhga ham keladi — «✅ Qabul qildim» ni birinchi bosgan oladi, ikkala xabar ham yangilanadi. Boshqa hisobotlar bu guruhga bormaydi.</p>
+          </div>
+          {config?.sales_group ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" /> Ulangan: {config.sales_group.title || "guruh"}
+            </span>
+          ) : (
+            <span className="rounded-full bg-ink-100 px-3 py-1.5 text-sm font-semibold text-ink-600">Ulanmagan</span>
+          )}
+        </div>
+        <ol className="list-decimal space-y-1.5 pl-5 text-sm text-ink-700">
+          <li>Telegram'da menejerlar uchun guruh oching (mavzular shart emas).</li>
+          <li>Botni{bot ? <> (<b>@{bot}</b>)</> : ""} shu guruhga qo'shing.</li>
+          <li>«Managerlar guruhi uchun kod olish» tugmasini bosing va chiqqan <b>/ulash_sotuv …</b> buyrug'ini shu guruhga yozing.</li>
+        </ol>
+        <div className="flex flex-wrap items-center gap-3">
+          {salesCommand ? (
+            <div className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2">
+              <MessagesSquare className="h-4 w-4 text-brand-700" />
+              <code className="select-all font-mono text-base font-bold text-ink-900">{salesCommand}</code>
+              <button
+                className="btn-ghost !px-2"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(salesCommand);
+                    setSalesCopied(true);
+                  } catch {
+                    setSalesCopied(false);
+                  }
+                }}
+                aria-label="Nusxalash"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+              {salesCopied && <span className="text-xs font-semibold text-emerald-700">Nusxalandi</span>}
+            </div>
+          ) : (
+            <button className="btn-secondary" onClick={getCode} disabled={busy}>
+              {busy ? <Loader className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Managerlar guruhi uchun kod olish
+            </button>
+          )}
+          {config?.sales_group && (
+            <button className="btn-ghost text-rose-600 hover:bg-rose-50" onClick={unlinkSales} disabled={busy}>
+              Uzish
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

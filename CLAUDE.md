@@ -601,6 +601,20 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   `useCrm(enabled)` + `CrmData`: the data is read once in the shell. Managers
   still see only their amoCRM view (opens to them in week 3). Next: step 2
   (lead card in a right panel).
+- **Managers' group + lead message format — 2026-11-26** (owner: «alohida
+  managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
+  yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an
+  example). `telegram_config/main.sales_group {chat_id, title}`, linked with
+  `/ulash_sotuv CODE` (same one-time code as /ulash; Sozlamalar → Telegram
+  guruh → «Managerlar guruhi», «Uzish» = `/webhooks/tg-group/unlink-sales`).
+  It is NOT a work chat (no Hisobchi there). `groups.salesTargets()` = Sotuv
+  topic + managers' group; `leadClaim.announce` posts to both,
+  `toManagers` for Instagram/site leads, every copy kept in
+  `lead_posts/{leadId}` and edited on «Qabul qildim» (captions too). Meta
+  form leads now read: «🧾 Nomi: form / 📝 Ma'lumotlar: each answer as
+  filled (labels and choice texts from the form's questions, cached) /
+  ℹ️ Manba: Instagram|Facebook / 📆 Sana / 📣 Reklama / 🆔 LID» —
+  `meta-webhook/leadText.js metaLeadText`.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

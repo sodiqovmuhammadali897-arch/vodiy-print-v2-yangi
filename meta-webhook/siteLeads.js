@@ -109,6 +109,7 @@ const create = (db, { route = null, claims = null } = {}) => {
     const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, { method: "POST", body: fd });
     const data = await res.json().catch(() => ({}));
     if (!data.ok) throw new Error(`sendDocument: ${JSON.stringify(data).slice(0, 200)}`);
+    return data;
   };
 
   const register = (app) => {
@@ -128,11 +129,21 @@ const create = (db, { route = null, claims = null } = {}) => {
         if (!BOT_TOKEN || !route) return;
         const target = await route("sales");
         const text = leadText(out.lead, ref.id);
-        if (out.file) await sendFile({ ...target, ...(markup.reply_markup ? { reply_markup: JSON.stringify(markup.reply_markup) } : {}) }, out.file, text).catch(async (err) => {
-          console.error("Site lead file failed", err.message);
-          await telegram("sendMessage", { ...target, text: `${text}\n\n(fayl yuborilmadi)`, ...markup });
-        });
-        else await telegram("sendMessage", { ...target, text, ...markup });
+        let sent = null;
+        let caption = false;
+        if (out.file) {
+          sent = await sendFile({ ...target, ...(markup.reply_markup ? { reply_markup: JSON.stringify(markup.reply_markup) } : {}) }, out.file, text).catch(async (err) => {
+            console.error("Site lead file failed", err.message);
+            return telegram("sendMessage", { ...target, text: `${text}\n\n(fayl yuborilmadi)`, ...markup });
+          });
+          caption = Boolean(sent && sent.result && sent.result.document);
+        } else sent = await telegram("sendMessage", { ...target, text, ...markup });
+        // «Qabul qildim» updates this message too, and the managers' group
+        // gets the lead as well (leadClaim.js, groups.js).
+        if (newLeadId && claims) {
+          if (sent && sent.ok && sent.result) await claims.record(newLeadId, [{ chat_id: target.chat_id, message_id: sent.result.message_id, text: text.slice(0, caption ? 1000 : 4000), caption }]).catch(() => undefined);
+          await claims.toManagers(newLeadId, text);
+        }
       } catch (err) {
         console.error("Site lead failed", err);
         if (!res.headersSent) res.status(500).json({ error: "Yuborib bo'lmadi — iltimos, qo'ng'iroq qiling: +998 77 200 88 55" });
