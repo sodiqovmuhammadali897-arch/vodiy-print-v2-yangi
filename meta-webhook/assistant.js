@@ -436,7 +436,7 @@ const handleQuestion = async (db, { chatId, threadId = null, replyTo, text, cont
   return { reply, pending: ctx.pending, files: ctx.files.map((f) => f.filename) };
 };
 
-const register = (app, db, hr = null, groups = null, marketing = null, chief = null, tasks = null, ads = null, content = null, recall = null, debts = null, amo = null, claims = null) => {
+const register = (app, db, hr = null, groups = null, marketing = null, chief = null, tasks = null, ads = null, content = null, recall = null, debts = null, amo = null, claims = null, leadTasks = null) => {
   const configured = Boolean(BOT_TOKEN && ANTHROPIC_API_KEY && ALLOWED_CHATS.size > 0);
   if (!configured) {
     console.log("Hisobchi bot: TELEGRAM_BOT_TOKEN / ANTHROPIC_API_KEY / ASSISTANT_CHAT_IDS not all set — not enabled.");
@@ -531,6 +531,7 @@ const register = (app, db, hr = null, groups = null, marketing = null, chief = n
         // Javobsiz qo'ng'iroq: javob qaytardim / keyinroq eslat (amocrm.js).
         else if (amo && /^mc:/.test(data)) await amo.handleCallback(req.body.callback_query);
         else if (claims && /^lc:/.test(data)) await claims.handleCallback(req.body.callback_query);
+        else if (leadTasks && /^lt:/.test(data)) await leadTasks.handleCallback(req.body.callback_query);
         else if (chief && /^chief:/.test(data)) await chief.handleCallback(req.body.callback_query, isWorkChat);
         // Reklama proposals: marketolog / admin buttons (targetolog.js).
         else if (ads && /^ads:/.test(data)) await ads.handleCallback(req.body.callback_query);

@@ -94,9 +94,11 @@ content.register(app);
 const recall = process.env.TELEGRAM_BOT_TOKEN ? require("./recall").create(db) : null;
 // Qarz undirish: each sales manager's debts, daily (debts.js).
 const debts = recall ? require("./debts").create(db, { team: () => recall.managers("debts"), admins: recall.admins }) : null;
-const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm, claims);
+// ERP lead tasks → Telegram reminders with buttons (leadTaskBot.js).
+const leadTasks = process.env.TELEGRAM_BOT_TOKEN ? require("./leadTaskBot").create(db) : null;
+const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm, claims, leadTasks);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead, startLead } = require("./leads");
-const { pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone: normalizeCallPhone } = require("./callLeads");
+const { pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone: normalizeCallPhone, talkedSeconds, tasksDoneByTalk, talkLabel } = require("./callLeads");
 // Calls open ERP leads (the ERP's CRM, phase 2) on their own switch, so the
 // Meta form and Instagram leads keep going to the managers as before.
 // ERP_CALL_LEADS=off turns it off.
@@ -417,6 +419,28 @@ const handleCallFinish = async (event) => {
     if (!lead.assigned_to_email && staffLogin) Object.assign(patch, { assigned_to_email: staffLogin, assigned_to_name: staffName });
     await db.collection("leads").doc(lead.id).update(patch);
 
+    // A real talk (30 s+, in or out) does the lead's call tasks due by
+    // today; if nothing stays open, «Qayta aloqa» tomorrow 10:00 (step 3).
+    const talked = talkedSeconds(event);
+    if (CALL_LEADS_ON && talked > 0) {
+      const all = (await db.collection("lead_tasks").where("lead_id", "==", lead.id).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+      const closing = tasksDoneByTalk(all, talked);
+      if (closing.length) {
+        const result = `📞 Gaplashildi (${talkLabel(talked)}) — ${isIncoming ? "kiruvchi" : "chiquvchi"} qo'ng'iroq`;
+        for (const t of closing) {
+          await db.collection("lead_tasks").doc(t.id).update({ status: "done", completed_at: now, result });
+          await db.collection("lead_activities").add({ lead_id: lead.id, text: `Zadacha bajarildi: ${t.type === "follow_up" ? "Qayta aloqa" : "Qo'ng'iroq qilish"} — natija: ${result}`, actor_email: actor.email, actor_name: actor.name, created_at: now });
+        }
+        const stillOpen = all.some((t) => t.status === "open" && !closing.includes(t));
+        if (!stillOpen) {
+          const tomorrow = new Date(Date.now() + 5 * 3600e3 + 864e5).toISOString().slice(0, 10);
+          const owner = { email: patch.assigned_to_email || lead.assigned_to_email || staffLogin, name: patch.assigned_to_name || lead.assigned_to_name || staffName };
+          await db.collection("lead_tasks").add({ lead_id: lead.id, lead_name: lead.full_name || "", type: "follow_up", due_date: tomorrow, due_time: "10:00", assigned_to_email: owner.email, assigned_to_name: owner.name, note: "Gaplashilgandan keyin: narx / maket yuborish yoki qayta qo'ng'iroq", status: "open", completed_at: null, created_at: now });
+          await db.collection("lead_activities").add({ lead_id: lead.id, text: `Zadacha qo'yildi: Qayta aloqa — ${tomorrow} 10:00`, actor_email: "system", actor_name: "Mois Zvonki", created_at: now });
+        }
+      }
+    }
+
     // A missed incoming call: a call-back task in 30 minutes.
     if (CALL_LEADS_ON && isIncoming && !answered) {
       const tasksSnap = await db.collection("lead_tasks").where("lead_id", "==", lead.id).get();
@@ -503,6 +527,7 @@ app.listen(PORT, () => {
     .then((n) => n && console.log(`bot_tasks: set on ${n} staff`))
     .catch((e) => console.error("bot_tasks migrate failed:", e.message));
   if (debts) debts.start();
+  if (leadTasks) leadTasks.start();
   salesKpi.start();
   guideFacts.start();
   void amocrm.start().catch((err) => console.error("amoCRM start failed", err));

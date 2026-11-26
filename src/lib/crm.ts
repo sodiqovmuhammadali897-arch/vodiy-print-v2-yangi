@@ -62,6 +62,28 @@ export function taskState(t: Pick<LeadTask, "due_date" | "due_time">, now = Date
   return t.due_date === tashDay(now) ? "today" : "later";
 }
 
+// Zadachalar's four columns (step 3, 2026-11-26), like amoCRM's task page.
+export type TaskColumn = "late" | "today" | "tomorrow" | "later";
+export const TASK_COLUMNS: { key: TaskColumn; label: string; color: string }[] = [
+  { key: "late", label: "Muddati o'tgan", color: "#e11d48" },
+  { key: "today", label: "Bugun", color: "#16a34a" },
+  { key: "tomorrow", label: "Ertaga", color: "#0ea5e9" },
+  { key: "later", label: "Keyinroq", color: "#94a3b8" },
+];
+export function taskColumn(t: Pick<LeadTask, "due_date" | "due_time">, now = Date.now()): TaskColumn {
+  const s = taskState(t, now);
+  if (s !== "later") return s;
+  return t.due_date === tashDay(now + 86400000) ? "tomorrow" : "later";
+}
+
+// Moving a task: «+1 soat» from now, or tomorrow 10:00 (the same as the
+// Telegram reminder's buttons, meta-webhook/leadTaskBot.js).
+export function snoozeSlot(kind: "h1" | "tomorrow", now = Date.now()): { date: string; time: string } {
+  if (kind === "tomorrow") return { date: tashDay(now + 86400000), time: "10:00" };
+  const t = new Date(now + 3600e3 + 5 * 3600e3).toISOString();
+  return { date: t.slice(0, 10), time: t.slice(11, 16) };
+}
+
 // "bugun 15:00", "ertaga 10:00", "kecha 16:00", "3 kun o'tdi", "14-noy".
 export function dueLabel(t: Pick<LeadTask, "due_date" | "due_time">, now = Date.now()): string {
   const today = tashDay(now);

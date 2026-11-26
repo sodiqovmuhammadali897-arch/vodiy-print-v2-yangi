@@ -823,6 +823,8 @@ export type LeadTask = {
   created_at: string;
   // What came of it — required when a task is done (CRM, 2026-11-12).
   result?: string;
+  // Telegram reminders already sent (server, leadTaskBot.js); cleared on a move.
+  reminded?: { due?: string; late?: string } | null;
 };
 
 // Auto-written, never edited by hand — the lead's "Faoliyat" timeline.

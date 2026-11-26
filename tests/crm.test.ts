@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardStats, columnOf, dueLabel, matchesLead, needsTask, nextTask, taskState } from "../src/lib/crm";
+import { boardStats, columnOf, dueLabel, matchesLead, needsTask, nextTask, snoozeSlot, taskColumn, taskState } from "../src/lib/crm";
 
 // 2026-11-12 10:00 Tashkent
 const NOW = Date.parse("2026-11-12T10:00:00+05:00");
@@ -64,5 +64,22 @@ describe("crm board", () => {
     expect(matchesLead(l, "90 123")).toBe(true);
     expect(matchesLead(l, "zilola")).toBe(false);
     expect(matchesLead(l, "")).toBe(true);
+  });
+});
+
+describe("Zadachalar columns (step 3)", () => {
+  const now = Date.parse("2026-11-26T14:00:00+05:00");
+  it("late / today / tomorrow / later", () => {
+    expect(taskColumn({ due_date: "2026-11-26", due_time: "13:00" }, now)).toBe("late");
+    expect(taskColumn({ due_date: "2026-11-25", due_time: "" }, now)).toBe("late");
+    expect(taskColumn({ due_date: "2026-11-26", due_time: "16:00" }, now)).toBe("today");
+    expect(taskColumn({ due_date: "2026-11-26", due_time: "" }, now)).toBe("today");
+    expect(taskColumn({ due_date: "2026-11-27", due_time: "10:00" }, now)).toBe("tomorrow");
+    expect(taskColumn({ due_date: "2026-11-30", due_time: "10:00" }, now)).toBe("later");
+  });
+  it("moving: +1 hour or tomorrow 10:00", () => {
+    expect(snoozeSlot("h1", now)).toEqual({ date: "2026-11-26", time: "15:00" });
+    expect(snoozeSlot("tomorrow", now)).toEqual({ date: "2026-11-27", time: "10:00" });
+    expect(snoozeSlot("h1", Date.parse("2026-11-26T23:30:00+05:00"))).toEqual({ date: "2026-11-27", time: "00:30" });
   });
 });

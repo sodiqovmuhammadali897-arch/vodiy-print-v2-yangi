@@ -607,7 +607,22 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   left, tasks + history right; `/leads/:id` still renders it as a page.
   `crm/leadLink.ts useLeadHref` decides where a lead opens (in /leads → the
   panel, elsewhere → its page) for the board, tasks, home and calls.
-  Next: step 3 (task columns, Telegram task reminders, outgoing calls).
+- **Step 3 — built 2026-11-26:** Zadachalar in four columns (Muddati o'tgan ·
+  Bugun · Ertaga · Keyinroq; `taskColumn`, `TASK_COLUMNS` in `src/lib/crm.ts`;
+  cards with quick results and ⏰ +1 soat / Ertaga 10:00 → `moveLeadTask`).
+  Telegram reminders: `meta-webhook/leadTaskBot.js` every minute — at the
+  due time «⏰ Zadacha vaqti bo'ldi», 30 min later one «🔴 muddati o'tdi»,
+  08:00–20:00 only, tasks older than 12 h skipped, `lead_tasks.reminded
+  {due, late}` (cleared on a move). Buttons `lt:{task}:talk|noans|h1|tom`:
+  Gaplashdim (+ Qayta aloqa tomorrow 10:00 if nothing else open), Javob
+  bermadi (+ a call in 2 h, or 10:00 next day), +1 soat, Ertaga; only the
+  assignee or an admin. Only staff ticked «Zadacha eslatmalari (ERP)» in
+  Xodimlar (`bot_tasks.tasks`, default OFF); `TASK_REMINDERS=off` stops it.
+  Calls: an answered call of 30 s+ (in or out, `callLeads.talkedSeconds`)
+  on an open lead closes its call / Qayta aloqa tasks due by today
+  (`tasksDoneByTalk`) with «📞 Gaplashildi (N daq) — … qo'ng'iroq», and adds
+  Qayta aloqa tomorrow 10:00 if nothing stays open. Outgoing calls were
+  already put on the lead's timeline.
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an

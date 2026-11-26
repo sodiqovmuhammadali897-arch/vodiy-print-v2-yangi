@@ -117,6 +117,12 @@ export async function addLeadTask(
   await logLeadActivity(lead.id, `Zadacha qo'yildi: ${taskTypeInfo(type).label} — ${date}${time ? " " + time : ""}${note ? ` (${note})` : ""}`, actor.email, actor.name);
 }
 
+// A new time for an open task; its Telegram reminder comes again then.
+export async function moveLeadTask(task: LeadTask, date: string, time: string, actor: Actor): Promise<void> {
+  await updateOne("lead_tasks", task.id, { due_date: date, due_time: time, reminded: {} });
+  await logLeadActivity(task.lead_id, `Zadacha ko'chirildi: ${taskTypeInfo(task.type).label} → ${date}${time ? " " + time : ""}`, actor.email, actor.name);
+}
+
 // Done, with what came of it (required).
 export async function completeLeadTask(task: LeadTask, result: string, actor: Actor): Promise<void> {
   const r = result.trim();

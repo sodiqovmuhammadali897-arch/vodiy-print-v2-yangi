@@ -172,7 +172,9 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
           <p className="text-sm text-ink-500">
             {view === "home"
               ? "Bugungi zadachalar, qo'ng'iroqlar va lidlar. Raqamni bossangiz, ro'yxati ochiladi."
-              : "Lid, bosqich, zadacha — ERP ichida. Kartani sudrab keyingi bosqichga o'tkazing."}
+              : view === "tasks"
+                ? "Muddati o'tgan, bugungi, ertangi va keyingi zadachalar. Qo'ng'iroq 30 s dan oshsa, zadacha o'zi yopiladi."
+                : "Lid, bosqich, zadacha — ERP ichida. Kartani sudrab keyingi bosqichga o'tkazing."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

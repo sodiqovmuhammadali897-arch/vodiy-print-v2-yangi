@@ -69,4 +69,26 @@ function needsCallback(openTasks, now = Date.now()) {
   return !openTasks.some((t) => t.status === "open" && (t.type === "call" || t.type === "follow_up") && String(t.due_date) <= today);
 }
 
-module.exports = { CRM_START, pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone };
+// Talk time of a call in seconds: answer → end when both came, else the
+// event's duration (answered calls only).
+function talkedSeconds(event) {
+  if (!event || !event.answered) return 0;
+  const a = Number(event.answer_time);
+  const e = Number(event.end_time);
+  if (a > 0 && e >= a) return Math.round(e - a);
+  return Math.max(0, Math.round(Number(event.duration) || 0));
+}
+
+// Step 3 (2026-11-26): a real talk (30 s or more, in or out) does the
+// lead's call tasks that are due today or earlier — the manager need not
+// tick them by hand. Returns the tasks to close.
+const TALK_MIN_S = 30;
+function tasksDoneByTalk(tasks, seconds, now = Date.now()) {
+  if (seconds < TALK_MIN_S) return [];
+  const today = new Date(now + 5 * 3600e3).toISOString().slice(0, 10);
+  return tasks.filter((t) => t.status === "open" && (t.type === "call" || t.type === "follow_up") && String(t.due_date || "") <= today);
+}
+
+const talkLabel = (sec) => (sec >= 60 ? `${Math.floor(sec / 60)} daq ${sec % 60} s` : `${sec} s`);
+
+module.exports = { CRM_START, pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone, talkedSeconds, tasksDoneByTalk, talkLabel, TALK_MIN_S };

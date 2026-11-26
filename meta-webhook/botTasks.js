@@ -1,7 +1,9 @@
 // What the bot gives each staff member — ticked by the owner in Xodimlar →
 // «Bot unga nima bersin» (2026-11-24: «doim sanga qandaydir managerga
 // buyruqlar beryapman, shuni xodimlar ruxsatiga belgidan qil»). Kept on
-// staff.bot_tasks: { recall, recall_per_day, debts, leads, amo }.
+// staff.bot_tasks: { recall, recall_per_day, debts, leads, amo, tasks }.
+// `tasks` (2026-11-26): the ERP lead tasks' Telegram reminders
+// (leadTaskBot.js) — off until the owner ticks it.
 //
 // Before the owner ticks anything, a staff member keeps today's behaviour:
 // old customers and debts go to the names in RECALL_MANAGERS, every staff
@@ -9,7 +11,7 @@
 // `migrate` writes that once onto staff without bot_tasks, so the form
 // shows what really happens.
 
-const KINDS = ["recall", "debts", "leads", "amo"];
+const KINDS = ["recall", "debts", "leads", "amo", "tasks"];
 const norm = (s) => String(s || "").trim().toLowerCase();
 
 const legacyNames = () =>
@@ -26,6 +28,7 @@ function wants(s, kind, { managerName = "", names } = {}) {
   const bt = (s && s.bot_tasks) || {};
   if (typeof bt[kind] === "boolean") return bt[kind];
   if (kind === "recall" || kind === "debts") return !!(s && s.report_manager_id) && inLegacy(s, managerName, names);
+  if (kind === "tasks") return false; // new — only when ticked
   return true; // leads, amo — as before
 }
 
