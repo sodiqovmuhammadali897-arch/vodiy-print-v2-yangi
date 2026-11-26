@@ -116,7 +116,7 @@ const missedText = (c, { who, manager, lead, now }) =>
     .filter(Boolean)
     .join("\n");
 
-const create = (db, { telegram = null, managersTarget = null } = {}) => {
+const create = (db, { telegram = null, managersTarget = null, contacts = null } = {}) => {
   let flagAt = 0;
   let amoOff = false;
   const isAmoOff = async () => {
@@ -131,7 +131,12 @@ const create = (db, { telegram = null, managersTarget = null } = {}) => {
   const toAdmins = async (staff, text) => {
     if (text) for (const s of admins(staff)) await send(Number(s.telegram_chat_id), text);
   };
-  const callsSince = async (ms) => (await db.collection("calls").where("created_at", ">=", new Date(ms).toISOString()).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  // Kontaktlar' calls (the office, staff, suppliers …) are not sales: left out.
+  const callsSince = async (ms) => {
+    const rows = (await db.collection("calls").where("created_at", ">=", new Date(ms).toISOString()).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+    const index = contacts ? await contacts.load().catch(() => new Map()) : new Map();
+    return rows.filter((c) => !c.contact && !index.has(digits(c.phone)));
+  };
 
   const tick = async (now = Date.now()) => {
     if (!(await isAmoOff())) return;

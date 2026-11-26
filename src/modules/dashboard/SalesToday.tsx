@@ -10,6 +10,8 @@ import { DEFAULT_TALK_TARGET_MIN, talkProgress } from "../../lib/managerHome";
 import { callStats, minutes, myUnreturned } from "../../lib/salesToday";
 import { useCrm } from "../leads/crm/useCrm";
 import { TaskRow } from "../leads/crm/TaskList";
+import { useContacts } from "../leads/crm/useContacts";
+import { salesCalls } from "../../lib/contacts";
 
 // The main Bosh sahifa's «Bugungi sotuv» (2026-11-26; the owner: «bosh
 // sahifada bugungi gaplashgan vaqti, zadachalari, kirish nechta, chiqish
@@ -38,7 +40,10 @@ export default function SalesToday() {
   const [period, setPeriod] = useState<PeriodKind>("today");
   const [who, setWho] = useState(""); // the owner's choice; "" = the team
   const email = owner ? who : me;
-  const [calls, setCalls] = useState<CallRow[]>([]);
+  const [allCalls, setCalls] = useState<CallRow[]>([]);
+  // Kontaktlar' calls (office, staff, suppliers, personal) are not sales.
+  const { index: contactsIndex } = useContacts();
+  const calls = useMemo(() => salesCalls(allCalls, contactsIndex), [allCalls, contactsIndex]);
   const [target, setTarget] = useState(DEFAULT_TALK_TARGET_MIN);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [tick, setTick] = useState(0);

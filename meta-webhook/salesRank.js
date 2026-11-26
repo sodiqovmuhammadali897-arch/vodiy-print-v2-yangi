@@ -54,8 +54,10 @@ function weekRank({ sellers, calls, tasks, orders, week }) {
   return rows.map(({ managerName, ...r }) => ({ ...r, rank: { talk: p.talk.get(r.email), done: p.done.get(r.email), sales: p.sales.get(r.email) }, of: rows.length }));
 }
 
-const create = (db) => {
+const create = (db, { contacts = null } = {}) => {
   const run = async (now = Date.now()) => {
+    const index = contacts ? await contacts.load().catch(() => new Map()) : new Map();
+    const notContact = (c) => !c.contact && !index.has(String(c.phone || "").replace(/\D/g, "").slice(-9));
     const week = weekStart(now);
     const from = new Date(Date.parse(`${week}T00:00:00+05:00`)).toISOString();
     const [staffSnap, managersSnap, callsSnap, tasksSnap, byDate, byCreated] = await Promise.all([
@@ -74,7 +76,7 @@ const create = (db) => {
     if (!sellers.length) return 0;
     const orders = new Map();
     for (const d of [...byDate.docs, ...byCreated.docs]) orders.set(d.id, d.data());
-    const rows = weekRank({ sellers, calls: callsSnap.docs.map((d) => d.data()), tasks: tasksSnap.docs.map((d) => d.data()), orders: [...orders.values()], week });
+    const rows = weekRank({ sellers, calls: callsSnap.docs.map((d) => d.data()).filter(notContact), tasks: tasksSnap.docs.map((d) => d.data()), orders: [...orders.values()], week });
     for (const r of rows) await db.collection("sales_rank").doc(`${week}_${r.email}`).set({ week, staff_email: r.email, ...r, updated_at: new Date(now).toISOString() });
     return rows.length;
   };

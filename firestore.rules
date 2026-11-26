@@ -266,6 +266,15 @@ service cloud.firestore {
     }
     // amoCRM tasks per manager and month (meta-webhook/amocrm.js), for the
     // KPI; the missed-task memory is server-only.
+    // Kontaktlar — numbers that are not leads (src/lib/contacts.ts). Anyone in
+    // sales reads and adds (as themselves); a contact is changed or removed by
+    // whoever added it, or an admin. The server keeps calls_count.
+    match /crm_contacts/{id} {
+      allow read: if isAdmin() || can('leads', 'view');
+      allow create: if (isAdmin() || can('leads', 'edit')) && request.resource.data.added_by_email == email();
+      allow update, delete: if isAdmin() || (can('leads', 'edit') && resource.data.added_by_email == email());
+    }
+
     // Weekly places in the team (salesRank.js): a seller reads only their own.
     match /sales_rank/{id} {
       allow read: if (isAdmin() && !isManagerAccount()) || (isStaff() && resource.data.staff_email == email());

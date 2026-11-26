@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLeadHref } from "./crm/leadLink";
+import { useContacts } from "./crm/useContacts";
+import { ContactModal } from "./crm/ContactsPage";
+import type { CrmData } from "./crm/useCrm";
+import { contactOfCall, contactType, salesCalls } from "../../lib/contacts";
 import { ChevronLeft, ChevronRight, PhoneIncoming, PhoneMissed, PhoneOutgoing } from "lucide-react";
 import { listRange } from "../../lib/firestoreDb";
 import { talkLabel, talkSeconds, type CallRow } from "../../lib/crmDash";
@@ -19,7 +23,11 @@ const KINDS: [CallKind, string][] = [
 // `me`: a manager sees only their own calls — made or taken by them, and the
 // missed ones on their leads or nobody's (2026-11-26: «faqat o'zini
 // ma'lumotlari o'ziga ko'rinsin»); "" = the owner, everyone's.
-export default function CallsLog({ sellers, me = "", leads = [] }: { sellers: { email: string; name: string }[]; me?: string; leads?: { id: string; assigned_to_email?: string }[] }) {
+export default function CallsLog({ sellers, me = "", leads = [], crm }: { sellers: { email: string; name: string }[]; me?: string; leads?: { id: string; assigned_to_email?: string }[]; crm?: CrmData }) {
+  // Kontaktlar: their calls are marked and kept out of the tiles (src/lib/contacts.ts).
+  const { contacts, index } = useContacts();
+  const [adding, setAdding] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const leadHref = useLeadHref();
   const today = tashkentDay();
   const [day, setDay] = useState(today);
@@ -54,10 +62,10 @@ export default function CallsLog({ sellers, me = "", leads = [] }: { sellers: { 
   }, [day, today]);
 
   const name = useMemo(() => new Map(sellers.map((s) => [s.email, s.name])), [sellers]);
-  const mine = useMemo(() => (calls || []).filter((c) => !staff || me || c.staff_email === staff), [calls, staff, me]);
+  const mine = useMemo(() => salesCalls((calls || []).filter((c) => !staff || me || c.staff_email === staff), index), [calls, staff, me, index]);
   const sum = callSummary(mine);
   const list = filterCalls(calls || [], kind, me ? "" : staff);
-  const notReturned = new Set(unreturned(calls || []).map((c) => c.id));
+  const notReturned = new Set(unreturned(salesCalls(calls || [], index)).map((c) => c.id));
 
   return (
     <div className="space-y-4">
@@ -119,18 +127,27 @@ export default function CallsLog({ sellers, me = "", leads = [] }: { sellers: { 
               const sec = talkSeconds(c);
               const missed = c.direction === "in" && !c.answered;
               const Icon = missed ? PhoneMissed : c.direction === "in" ? PhoneIncoming : PhoneOutgoing;
+              const ct = contactOfCall(c, index);
               return (
                 <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 text-sm">
                   <span className="w-12 shrink-0 tabular-nums text-ink-500">{timeOf(c)}</span>
                   <Icon className={`h-4 w-4 shrink-0 ${missed ? "text-rose-600" : c.direction === "in" ? "text-emerald-600" : "text-brand-600"}`} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-ink-900">{c.client_name || c.phone || "Noma'lum raqam"}</span>
+                    <span className="block truncate font-semibold text-ink-900">
+                      {ct ? `📇 ${ct.name}` : c.client_name || c.phone || "Noma'lum raqam"}
+                      {ct && <span className="ml-1.5 text-xs font-normal text-ink-500">· {contactType(ct.type).label.split(" /")[0].toLowerCase()} · kontakt</span>}
+                    </span>
                     <span className="text-xs text-ink-500">
                       {[c.client_name ? c.phone : "", c.staff_email ? name.get(c.staff_email) || c.staff_email : missed ? "hech kim olmadi" : "", sec ? talkLabel(sec) : c.answered ? "" : "javobsiz"].filter(Boolean).join(" · ")}
                     </span>
                   </span>
                   {notReturned.has(c.id) && <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">qayta qo'ng'iroq qiling</span>}
-                  {c.lead_id && (
+                  {!ct && crm && c.phone && (
+                    <button type="button" onClick={() => setAdding(c.phone || "")} className="rounded-lg border border-ink-200 px-2 py-1 text-xs font-semibold text-ink-600 hover:bg-ink-50">
+                      📇 Kontaktga qo'shish
+                    </button>
+                  )}
+                  {c.lead_id && !ct && (
                     <Link to={leadHref(c.lead_id)} className="rounded-lg border border-ink-200 px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">
                       Lid
                     </Link>
@@ -142,6 +159,19 @@ export default function CallsLog({ sellers, me = "", leads = [] }: { sellers: { 
           </div>
         )}
       </div>
+      {note && <div className="rounded-xl border border-ink-200 bg-surface px-4 py-2.5 text-sm text-ink-700">{note}</div>}
+      {adding !== null && crm && (
+        <ContactModal
+          open
+          crm={crm}
+          phone={adding}
+          existing={contacts || []}
+          onClose={(m) => {
+            setAdding(null);
+            if (m) setNote(m);
+          }}
+        />
+      )}
     </div>
   );
 }

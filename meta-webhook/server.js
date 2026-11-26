@@ -88,10 +88,12 @@ const amocrm = require("./amocrm").create(db, { notify: process.env.TELEGRAM_BOT
 // ERP lead tasks → KPI numbers (erp_tasks) and, once the ERP is main, the
 // daily task / lead messages (erpTasks.js).
 const erpTasks = require("./erpTasks").create(db, { telegram: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null });
+// Kontaktlar — numbers that are not leads (contacts.js).
+const crmContacts = require("./contacts").create(db);
 // «Jamoada o'rningiz — bu hafta» on the main Bosh sahifa (salesRank.js).
-const salesRank = require("./salesRank").create(db);
+const salesRank = require("./salesRank").create(db, { contacts: crmContacts });
 // Missed calls, 09:30 and 19:00 notices from ERP data once the amoCRM sync is off (erpDaily.js).
-const erpDaily = require("./erpDaily").create(db, { telegram: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null, managersTarget: groups ? groups.managersTarget : null });
+const erpDaily = require("./erpDaily").create(db, { telegram: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null, managersTarget: groups ? groups.managersTarget : null, contacts: crmContacts });
 // amoCRM's open deals → ERP leads, started by the owner from the app (amoImport.js).
 require("./amoImport").create(db, { amo: amocrm }).register(app);
 // Targetolog — Meta ads with marketolog → admin approval; see targetolog.js.
@@ -346,8 +348,12 @@ const handleCallFinish = async (event) => {
   const answeredLabel = answered ? "javob berildi" : "javob berilmadi";
   const durationLabel = formatCallDuration(duration);
 
+  // Kontaktlar (contacts.js): the office, staff, suppliers, personal numbers
+  // — not leads: no lead is opened or touched, no task, just the call.
+  const contact = await crmContacts.of(clientNumber).catch(() => null);
+
   // The caller's open lead (callLeads.js); a customer by phone for the name.
-  const leadsAll = (await db.collection("leads").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const leadsAll = contact ? [] : (await db.collection("leads").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
   const target = normalizeCallPhone(clientNumber);
   const orderStatus = {};
   for (const l of leadsAll) {
@@ -369,7 +375,7 @@ const handleCallFinish = async (event) => {
 
   // An incoming call with no open lead is a new enquiry — a new lead
   // (a repeat customer too), given to whoever took the call.
-  if (CALL_LEADS_ON && !lead && isIncoming && target.length === 9) {
+  if (CALL_LEADS_ON && !contact && !lead && isIncoming && target.length === 9) {
     const name = customer ? [customer.first_name, customer.last_name].filter(Boolean).join(" ") || customer.company || "" : clientName || "";
     const fields = {
       full_name: name || "Noma'lum (qo'ng'iroq)",
@@ -405,10 +411,16 @@ const handleCallFinish = async (event) => {
     // Which Mois Zvonki account it was, matched or not — to link the rest.
     mz_account: staffEmail || String(event?.user_name || ""),
     mz_src: normalizeCallPhone(event?.src_number),
+    contact: contact ? { id: contact.id, name: contact.name, type: contact.type } : null,
     // The event's field names (no values) — to see which one names the employee.
     event_keys: Object.keys(event || {}).sort(),
     created_at: now,
   });
+
+  if (contact) {
+    const { FieldValue } = require("firebase-admin/firestore");
+    await db.collection("crm_contacts").doc(contact.id).update({ calls_count: FieldValue.increment(1), last_call_at: now }).catch(() => undefined);
+  }
 
   if (lead) {
     await db.collection("lead_activities").add({

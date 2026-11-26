@@ -723,6 +723,24 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   the other lead's manager. This is in the app — the Firestore rules still
   let leads viewers read all leads (needed for LID numbers and the phone
   duplicate check); a rules-level lock would need server endpoints for those.
+- **Kontaktlar — 2026-11-26** (owner: «ishxona nomerlari, shaxsiy
+  kontaktlarni kirgizib qo'ysak, u nomerlar zadacha yoki yangi lidlarga
+  tushmasin»; «manager ham qo'shsa bo'lsin»; menu Lidlar · Zadachalar ·
+  Qo'ng'iroqlar · Tahlil · Kontaktlar): `crm_contacts/{id}` {name, phone,
+  digits (last 9), type office|staff|supplier|personal, note, added_by_*,
+  calls_count, last_call_at}; rules: leads viewers read, leads editors add
+  as themselves, the adder or an admin edits/deletes. `src/lib/contacts.ts`
+  (index, `contactOfCall`, `salesCalls`, `contactProblem`),
+  `crm/useContacts.ts`, `crm/ContactsPage.tsx` (list, type chips, search,
+  `ContactModal`; saving closes open leads with that number as lost
+  «Kontakt (lid emas)» where the rules allow). Server `meta-webhook/
+  contacts.js` (cached 2 min): `handleCallFinish` opens/touches no lead for
+  a contact's call (no task, no task closing), writes `calls.contact` and
+  bumps the contact's calls_count; erpDaily (missed / 09:30 / 19:00) and
+  salesRank leave contacts' calls out. In the app: Qo'ng'iroqlar shows
+  «📇 Name · type · kontakt», keeps them out of the tiles and «qayta
+  qo'ng'iroq qiling», and has «📇 Kontaktga qo'shish» on other numbers;
+  Bosh sahifa's Bugungi sotuv counts no contact calls (talk time included).
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an
