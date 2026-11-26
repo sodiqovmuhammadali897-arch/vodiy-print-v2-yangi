@@ -818,6 +818,11 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     (amoCRM's + the ERP's own `calls` of that phone, `mergeCalls`,
     `phoneForms`; ▶ audio) · Bitimlar (all fields, tags) · Izohlar. Old
     recordings may be gone from Mois Zvonki.
+    Notes are read per deal/contact (`filter[entity_id][]`, 50 a request):
+    reading the whole notes list stopped at 17.09. Real after the re-run
+    (2026-11-26 18:24): 17 265 calls (8 559 with a recording) → 3 248 of
+    3 450 customers have calls; 358 notes; recordings from 14.05 to today
+    open (HTTP 206 audio).
 - **ERP'ga o'tish (switchover) — built 2026-11-26** (owner: «25 kundagi
   yangi lidlardan boshqa eski lidlarni yop; ertadan managerlar ERP bo'yicha
   ishlaydi; amodan hamma zadachalarni ko'chir — Muhammadiyor, Nuriddin»).
