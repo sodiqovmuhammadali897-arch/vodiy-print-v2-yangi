@@ -832,7 +832,18 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   open ERP lead created before the cut-off with no order is closed: lost
   «Eski lid (ERP'ga o'tish)», `lost_at`; its open tasks → done +
   `cancelled: true` (erpTasks, salesRank and crmDash skip them). Closed
-  leads flow into Mijozlar bazasi. Not run yet — the owner presses it.
+  leads flow into Mijozlar bazasi (a phone that still has an open lead is
+  left out — `crmBase.syncErp` `active`).
+  - **Run 2026-11-26 ~17:00** — together with «amoCRM'dan ko'chirish» at
+    the same moment, so doubles were made; a second run closed most. Then
+    `crm-fix.yml` (writer, owner: «ha, uchalasini qil»; preview/apply,
+    counts only, logged in `data_fixes`): Jamila's (Maryam's old amoCRM
+    «Menejer 2») 161 open leads + 162 tasks shared Muhammaddiyor 81 /
+    Nuriddin 80; 74 ownerless tasks → the lead's manager (7 left, lead
+    has nobody); 8 double leads closed «Takror lid (birlashtirildi)»; 2
+    double + 1 orphan task cancelled. Before the fix: 513 open leads (460
+    from amoCRM with tasks, 53 from 25.11), 647 open tasks (214 overdue),
+    753 old leads closed. `crm-check.yml` (read only) prints these counts.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
