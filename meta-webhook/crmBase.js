@@ -283,11 +283,16 @@ const create = (db, { amo, log = console } = {}) => {
       for (const doc of (await COL.get()).docs) for (const e of doc.data().deals || []) if (e.source === "erp") synced.set(e.key, e.reason);
       synced.set("_loaded", "");
     }
-    const lost = (await db.collection("leads").where("status", "==", "lost").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+    const all = (await db.collection("leads").get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+    const lost = all.filter((l) => l.status === "lost");
+    // A phone that still has an open lead is a customer in work, not one for
+    // the base (the switchover closed doubles of open amoCRM deals). Its lost
+    // leads come in once it has no open lead left.
+    const active = new Set(all.filter((l) => l.status !== "lost").map((l) => digitsOf(l.phone)).filter((d) => d.length >= 9));
     let n = 0;
     for (const l of lost) {
       const d = digitsOf(l.phone);
-      if (d.length < 9 || NOT_CUSTOMER.test(l.lost_reason || "")) continue;
+      if (d.length < 9 || NOT_CUSTOMER.test(l.lost_reason || "") || active.has(d)) continue;
       const e = erpEntry(l);
       if (synced.get(e.key) === e.reason) continue;
       const ref = COL.doc(d);
