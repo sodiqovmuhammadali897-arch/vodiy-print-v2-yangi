@@ -800,6 +800,43 @@ export type Lead = {
   quantity?: string;
 };
 
+// Mijozlar bazasi (meta-webhook/crmBase.js): one customer per phone with
+// every closed deal ever (amoCRM's won/lost and the ERP's lost leads).
+export type BaseDeal = {
+  key: string;
+  source: "amo" | "erp";
+  status: "won" | "lost";
+  reason: string;
+  group: string; // price | competitor | no_answer | wrong_number | cancelled | other | none | won
+  closed_at: string;
+  created_at: string;
+  manager_name: string;
+  manager_email: string;
+  product: string;
+  price: number;
+  title: string;
+  comment?: string;
+  amo_id?: number;
+  lead_id?: string;
+};
+export type CrmBaseDoc = {
+  id: string;
+  digits: string;
+  phone: string;
+  name?: string;
+  brand?: string;
+  region?: string;
+  industry?: string;
+  address?: string;
+  deals: BaseDeal[];
+  last: { status: string; reason: string; group: string; closed_at: string; manager_name: string; source: string };
+  lost: number;
+  won: number;
+  sum: number;
+  reopened?: { count: number; last_at: string; lead_id: string; by_name: string; to_name: string } | null;
+  updated_at?: string;
+};
+
 export type LeadTaskType =
   | "call"
   | "telegram"

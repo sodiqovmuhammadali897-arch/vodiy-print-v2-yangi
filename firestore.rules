@@ -269,6 +269,15 @@ service cloud.firestore {
     // Kontaktlar — numbers that are not leads (src/lib/contacts.ts). Anyone in
     // sales reads and adds (as themselves); a contact is changed or removed by
     // whoever added it, or an admin. The server keeps calls_count.
+    // Mijozlar bazasi (meta-webhook/crmBase.js, 2026-11-26): every closed
+    // deal of a phone. Everyone with leads sees it (owner: «managerlar ham
+    // umumiyni ko'ra olsin»); the server writes it; people only mark a
+    // customer as taken back into work.
+    match /crm_base/{id} {
+      allow read: if isAdmin() || can('leads', 'view');
+      allow update: if (isAdmin() || can('leads', 'edit'))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reopened', 'updated_at']);
+    }
     match /crm_contacts/{id} {
       allow read: if isAdmin() || can('leads', 'view');
       allow create: if (isAdmin() || can('leads', 'edit')) && request.resource.data.added_by_email == email();

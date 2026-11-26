@@ -787,6 +787,25 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   back from Meta, matches the ERP lead (`meta_leads.lead_id`, now written on
   ingest, else phone among form leads), fills blanks only; counts in
   `crm_meta/portrait_backfill` (delete `done_at` to run it again).
+- **Mijozlar bazasi — 2026-11-26** (owner: «yopilgan, qimmat degan hamma
+  lidlar to'planadigan baza, kontaktlardan pastda; amodagi eski hamma
+  ma'lumotni ol (3000+)»; «managerlar ham umumiyni ko'ra olsin — boshqa
+  manager gaplashgan bo'lsa tarix ko'rinishi kerak»). `crm_base/{last 9
+  digits}` = one customer with every closed deal (`deals[]`: source amo|erp,
+  won|lost, reason (Latin), group as amoLost, closed_at, manager, product,
+  price, comment) + `last`, `lost`, `won`, `sum`, `reopened`.
+  `meta-webhook/crmBase.js`: owner-only `/webhooks/crm/amo-base/preview|run`
+  (amoCRM's 142/143 deals with contacts; progress `crm_meta/amo_base`;
+  merges by key, re-run adds only new) and every 30 min the ERP's lost leads
+  (not «Kontakt (lid emas)»). Rules: leads viewers read; people update only
+  `reopened`. Page Sotuv bo'limi → «Mijozlar bazasi» (`?v=baza`,
+  `crm/BasePage.tsx`, logic `src/lib/crmBase.ts`, read once per 5 min by
+  `useBase`): tiles by group, filters, Excel (CSV), expandable history,
+  «Qayta ishlash» (`crmService.reopenFromBase`: new lead «Qabul qilindi»,
+  source «Mijozlar bazasi», «Qayta aloqa» task in 30 min, or the open lead
+  of that phone); admins pick «Kimga beriladi» and give many at once. Lead
+  card: «📚 Oldin N marta murojaat qilgan» (`useBaseOf`, own deal hidden).
+  The import is NOT run yet — the owner presses it.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

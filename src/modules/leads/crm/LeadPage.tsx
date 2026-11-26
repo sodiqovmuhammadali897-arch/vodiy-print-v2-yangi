@@ -44,6 +44,9 @@ import LostModal from "./LostModal";
 import { TaskRow } from "./TaskList";
 import { useCrmOpen } from "./crmOpen";
 import { useSalesFon } from "../SalesFon";
+import { useBaseOf } from "./useBase";
+import { History } from "./BasePage";
+import { historyFor } from "../../../lib/crmBase";
 
 // One lead: its stage, fields (amoCRM's), timeline and tasks.
 const tashToday = () =>
@@ -355,6 +358,7 @@ export function LeadCard({ id, crm, panel = false, onClose }: { id: string; crm?
               </button>
             )}
           </div>
+          <BaseHistory phone={lead.phone} leadId={lead.id} />
           {(lead.form_answers || []).length > 0 && (
             <div className="rounded-xl border border-sky-200 bg-sky-50/70 px-3 py-2 dark:border-sky-800 dark:bg-sky-900/20">
               <div className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-200">
@@ -788,5 +792,27 @@ function Multi({
         </select>
       </div>
     </Row>
+  );
+}
+
+// The same phone's earlier closed deals (Mijozlar bazasi): who talked, why
+// it was lost, what they asked — so another manager sees it (2026-11-26).
+function BaseHistory({ phone, leadId }: { phone: string; leadId: string }) {
+  const doc = useBaseOf(phone);
+  const deals = historyFor(doc, leadId);
+  const [open, setOpen] = useState(true);
+  if (!deals.length) return null;
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
+      <button type="button" className="flex w-full items-center justify-between text-left text-[10.5px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200" onClick={() => setOpen((o) => !o)}>
+        <span>📚 Oldin {deals.length} marta murojaat qilgan</span>
+        <span>{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div className="mt-1.5">
+          <History deals={deals} />
+        </div>
+      )}
+    </div>
   );
 }

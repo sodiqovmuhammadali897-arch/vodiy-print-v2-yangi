@@ -6,7 +6,8 @@ import { convertLeadToCustomer } from "./leadConversion";
 import { changeOrderStatus } from "./orderStatus";
 import { nextLeadNumber } from "./numbering";
 import { MANUAL_COLUMNS, columnLabel, taskTypeInfo, type CrmColumn } from "./crm";
-import type { Lead, LeadTask } from "./types";
+import type { CrmBaseDoc, Lead, LeadTask } from "./types";
+import { digitsOf, reopenFields } from "./crmBase";
 
 export type Actor = { email: string; name: string };
 
@@ -182,4 +183,30 @@ export async function leadByPhone(phone: string): Promise<Lead | null> {
   if (d.length < 9) return null;
   const leads = await listAll<Lead>("leads");
   return leads.find((l) => String(l.phone || "").replace(/\D/g, "").slice(-9) === d) || null;
+}
+
+// Mijozlar bazasi → «Qayta ishlash» (2026-11-26): the customer becomes a new
+// lead («Qabul qilindi») for `to`, with a «Qayta aloqa» task and the old
+// history in its note; crm_base keeps who took it and when. A phone that
+// already has an open lead is not doubled — that lead is returned.
+export async function reopenFromBase(
+  c: CrmBaseDoc,
+  to: Actor,
+  actor: Actor,
+  allLeads: Lead[],
+): Promise<{ leadId: string; existing: boolean }> {
+  const open = allLeads.find((l) => digitsOf(l.phone) === c.digits && l.status !== "lost" && !l.converted_order_id);
+  if (open) return { leadId: open.id, existing: true };
+  const { taskNote, ...fields } = reopenFields(c);
+  const id = await createCrmLead({ ...fields, assigned_to_email: to.email, assigned_to_name: to.name }, actor, null);
+  const tash = new Date(Date.now() + 5 * 3600e3 + 30 * 60e3);
+  const late = tash.getUTCHours() >= 18;
+  const day = late ? new Date(tash.getTime() + 86400e3).toISOString().slice(0, 10) : tash.toISOString().slice(0, 10);
+  const time = late ? "10:00" : tash.toISOString().slice(11, 16);
+  await addLeadTask({ id, full_name: fields.full_name || fields.brand || fields.phone, assigned_to_email: to.email, assigned_to_name: to.name }, "follow_up", day, time, taskNote, actor);
+  await updateOne("crm_base", c.id, {
+    reopened: { count: (c.reopened?.count || 0) + 1, last_at: now(), lead_id: id, by_name: actor.name, to_name: to.name },
+    updated_at: now(),
+  });
+  return { leadId: id, existing: false };
 }

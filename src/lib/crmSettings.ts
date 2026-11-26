@@ -7,7 +7,7 @@ import { applyContactTypes } from "./contacts";
 
 export type StageSetting = { key: string; label: string; color: string };
 export type TypeSetting = { key: string; label: string; icon: string };
-export type SectionKey = "lidlar" | "zadachalar" | "qongiroqlar" | "tahlil" | "kontaktlar" | "sozlamalar";
+export type SectionKey = "lidlar" | "zadachalar" | "qongiroqlar" | "tahlil" | "kontaktlar" | "baza" | "sozlamalar";
 export type CrmSettingsDoc = {
   stages?: StageSetting[];
   sections?: Partial<Record<SectionKey, string>>;
@@ -25,6 +25,7 @@ export const DEFAULT_SECTIONS: Record<SectionKey, string> = {
   qongiroqlar: "Qo'ng'iroqlar",
   tahlil: "Tahlil",
   kontaktlar: "Kontaktlar",
+  baza: "Mijozlar bazasi",
   sozlamalar: "Sozlamalar",
 };
 const sections: Record<SectionKey, string> = { ...DEFAULT_SECTIONS };

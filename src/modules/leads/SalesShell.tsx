@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { BarChart3, BookUser, CheckSquare, Phone, Rows3, Settings, Users } from "lucide-react";
+import { Archive, BarChart3, BookUser, CheckSquare, Phone, Rows3, Settings, Users } from "lucide-react";
 import { useCrm } from "./crm/useCrm";
 import LeadsBoard from "./crm/LeadsBoard";
 import CallsLog from "./CallsLog";
 import CrmAnalysis from "./crm/CrmAnalysis";
 import AmoImportCard from "./crm/AmoImportCard";
 import ContactsPage from "./crm/ContactsPage";
+import BasePage from "./crm/BasePage";
 import CrmSettings from "./crm/CrmSettings";
 import { sectionLabel } from "../../lib/crmSettings";
 import SwitchCard from "./crm/SwitchCard";
@@ -25,7 +26,7 @@ import { boardStats, isOldLead } from "../../lib/crm";
 // the amoCRM reports for the month of the move.
 // «Bosh sahifa» moved to the main Bosh sahifa (2026-11-26, the owner: «sotuv
 // bo'limidan bosh sahifani olib tashla») — dashboard/SalesToday.tsx.
-export type SalesSection = "lidlar" | "zadachalar" | "qongiroqlar" | "tahlil" | "kontaktlar" | "sozlamalar";
+export type SalesSection = "lidlar" | "zadachalar" | "qongiroqlar" | "tahlil" | "kontaktlar" | "baza" | "sozlamalar";
 type TahlilTab = "erp" | "otish" | "voronka" | "yutqazilgan" | "nazorat" | "amo";
 
 const SECTIONS: { key: SalesSection; label: string; icon: ReactNode }[] = [
@@ -34,6 +35,7 @@ const SECTIONS: { key: SalesSection; label: string; icon: ReactNode }[] = [
   { key: "qongiroqlar", label: "Qo'ng'iroqlar", icon: <Phone className="h-4 w-4" /> },
   { key: "tahlil", label: "Tahlil", icon: <BarChart3 className="h-4 w-4" /> },
   { key: "kontaktlar", label: "Kontaktlar", icon: <BookUser className="h-4 w-4" /> },
+  { key: "baza", label: "Mijozlar bazasi", icon: <Archive className="h-4 w-4" /> },
   // Admins only (crm/CrmSettings.tsx).
   { key: "sozlamalar", label: "Sozlamalar", icon: <Settings className="h-4 w-4" /> },
 ];
@@ -48,7 +50,7 @@ const TAHLIL: { key: TahlilTab; label: string }[] = [
 
 // Old links (?v=voronka …) land in the new place.
 export function sectionOf(v: string | null): { section: SalesSection; tab: TahlilTab } {
-  if (v === "lidlar" || v === "zadachalar" || v === "qongiroqlar" || v === "kontaktlar" || v === "sozlamalar") return { section: v, tab: "erp" };
+  if (v === "lidlar" || v === "zadachalar" || v === "qongiroqlar" || v === "kontaktlar" || v === "baza" || v === "sozlamalar") return { section: v, tab: "erp" };
   if (v === "voronka" || v === "yutqazilgan" || v === "nazorat" || v === "amo" || v === "otish") return { section: "tahlil", tab: v };
   if (v === "control") return { section: "tahlil", tab: "nazorat" };
   if (v === "tahlil") return { section: "tahlil", tab: "erp" };
@@ -115,6 +117,8 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
       <CallsLog sellers={crm.sellers} me={crm.isAdmin ? "" : crm.email} leads={crm.leads || []} crm={crm} />
     ) : section === "kontaktlar" ? (
       <ContactsPage crm={crm} />
+    ) : section === "baza" ? (
+      <BasePage crm={crm} isOwner={isOwner} />
     ) : section === "sozlamalar" && crm.isAdmin ? (
       <CrmSettings key={crm.settingsVersion > 0 ? "ready" : "wait"} crm={crm} />
     ) : (
