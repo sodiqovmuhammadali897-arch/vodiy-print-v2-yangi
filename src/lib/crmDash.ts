@@ -98,12 +98,12 @@ export function talkSeconds(
   return Math.max(0, Number(c.duration_seconds) || 0);
 }
 
-// "2 s 14 d", "47 daq", "40 s" — talk time on a tile.
+// "2 soat 14 daq", "47 daq", "40 s" — talk time on a tile.
 export function talkLabel(sec: number): string {
   if (sec < 60) return `${sec} s`;
   const m = Math.round(sec / 60);
   if (m < 60) return `${m} daq`;
-  return `${Math.floor(m / 60)} s ${m % 60} d`;
+  return `${Math.floor(m / 60)} soat ${m % 60} daq`;
 }
 
 // Tashkent hour of a call (9 for 09:xx).

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Target, TrendingUp, TrendingDown, Wallet, PackageOpen, ClipboardList, CircleCheck as CheckCircle2, Hourglass, Info } from "lucide-react";
+import { Target, TrendingUp, Wallet, Info } from "lucide-react";
 import { getOne, listAll } from "../../lib/firestoreDb";
 import { formatMoney, formatMoneyShort } from "../../lib/format";
 import { computeWorkdayStats, startOfDay } from "../../lib/workdays";
@@ -12,6 +12,8 @@ import DashboardHero from "./DashboardHero";
 import WorkdaysPanel from "./WorkdaysPanel";
 import ManagerStatsPanel from "./ManagerStatsPanel";
 import RecentOrdersPanel from "./RecentOrdersPanel";
+import SalesToday from "./SalesToday";
+import { planLine, workDaysLeft } from "../../lib/managerHome";
 
 type Stats = {
   plan: number;
@@ -102,8 +104,6 @@ export default function Dashboard() {
     [managers, staff],
   );
   const manager = myManager || managers.find((m) => m.id === picked) || null;
-  // One person's numbers: company-wide cards (expenses) are hidden.
-  const scopedView = !!manager || ownOnly;
 
   const { stats, recentOrders } = useMemo(() => {
     const today = new Date();
@@ -145,6 +145,12 @@ export default function Dashboard() {
 
   const workday = computeWorkdayStats(new Date(), holidays);
   const planProgress = stats.plan > 0 ? (stats.revenue / stats.plan) * 100 : 0;
+  // What is left of the plan per working day (2026-11-26, the owner's «hammasi qo'shilsin»).
+  const daysLeft = workDaysLeft(Date.now(), holidays.map((h) => h.date));
+  const pl = planLine(stats.plan, stats.revenue, daysLeft);
+  const perDay = stats.plan > 0 && pl.left > 0 && daysLeft > 0 ? { left: pl.left, days: daysLeft, perDay: pl.perDay } : null;
+  // «Bugungi sotuv»: calls and reminders, for anyone who works with leads.
+  const canSales = isAdmin || can("leads", "view");
 
   return (
     <div className="space-y-6">
@@ -173,7 +179,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {(canOrders || (canFinance && !scopedView)) && (
+      {canOrders && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {canOrders && (
             <>
@@ -189,7 +195,16 @@ export default function Dashboard() {
               <StatCard
                 title="Bu oy aylanmasi"
                 value={formatMoneyShort(stats.revenue)}
-                hint={<>Real sotuv: {formatMoney(stats.revenue)}</>}
+                hint={
+                  <>
+                    Real sotuv: {formatMoney(stats.revenue)}
+                    {perDay && (
+                      <span className="mt-1 block font-semibold text-ink-700">
+                        Qoldi {formatMoneyShort(perDay.left)} · {perDay.days} ish kuni → kuniga ~{formatMoneyShort(perDay.perDay)}
+                      </span>
+                    )}
+                  </>
+                }
                 tone="emerald"
                 icon={<TrendingUp className="h-5 w-5" />}
                 progress={Math.min(100, planProgress)}
@@ -202,54 +217,12 @@ export default function Dashboard() {
                 tone="rose"
                 icon={<Wallet className="h-5 w-5" />}
               />
-              <StatCard
-                title="Faol buyurtmalar"
-                value={stats.activeCount}
-                hint="Bu oy ichida ishlab turgan"
-                tone="amber"
-                icon={<PackageOpen className="h-5 w-5" />}
-              />
-              <StatCard
-                title="Bugungi buyurtmalar"
-                value={stats.todayCount}
-                hint="Bugun tushgan zakazlar"
-                tone="sky"
-                icon={<ClipboardList className="h-5 w-5" />}
-              />
-              <StatCard
-                title="Tugallangan buyurtmalar"
-                value={stats.doneCount}
-                hint="Bugun bajarilganlari"
-                tone="emerald"
-                icon={<CheckCircle2 className="h-5 w-5" />}
-              />
-              <StatCard
-                title="Bugungi kirim"
-                value={formatMoneyShort(stats.todayIncome)}
-                hint={<>To'langan: {formatMoney(stats.todayIncome)}</>}
-                tone="emerald"
-                icon={<TrendingUp className="h-5 w-5" />}
-              />
-              <StatCard
-                title="Bitmagan buyurtmalar"
-                value={stats.unfinishedCount}
-                hint="Hozircha yakunlanmagan, jami"
-                tone="amber"
-                icon={<Hourglass className="h-5 w-5" />}
-              />
             </>
-          )}
-          {canFinance && !scopedView && (
-            <StatCard
-              title="Bugungi chiqim"
-              value={formatMoneyShort(stats.todayExpense)}
-              hint={<>Xarajat: {formatMoney(stats.todayExpense)}</>}
-              tone="rose"
-              icon={<TrendingDown className="h-5 w-5" />}
-            />
           )}
         </div>
       )}
+
+      {canSales && <SalesToday />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <WorkdaysPanel stats={workday} />

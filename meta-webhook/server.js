@@ -88,6 +88,8 @@ const amocrm = require("./amocrm").create(db, { notify: process.env.TELEGRAM_BOT
 // ERP lead tasks → KPI numbers (erp_tasks) and, once the ERP is main, the
 // daily task / lead messages (erpTasks.js).
 const erpTasks = require("./erpTasks").create(db, { telegram: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null });
+// «Jamoada o'rningiz — bu hafta» on the main Bosh sahifa (salesRank.js).
+const salesRank = require("./salesRank").create(db);
 // Missed calls, 09:30 and 19:00 notices from ERP data once the amoCRM sync is off (erpDaily.js).
 const erpDaily = require("./erpDaily").create(db, { telegram: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null, managersTarget: groups ? groups.managersTarget : null });
 // amoCRM's open deals → ERP leads, started by the owner from the app (amoImport.js).
@@ -537,6 +539,7 @@ app.listen(PORT, () => {
   if (leadTasks) leadTasks.start();
   erpTasks.start();
   erpDaily.start();
+  salesRank.start();
   salesKpi.start();
   guideFacts.start();
   void amocrm.start().catch((err) => console.error("amoCRM start failed", err));

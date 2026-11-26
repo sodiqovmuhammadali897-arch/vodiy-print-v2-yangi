@@ -689,19 +689,29 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   markCrmLost (older ones fall back to updated_at). staffbot's KPI answer
   and bonus.js read/say «zadachalar» from the main system.
   - The switch is NOT flipped — the owner decides after the parallel week.
-- **Step 7 — Menejer bosh sahifasi, built 2026-11-26** (owner chose it as
-  step 7; the mockup of 2026-11-13): a manager's Bosh sahifa is
-  `crm/ManagerHome.tsx` (logic `src/lib/managerHome.ts`): greeting, period
-  (Bugun/Kecha/Hafta/Oy), tiles overdue / due today / done (± previous) /
-  no-task leads (crmDash with owner = the manager), «Gaplashdim» (talk
-  time, calls, 30 s+ talks, missed; Bugun: bar against the daily target
-  `crm_settings/main.talk_target_min`, default 60, set by the owner on
-  Tahlil → «amoCRM → ERP»), «Yangi lidlarim» (by source), «Oylik reja»
-  (kpi_sales sales vs kpi_months.plan or managers.monthly_plan; left,
-  working days left without Sundays, needed per day), today's + overdue
-  tasks (TaskRow, closable there), own funnel and this month's conversion
-  vs the team's. The owner's Bosh sahifa has «Ko'rinish: … ko'zi bilan» to
-  see any seller's page. `useCrm` sellers now carry `managerId`.
+- **Main Bosh sahifa = the sales home — 2026-11-26** (owner: «sotuv
+  bo'limida bosh sahifani olib tashlaymiz, bitta bosh sahifa bo'ladi»;
+  «bu oy rejasi, aylanmasi, qarzdorlik qolsin, qolganlari shartmas»;
+  «hammasi qo'shilsin» for the 4 recommendations). Sotuv bo'limi has no
+  «Bosh sahifa» now (Lidlar · Zadachalar · Qo'ng'iroqlar · Tahlil; `/leads`
+  opens Lidlar). `/dashboard`: compact mission banner, only Bu oy rejasi /
+  aylanmasi (+ «Qoldi X · N ish kuni → kuniga ~Y», `managerHome.ts
+  planLine/workDaysLeft`) / qarzdorlik, then `dashboard/SalesToday.tsx`
+  (for admins or leads view; logic `src/lib/salesToday.ts`): Bugun / Kecha
+  / Hafta; talk time vs `crm_settings/main.talk_target_min` (set on Tahlil
+  → «amoCRM → ERP»); Kiruvchi and Chiquvchi — count + minutes talked
+  (+ answered / missed); Eslatmalar = lead tasks (overdue first, then
+  today, closable there); «Qaytarilmagan qo'ng'iroqlar» (missed, not
+  called back — the seller's leads' or ownerless; tel: link);
+  «Zadachasiz lidlar» (biggest first, opens the lead drawer); «Jamoada
+  o'rningiz — bu hafta» from `sales_rank/{week}_{email}`
+  (`meta-webhook/salesRank.js`, every 30 min: talk, ERP tasks done, sales
+  by manager_name like KPI, places from Monday; rules: own doc, owner all).
+  A seller sees their own (missed calls on their leads count to them); the
+  owner sees the team + «Menejerlar — bugun» table (talk, target %, in/out
+  with minutes, missed, done/left/overdue tasks, no-task leads, first call;
+  a name opens that seller) and can pick one seller. ManagerHome.tsx was
+  removed. `talkLabel` now says «2 soat 14 daq».
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an

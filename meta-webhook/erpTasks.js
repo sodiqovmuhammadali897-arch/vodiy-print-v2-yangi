@@ -172,7 +172,7 @@ const adminTasksText = (rows) => (rows.length ? ["📊 Bugun ERP zadachalari", .
 const adminDealsText = (rows) => {
   const bad = rows.filter((r) => r.noTask || r.stale);
   if (!bad.length) return "✅ Lidlar: hamma ochiq lidda keyingi zadacha bor, 3 kundan ortiq harakatsiz lid yo'q.";
-  return ["📋 Lid nazorati — 10:00 (ERP)", ...bad.map((r) => `${r.name} — zadachasiz ${r.noTask}, harakatsiz ${r.stale}`), "", "Ro'yxatlar menejerlarga yuborildi. Batafsil: Sotuv bo'limi → Bosh sahifa."].join("\n");
+  return ["📋 Lid nazorati — 10:00 (ERP)", ...bad.map((r) => `${r.name} — zadachasiz ${r.noTask}, harakatsiz ${r.stale}`), "", "Ro'yxatlar menejerlarga yuborildi. Batafsil: ERP → Bosh sahifa."].join("\n");
 };
 
 const SLOTS = [

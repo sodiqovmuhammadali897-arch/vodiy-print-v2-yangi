@@ -96,7 +96,7 @@ describe("CRM home: talk time", () => {
   it("labels", () => {
     expect(talkLabel(40)).toBe("40 s");
     expect(talkLabel(47 * 60)).toBe("47 daq");
-    expect(talkLabel(134 * 60)).toBe("2 s 14 d");
+    expect(talkLabel(134 * 60)).toBe("2 soat 14 daq");
     expect(
       callHour({ start_time: "2026-11-13T05:10:00Z", created_at: "" }),
     ).toBe(10);
