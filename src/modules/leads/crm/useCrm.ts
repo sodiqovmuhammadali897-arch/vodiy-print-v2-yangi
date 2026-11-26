@@ -21,7 +21,10 @@ export function useCrm(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
     const onErr = (e: Error) => setError(e.message);
-    const offLeads = subscribeAll<Lead>("leads", (rows) => setLeads(rows), undefined);
+    // A manager sees only their own leads, and the new ones nobody took yet
+    // (to take with «Qabul qildim») — the owner, 2026-11-26: «sotuv
+    // bo'limida faqat manager o'zini ma'lumotlari o'ziga ko'rinsin».
+    const offLeads = subscribeAll<Lead>("leads", (rows) => setLeads(auth.isAdmin ? rows : rows.filter((l) => visibleToManager(l, email))), undefined);
     const offTasks = auth.isAdmin
       ? subscribeAll<LeadTask>("lead_tasks", setTasks)
       : subscribeWhere<LeadTask>("lead_tasks", "assigned_to_email", email, setTasks, undefined, onErr);
@@ -49,3 +52,7 @@ export function useCrm(enabled = true) {
   return { leads, tasks, orders, sellers, actor, isAdmin: auth.isAdmin, email, error };
 }
 export type CrmData = ReturnType<typeof useCrm>;
+
+// A manager's own lead, or a new one nobody has taken.
+export const visibleToManager = (l: Pick<Lead, "assigned_to_email" | "status">, email: string) =>
+  String(l.assigned_to_email || "").toLowerCase() === email || (!l.assigned_to_email && (l.status === "new" || !l.status));

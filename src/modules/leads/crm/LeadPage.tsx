@@ -39,7 +39,7 @@ import {
   updateCrmLead,
 } from "../../../lib/crmService";
 import type { Lead, LeadActivity } from "../../../lib/types";
-import { useCrm, type CrmData } from "./useCrm";
+import { useCrm, visibleToManager, type CrmData } from "./useCrm";
 import LostModal from "./LostModal";
 import { TaskRow } from "./TaskList";
 import { useCrmOpen } from "./crmOpen";
@@ -142,6 +142,9 @@ export function LeadCard({ id, crm, panel = false, onClose }: { id: string; crm?
 
   // Managers only once the owner opened the section (crmOpen.ts).
   if (!isAdmin && openToManagers === false) return <Navigate to="/leads" replace />;
+  // A manager opens only their own lead or an untaken new one (2026-11-26).
+  if (!isAdmin && lead && !visibleToManager(lead, (crm || own).email))
+    return <div className="card p-8 text-center text-sm text-ink-500">Bu lid boshqa menejerga biriktirilgan — uni faqat o'sha menejer va rahbar ko'radi.</div>;
   if (lead === undefined)
     return (
       <div className="flex justify-center py-16 text-ink-500">

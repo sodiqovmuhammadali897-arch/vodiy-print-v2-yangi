@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { visibleToManager } from "../src/modules/leads/crm/useCrm";
 import { boardStats, columnOf, dueLabel, matchesLead, needsTask, nextTask, snoozeSlot, taskColumn, taskState } from "../src/lib/crm";
 
 // 2026-11-12 10:00 Tashkent
@@ -81,5 +82,14 @@ describe("Zadachalar columns (step 3)", () => {
     expect(snoozeSlot("h1", now)).toEqual({ date: "2026-11-26", time: "15:00" });
     expect(snoozeSlot("tomorrow", now)).toEqual({ date: "2026-11-27", time: "10:00" });
     expect(snoozeSlot("h1", Date.parse("2026-11-26T23:30:00+05:00"))).toEqual({ date: "2026-11-27", time: "00:30" });
+  });
+});
+
+describe("a manager sees only their own (2026-11-26)", () => {
+  it("own leads and untaken new ones", () => {
+    expect(visibleToManager({ assigned_to_email: "Me@vp", status: "accepted" } as never, "me@vp")).toBe(true);
+    expect(visibleToManager({ assigned_to_email: "", status: "new" } as never, "me@vp")).toBe(true);
+    expect(visibleToManager({ assigned_to_email: "", status: "accepted" } as never, "me@vp")).toBe(false);
+    expect(visibleToManager({ assigned_to_email: "other@vp", status: "new" } as never, "me@vp")).toBe(false);
   });
 });

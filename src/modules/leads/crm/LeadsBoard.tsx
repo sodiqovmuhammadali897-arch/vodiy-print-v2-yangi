@@ -70,10 +70,10 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
       (leads || []).filter(
         (l) =>
           (showOld || !isOldLead(l)) &&
-          (!owner || l.assigned_to_email === owner) &&
+          (!owner || l.assigned_to_email === owner || (!isAdmin && !l.assigned_to_email)) &&
           matchesLead(l, q),
       ),
-    [leads, owner, q, showOld],
+    [leads, owner, q, showOld, isAdmin],
   );
   const myTasks = useMemo(
     () => tasks.filter((t) => !owner || t.assigned_to_email === owner),
@@ -255,6 +255,7 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
                 </button>
               )}
             </label>
+            {isAdmin && (
             <select
               className="input w-auto py-2"
               value={owner}
@@ -266,10 +267,8 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
                   {s.name}
                 </option>
               ))}
-              {!isAdmin && !sellers.some((s) => s.email === email) && (
-                <option value={email}>Mening lidlarim</option>
-              )}
             </select>
+            )}
             <button
               type="button"
               onClick={() => setProblems(!problems)}

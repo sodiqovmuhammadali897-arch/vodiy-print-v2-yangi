@@ -16,13 +16,26 @@ const KINDS: [CallKind, string][] = [
   ["missed", "O'tkazib yuborilgan"],
 ];
 
-export default function CallsLog({ sellers }: { sellers: { email: string; name: string }[] }) {
+// `me`: a manager sees only their own calls — made or taken by them, and the
+// missed ones on their leads or nobody's (2026-11-26: «faqat o'zini
+// ma'lumotlari o'ziga ko'rinsin»); "" = the owner, everyone's.
+export default function CallsLog({ sellers, me = "", leads = [] }: { sellers: { email: string; name: string }[]; me?: string; leads?: { id: string; assigned_to_email?: string }[] }) {
   const leadHref = useLeadHref();
   const today = tashkentDay();
   const [day, setDay] = useState(today);
   const [kind, setKind] = useState<CallKind>("all");
-  const [staff, setStaff] = useState("");
-  const [calls, setCalls] = useState<CallRow[] | null>(null);
+  const [staff, setStaff] = useState(me);
+  const [allCalls, setCalls] = useState<CallRow[] | null>(null);
+  const ownerOf = useMemo(() => new Map(leads.map((l) => [l.id, l.assigned_to_email || ""])), [leads]);
+  const calls = useMemo(() => {
+    if (!me || !allCalls) return allCalls;
+    return allCalls.filter((c) => {
+      if (c.staff_email) return c.staff_email === me;
+      // a missed call nobody took: theirs if the lead is theirs, or nobody's
+      const o = c.lead_id ? (ownerOf.has(c.lead_id) ? ownerOf.get(c.lead_id) || "" : "?") : "";
+      return o === me || !o;
+    });
+  }, [allCalls, me, ownerOf]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -41,9 +54,9 @@ export default function CallsLog({ sellers }: { sellers: { email: string; name: 
   }, [day, today]);
 
   const name = useMemo(() => new Map(sellers.map((s) => [s.email, s.name])), [sellers]);
-  const mine = useMemo(() => (calls || []).filter((c) => !staff || c.staff_email === staff), [calls, staff]);
+  const mine = useMemo(() => (calls || []).filter((c) => !staff || me || c.staff_email === staff), [calls, staff, me]);
   const sum = callSummary(mine);
-  const list = filterCalls(calls || [], kind, staff);
+  const list = filterCalls(calls || [], kind, me ? "" : staff);
   const notReturned = new Set(unreturned(calls || []).map((c) => c.id));
 
   return (
@@ -59,6 +72,7 @@ export default function CallsLog({ sellers }: { sellers: { email: string; name: 
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
+        {!me && (
         <select className="input w-auto py-1.5 text-sm" value={staff} onChange={(e) => setStaff(e.target.value)}>
           <option value="">Hamma menejerlar</option>
           {sellers.map((s) => (
@@ -67,6 +81,7 @@ export default function CallsLog({ sellers }: { sellers: { email: string; name: 
             </option>
           ))}
         </select>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">

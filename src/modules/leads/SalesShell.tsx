@@ -106,7 +106,7 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
     ) : section === "zadachalar" ? (
       <LeadsBoard mode="tasks" crm={crm} />
     ) : section === "qongiroqlar" ? (
-      <CallsLog sellers={crm.sellers} />
+      <CallsLog sellers={crm.sellers} me={crm.isAdmin ? "" : crm.email} leads={crm.leads || []} />
     ) : (
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">

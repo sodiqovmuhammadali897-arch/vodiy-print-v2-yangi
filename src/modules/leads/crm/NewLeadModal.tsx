@@ -93,10 +93,17 @@ export default function NewLeadModal({ onClose, onCreated, sellers, actor, isAdm
           <input className="input" inputMode="tel" placeholder="+998 90 123 45 67" value={phone} onChange={(e) => setPhone(e.target.value)} autoFocus />
           {dup && (
             <div className="mt-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
-              Bu raqam bilan lid bor: <b>{dup.lead_number}</b> {dup.brand || dup.full_name} ({dup.assigned_to_name || "mas'ulsiz"}).{" "}
-              <Link to={`/leads/${dup.id}`} className="font-semibold underline" onClick={onClose}>
-                Ochish
-              </Link>
+              {isAdmin || dup.assigned_to_email === actor.email || !dup.assigned_to_email ? (
+                <>
+                  Bu raqam bilan lid bor: <b>{dup.lead_number}</b> {dup.brand || dup.full_name} ({dup.assigned_to_name || "mas'ulsiz"}).{" "}
+                  <Link to={`/leads/${dup.id}`} className="font-semibold underline" onClick={onClose}>
+                    Ochish
+                  </Link>
+                </>
+              ) : (
+                // Another manager's customer: only who has it, not the details.
+                <>Bu raqam bilan lid bor — mas'ul: <b>{dup.assigned_to_name || "boshqa menejer"}</b>. Ikkinchi lid ochmang, rahbarga ayting.</>
+              )}
             </div>
           )}
         </div>

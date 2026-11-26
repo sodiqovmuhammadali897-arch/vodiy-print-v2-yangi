@@ -49,7 +49,8 @@ export function myUnreturned(calls: CallRow[], leads: Pick<Lead, "id" | "assigne
   const owner = new Map(leads.map((l) => [l.id, l.assigned_to_email || ""]));
   return unreturned(calls).filter((c) => {
     if (!email) return true;
-    const o = c.lead_id ? owner.get(c.lead_id) || "" : "";
+    // A lead not among the ones this person can see is someone else's.
+    const o = c.lead_id ? (owner.has(c.lead_id) ? owner.get(c.lead_id) || "" : "?") : "";
     return o === email || !o;
   });
 }

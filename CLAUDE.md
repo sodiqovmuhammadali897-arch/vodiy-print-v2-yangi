@@ -712,6 +712,17 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   with minutes, missed, done/left/overdue tasks, no-task leads, first call;
   a name opens that seller) and can pick one seller. ManagerHome.tsx was
   removed. `talkLabel` now says «2 soat 14 daq».
+- **Sotuv bo'limi: a manager sees only their own — 2026-11-26** (owner:
+  «sotuv bo'limida faqat bitta manager o'zini ma'lumotlari o'ziga
+  ko'rinsin»): `useCrm` gives non-admins only their leads + untaken new ones
+  (`visibleToManager`, to claim with «Qabul qildim»); no seller picker on
+  the board; the lead card says «boshqa menejerga biriktirilgan» for
+  another's lead; Qo'ng'iroqlar shows only their calls + missed calls on
+  their leads or nobody's (`CallsLog me/leads`); the home page's missed
+  list skips leads they can't see; the new-lead duplicate warning names only
+  the other lead's manager. This is in the app — the Firestore rules still
+  let leads viewers read all leads (needed for LID numbers and the phone
+  duplicate check); a rules-level lock would need server endpoints for those.
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an

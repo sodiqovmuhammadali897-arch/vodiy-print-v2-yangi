@@ -25,6 +25,8 @@ describe("Bugungi sotuv", () => {
     ];
     const leads = [{ id: "L1", assigned_to_email: "me" }, { id: "L2", assigned_to_email: "other" }];
     expect(myUnreturned(calls, leads, "me").map((c) => c.id)).toEqual(["m1", "m3"]);
+    // a lead this manager cannot see is someone else's
+    expect(myUnreturned(calls, [{ id: "L1", assigned_to_email: "me" }], "me").map((c) => c.id)).toEqual(["m1", "m3"]);
     expect(myUnreturned(calls, leads, "").map((c) => c.id)).toEqual(["m1", "m2", "m3"]);
   });
 });
