@@ -1,0 +1,77 @@
+name: Sotuv bo'limi — Jamila's former leads back to «Yangi» (writer — owner's approval)
+
+# Approved by the owner on 2026-11-26 («jamiladagi hamma zadachalarni yangi
+# lidga o'tkazib qo'y, ertaga obrabotka bo'ladi» → chose «Yangi + mas'ulsiz»):
+# the open leads that crm-fix.yml moved from Jamila (Maryam's old amoCRM
+# «Menejer 2») to Muhammaddiyor/Nuriddin go back to the «Yangi» stage with
+# nobody on them (managers take them with «Qabul qildim»); their open tasks
+# move to tomorrow 10:00, with nobody on them (they follow whoever takes the
+# lead). mode=preview writes nothing. Prints counts only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preview or apply"
+        default: "preview"
+      day:
+        description: "Tasks' new day (YYYY-MM-DD)"
+        default: "2026-11-27"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run
+        uses: appleboy/ssh-action@v1
+        env:
+          MODE: ${{ inputs.mode }}
+          DAY: ${{ inputs.day }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: MODE,DAY
+          command_timeout: 10m
+          script: |
+            cat > /tmp/vp-jam.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const APPLY = process.env.MODE === "apply";
+            const DAY = /^\d{4}-\d{2}-\d{2}$/.test(process.env.DAY || "") ? process.env.DAY : "2026-11-27";
+            const now = () => new Date().toISOString();
+            (async () => {
+              // The leads crm-fix.yml moved from Jamila: its timeline line.
+              const acts = (await db.collection("lead_activities").where("actor_name", "==", "Tizim (rahbar tasdig'i)").get()).docs.map((d) => d.data());
+              const ids = [...new Set(acts.filter((a) => /Mas'ul o'zgardi: Jamila/.test(a.text || "")).map((a) => a.lead_id))];
+              const leads = [];
+              for (const id of ids) {
+                const d = await db.collection("leads").doc(id).get();
+                if (d.exists) leads.push({ id, ...d.data() });
+              }
+              const open = leads.filter((l) => l.status !== "lost" && !l.converted_order_id);
+              const openIds = new Set(open.map((l) => l.id));
+              const tasks = [];
+              for (let i = 0; i < open.length; i += 30) {
+                const chunk = open.slice(i, i + 30).map((l) => l.id);
+                const snap = await db.collection("lead_tasks").where("lead_id", "in", chunk).get();
+                for (const d of snap.docs) if (d.data().status === "open") tasks.push({ id: d.id, ...d.data() });
+              }
+              const byStatus = {};
+              for (const l of open) byStatus[l.status] = (byStatus[l.status] || 0) + 1;
+              console.log(`${APPLY ? "APPLY" : "PREVIEW"}: moved from Jamila ${ids.length}; still open ${open.length} (by stage ${JSON.stringify(byStatus)}); their open tasks ${tasks.length} → ${DAY} 10:00, nobody on them`);
+              if (!APPLY) return;
+              let batch = db.batch(), k = 0;
+              const add = async (fn) => { fn(batch); if (++k >= 400) { await batch.commit(); batch = db.batch(); k = 0; } };
+              for (const l of open) {
+                await add((b) => b.update(db.collection("leads").doc(l.id), { status: "new", assigned_to_email: "", assigned_to_name: "", updated_at: now() }));
+                await add((b) => b.set(db.collection("lead_activities").doc(), { lead_id: l.id, text: "🔄 «Yangi» bosqichiga qaytarildi, mas'ulsiz — managerlar «Qabul qildim» bilan oladi", actor_email: "", actor_name: "Tizim (rahbar tasdig'i)", created_at: now() }));
+              }
+              for (const t of tasks) await add((b) => b.update(db.collection("lead_tasks").doc(t.id), { due_date: DAY, due_time: "10:00", assigned_to_email: "", assigned_to_name: "", reminded: admin.firestore.FieldValue.delete() }));
+              if (k) await batch.commit();
+              await db.collection("data_fixes").add({ kind: "crm_jamila_back_to_new", at: now(), leads: open.length, tasks: tasks.length, day: DAY, approved: "owner 2026-11-26 «Yangi + mas'ulsiz»" });
+              console.log("done");
+            })().catch((e) => console.log("failed:", e.message));
+            JS
+            cd /opt/meta-webhook && node /tmp/vp-jam.js; rm -f /tmp/vp-jam.js
