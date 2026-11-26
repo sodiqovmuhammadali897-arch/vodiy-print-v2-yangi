@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BarChart3, CheckSquare, LayoutDashboard, Phone, Rows3, Users } from "lucide-react";
 import { useCrm } from "./crm/useCrm";
 import CrmHome from "./crm/CrmHome";
+import ManagerHome from "./crm/ManagerHome";
 import LeadsBoard from "./crm/LeadsBoard";
 import CallsLog from "./CallsLog";
 import CrmAnalysis from "./crm/CrmAnalysis";
@@ -59,6 +60,9 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
   const auth = useAuth();
   // The owner (an admin who is not a manager's account) moves amoCRM's deals.
   const isOwner = auth.isAdmin && !auth.staff?.report_manager_id;
+  // The owner looks at Bosh sahifa «through a manager's eyes» (step 7).
+  const [viewAsEmail, setViewAsEmail] = useState("");
+  const viewAs = crm.sellers.find((s) => s.email === viewAsEmail) || null;
   const openToManagers = useCrmOpen();
   const amoSync = useAmoSync();
   // Managers see the ERP analysis and their own amoCRM numbers (the other
@@ -99,11 +103,24 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
 
   const body =
     section === "home" ? (
-      crm.leads ? (
+      !crm.leads ? (
+        <div className="h-40 animate-pulse rounded-3xl bg-ink-100/70" />
+      ) : !crm.isAdmin ? (
+        // A manager: their own day (step 7).
+        <ManagerHome crm={crm} email={crm.email} name={auth.staff?.full_name || crm.email} managerId={auth.staff?.report_manager_id || ""} />
+      ) : viewAs ? (
+        <div className="space-y-3">
+          <ViewAs sellers={crm.sellers} value={viewAs.email} onChange={setViewAsEmail} />
+          <ManagerHome crm={crm} email={viewAs.email} name={viewAs.name} managerId={viewAs.managerId} />
+        </div>
+      ) : crm.leads ? (
         <div className="space-y-4">
-          <div>
-            <h1 className="font-display text-2xl font-bold text-ink-900">Bosh sahifa</h1>
-            <p className="text-sm text-ink-500">Bugungi lidlar, zadachalar va qo'ng'iroqlar. Raqamni bossangiz, ro'yxati ochiladi.</p>
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h1 className="font-display text-2xl font-bold text-ink-900">Bosh sahifa</h1>
+              <p className="text-sm text-ink-500">Bugungi lidlar, zadachalar va qo'ng'iroqlar. Raqamni bossangiz, ro'yxati ochiladi.</p>
+            </div>
+            <ViewAs sellers={crm.sellers} value="" onChange={setViewAsEmail} />
           </div>
           <CrmHome leads={crm.leads} tasks={crm.tasks} orders={crm.orders} sellers={crm.sellers} actor={crm.actor} isAdmin={crm.isAdmin} email={crm.email} />
         </div>
@@ -170,5 +187,22 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
       <div className="min-w-0 flex-1">{body}</div>
       {leadId && <LeadDrawer id={leadId} crm={crm} onClose={closeLead} />}
     </div>
+  );
+}
+
+// «Kimning ko'zi bilan»: the owner's view, or one manager's own home page.
+function ViewAs({ sellers, value, onChange }: { sellers: { email: string; name: string }[]; value: string; onChange: (email: string) => void }) {
+  return (
+    <label className="flex items-center gap-2 text-xs text-ink-500">
+      Ko'rinish:
+      <select className="input w-auto py-1.5 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Rahbar (hammasi)</option>
+        {sellers.map((s) => (
+          <option key={s.email} value={s.email}>
+            {s.name} ko'zi bilan
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

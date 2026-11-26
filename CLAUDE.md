@@ -689,6 +689,19 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   markCrmLost (older ones fall back to updated_at). staffbot's KPI answer
   and bonus.js read/say «zadachalar» from the main system.
   - The switch is NOT flipped — the owner decides after the parallel week.
+- **Step 7 — Menejer bosh sahifasi, built 2026-11-26** (owner chose it as
+  step 7; the mockup of 2026-11-13): a manager's Bosh sahifa is
+  `crm/ManagerHome.tsx` (logic `src/lib/managerHome.ts`): greeting, period
+  (Bugun/Kecha/Hafta/Oy), tiles overdue / due today / done (± previous) /
+  no-task leads (crmDash with owner = the manager), «Gaplashdim» (talk
+  time, calls, 30 s+ talks, missed; Bugun: bar against the daily target
+  `crm_settings/main.talk_target_min`, default 60, set by the owner on
+  Tahlil → «amoCRM → ERP»), «Yangi lidlarim» (by source), «Oylik reja»
+  (kpi_sales sales vs kpi_months.plan or managers.monthly_plan; left,
+  working days left without Sundays, needed per day), today's + overdue
+  tasks (TaskRow, closable there), own funnel and this month's conversion
+  vs the team's. The owner's Bosh sahifa has «Ko'rinish: … ko'zi bilan» to
+  see any seller's page. `useCrm` sellers now carry `managerId`.
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an

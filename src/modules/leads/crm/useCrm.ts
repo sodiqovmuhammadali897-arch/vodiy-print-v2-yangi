@@ -42,7 +42,7 @@ export function useCrm(enabled = true) {
     () =>
       staff
         .filter((s) => s.report_manager_id || s.permissions?.leads?.edit)
-        .map((s) => ({ email: s.email.toLowerCase(), name: s.full_name || s.email }))
+        .map((s) => ({ email: s.email.toLowerCase(), name: s.full_name || s.email, managerId: s.report_manager_id || "" }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     [staff],
   );

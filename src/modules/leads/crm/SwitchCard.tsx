@@ -22,11 +22,13 @@ export default function SwitchCard({ crm }: { crm: CrmData }) {
   const [erp, setErp] = useState<AmoTaskDoc[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [amoSync, setAmoSync] = useState(true);
+  const [target, setTarget] = useState("");
   useEffect(
     () =>
       subscribeOne<{ task_source?: string; amo_sync?: boolean }>("crm_settings", "main", (d) => {
         setSource(d?.task_source === "erp" ? "erp" : "amo");
         setAmoSync(d?.amo_sync !== false);
+        setTarget(String((d as { talk_target_min?: number } | null)?.talk_target_min || 60));
       }),
     [],
   );
@@ -78,6 +80,12 @@ export default function SwitchCard({ crm }: { crm: CrmData }) {
     setBusy(false);
   };
 
+  const saveTarget = async () => {
+    const n = Math.round(Number(target));
+    if (!(n >= 5 && n <= 480)) return window.alert("5 dan 480 daqiqagacha yozing");
+    await upsertOne("crm_settings", "main", { talk_target_min: n }).catch((e) => window.alert(e instanceof Error ? e.message : "Bo'lmadi"));
+  };
+
   return (
     <section className="space-y-3 rounded-2xl border border-ink-100 bg-surface p-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -108,6 +116,19 @@ export default function SwitchCard({ crm }: { crm: CrmData }) {
         </div>
         <button type="button" disabled={busy || (amoSync && source !== "erp")} onClick={() => void toggleSync()} className="btn-secondary py-1.5">
           {amoSync ? "amoCRM'ni o'chirish" : "Qayta yoqish"}
+        </button>
+      </div>
+
+      {/* Step 7: the managers' daily talk target (their Bosh sahifa). */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ink-100 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-ink-900">Kunlik suhbat maqsadi</div>
+          <div className="text-xs text-ink-500">Har bir menejerning bosh sahifasida «Gaplashdim» shu maqsadga nisbatan ko'rsatiladi.</div>
+        </div>
+        <input type="number" min={5} max={480} className="input w-24 py-1.5 text-right" value={target} onChange={(e) => setTarget(e.target.value)} />
+        <span className="text-sm text-ink-500">daqiqa</span>
+        <button type="button" className="btn-secondary py-1.5" onClick={() => void saveTarget()}>
+          Saqlash
         </button>
       </div>
 
