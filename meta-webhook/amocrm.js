@@ -1082,6 +1082,9 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
 
   const tick = async () => {
     if (!enabled || running) return;
+    // Step 6: the owner turned the amoCRM sync off (crm_settings/main.amo_sync
+    // = false) — nothing is read or sent; what was written stays as history.
+    if (((await db.collection("crm_settings").doc("main").get().catch(() => null))?.data?.() || {}).amo_sync === false) return;
     running = true;
     const now = Date.now();
     try {

@@ -670,7 +670,25 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     10:00/15:00 skip Sundays and holidays. amocrm.js then sends none of its
     own (remind, dealAlerts, postpone notices — `erpIsMain`). amoCRM sync
     and its data keep running; switching back is one click.
-  - Not yet: stop the amoCRM sync after the parallel week (owner decides).
+- **Step 6 — built 2026-11-26** (owner: «6 qadamni boshla»): the amoCRM
+  sync can be switched off — `crm_settings/main.amo_sync` (on unless
+  false), the button «amoCRM'ni o'chirish / Qayta yoqish» on Tahlil →
+  «amoCRM → ERP», allowed only once task_source = "erp" (going back to
+  amoCRM as main turns the sync on again). Off → amocrm.js `tick` returns
+  at once (nothing read or sent; amo_* docs stay as history; Tahlil badge
+  «amoCRM arxivi»). The ERP then sends what amocrm.js did
+  (`meta-webhook/erpDaily.js`, only while the sync is off): a missed
+  incoming call (`calls`) not followed up in 15 min → the lead's manager
+  (else the managers' group, else admins) with the lead link, edited
+  «✅ Javob qaytarildi …» when a later call to the number appears, an hour
+  on → admins once; 09:30 sellers with calls in 14 days but none today →
+  admins (not Sundays/holidays/leave); 19:00 the day (calls, 30 s+ talks,
+  talk time, first–last per seller, new leads, missed left) and the leads
+  lost today by reason/seller → admins. State in
+  `crm_meta/erp_alerts_{day}`. `leads.lost_at` is now written by
+  markCrmLost (older ones fall back to updated_at). staffbot's KPI answer
+  and bonus.js read/say «zadachalar» from the main system.
+  - The switch is NOT flipped — the owner decides after the parallel week.
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an

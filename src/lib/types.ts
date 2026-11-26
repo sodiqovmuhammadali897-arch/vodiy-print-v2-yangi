@@ -793,6 +793,7 @@ export type Lead = {
   // Moved over from amoCRM (step 4, meta-webhook/amoImport.js): its deal id.
   amo_id?: number | null;
   amo_ids?: number[]; // every amoCRM deal joined to this lead (same phone)
+  lost_at?: string; // when it was marked lost (step 6; older ones: updated_at)
 };
 
 export type LeadTaskType =

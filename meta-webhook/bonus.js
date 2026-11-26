@@ -22,7 +22,7 @@ const reportText = (k) => {
   const planPct = s.plan > 0 ? Math.round((s.sales / s.plan) * 100) : null;
   const why = [];
   if (s.attendance_pct !== null && s.attendance_pct !== undefined && s.attendance_pct < s.threshold) why.push(`davomat ${pct(s.attendance_pct)}`);
-  if (s.amo_pct !== null && s.amo_pct !== undefined && s.amo_pct < s.threshold) why.push(`amoCRM ${pct(s.amo_pct)}`);
+  if (s.amo_pct !== null && s.amo_pct !== undefined && s.amo_pct < s.threshold) why.push(`zadachalar ${pct(s.amo_pct)}`);
   return [
     `🏆 ${monthName(k.month)} — KPI hisobotingiz`,
     "",
@@ -32,7 +32,7 @@ const reportText = (k) => {
     `Kirim: ${money(s.collected)}`,
     s.eligible ? `➕ ${pct(s.collect_rate)}: ${money(s.collect_bonus)}` : `➕ ${pct(s.collect_rate)}: 0 — ${why.join(", ") || "shart bajarilmadi"} (${s.threshold}% dan past)`,
     "",
-    `Davomat: ${pct(s.attendance_pct)} · amoCRM: ${pct(s.amo_pct)}`,
+    `Davomat: ${pct(s.attendance_pct)} · zadachalar: ${pct(s.amo_pct)}`,
     "",
     `💰 To'lanadi: ${money(s.payout)}`,
     ...(Number(k.paid_before) > 0 ? [`Avval to'langan: ${money(k.paid_before)} · qo'shimcha: ${money(Math.max(0, s.payout - k.paid_before))}`] : []),

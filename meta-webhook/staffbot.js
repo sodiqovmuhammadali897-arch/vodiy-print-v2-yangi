@@ -185,6 +185,8 @@ const create = (db, { priceTools }) => {
         if (!s.report_manager_id) return { xato: "KPI faqat sotuv menejerlari uchun — xodim profilida Manager profili bog'lanmagan" };
         const mon = todayCode().slice(0, 7);
         const id = `${mon}_${s.report_manager_id}`;
+        // The task condition's system: amoCRM, or the ERP once it is main (erpTasks.js).
+        const erpMain = ((await db.collection("crm_settings").doc("main").get().catch(() => null))?.data?.() || {}).task_source === "erp";
         const [salesDoc, monthDoc, mgrDoc, settingsDoc, sched, rows, amoDocs] = await Promise.all([
           db.collection("kpi_sales").doc(id).get(),
           db.collection("kpi_months").doc(id).get(),
@@ -192,7 +194,7 @@ const create = (db, { priceTools }) => {
           db.collection("kpi_settings").doc("sales").get(),
           scheduleOf(email),
           monthAttendance(email, mon),
-          db.collection("amo_tasks").where("staff_email", "==", email).get(),
+          db.collection(erpMain ? "erp_tasks" : "amo_tasks").where("staff_email", "==", email).get(),
         ]);
         const k = monthDoc.exists ? monthDoc.data() : {};
         if (k.snapshot && k.status !== "open") {
@@ -226,9 +228,9 @@ const create = (db, { priceTools }) => {
           sotuv: money(sd.sales),
           sotuv_bonusi: `${money(salesBonus)} (${salesRate}%, shartsiz)`,
           kirim: money(sd.collected),
-          kirim_bonusi: ok ? `${money(collectBonus)} (${collectRate}%)` : `0 — davomat yoki amoCRM ${cfg.threshold}% dan past (${money(collectBonus)} berilmaydi)`,
+          kirim_bonusi: ok ? `${money(collectBonus)} (${collectRate}%)` : `0 — davomat yoki zadachalar ${cfg.threshold}% dan past (${money(collectBonus)} berilmaydi)`,
           davomat: att === null ? "hali hisob yo'q" : `${att}% (chegara ${cfg.threshold}%)`,
-          amocrm_zadachalar: amo ? (amoPct === null ? "bu oy muddati kelgan zadacha yo'q" : `${amoPct}% — ${amo.due} tadan ${amo.on_time} tasi vaqtida`) : "amoCRM ulanmagan",
+          amocrm_zadachalar: amo ? (amoPct === null ? "bu oy muddati kelgan zadacha yo'q" : `${amoPct}% — ${amo.due} tadan ${amo.on_time} tasi vaqtida`) : erpMain ? "bu oy ERP zadachasi yo'q" : "amoCRM ulanmagan",
           mijozlar_qarzi: money(sd.debt || 0),
           jami_hozircha: money(salesBonus + (ok ? collectBonus : 0)),
         };

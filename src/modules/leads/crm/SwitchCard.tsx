@@ -21,7 +21,15 @@ export default function SwitchCard({ crm }: { crm: CrmData }) {
   const [amo, setAmo] = useState<AmoTaskDoc[] | null>(null);
   const [erp, setErp] = useState<AmoTaskDoc[] | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => subscribeOne<{ task_source?: string }>("crm_settings", "main", (d) => setSource(d?.task_source === "erp" ? "erp" : "amo")), []);
+  const [amoSync, setAmoSync] = useState(true);
+  useEffect(
+    () =>
+      subscribeOne<{ task_source?: string; amo_sync?: boolean }>("crm_settings", "main", (d) => {
+        setSource(d?.task_source === "erp" ? "erp" : "amo");
+        setAmoSync(d?.amo_sync !== false);
+      }),
+    [],
+  );
   useEffect(() => {
     void listWhere<AmoTaskDoc>("amo_tasks", "month", month).then(setAmo).catch(() => setAmo([]));
     void listWhere<AmoTaskDoc>("erp_tasks", "month", month).then(setErp).catch(() => setErp([]));
@@ -50,7 +58,20 @@ export default function SwitchCard({ crm }: { crm: CrmData }) {
     if (!window.confirm(text)) return;
     setBusy(true);
     try {
-      await upsertOne("crm_settings", "main", { task_source: next, task_source_by: auth.staff?.full_name || crm.email, task_source_at: new Date().toISOString() });
+      // Back to amoCRM: its sync must run again too.
+      await upsertOne("crm_settings", "main", { task_source: next, task_source_by: auth.staff?.full_name || crm.email, task_source_at: new Date().toISOString(), ...(next === "amo" ? { amo_sync: true } : {}) });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Bo'lmadi");
+    }
+    setBusy(false);
+  };
+
+  const toggleSync = async () => {
+    const next = !amoSync;
+    if (!window.confirm(next ? "amoCRM bilan bog'lanish qayta yoqilsinmi?" : "amoCRM bilan bog'lanish o'chirilsinmi?\n\n• ERP amoCRM'dan endi hech narsa o'qimaydi;\n• javobsiz qo'ng'iroq, 09:30 va 19:00 xabarlari ERP ma'lumotidan boradi;\n• eski amoCRM hisobotlari arxiv bo'lib qoladi.\n\namoCRM'ning o'zidagi ma'lumot o'chmaydi. Qayta yoqish — bitta tugma.")) return;
+    setBusy(true);
+    try {
+      await upsertOne("crm_settings", "main", { amo_sync: next, amo_sync_by: auth.staff?.full_name || crm.email, amo_sync_at: new Date().toISOString() });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Bo'lmadi");
     }
@@ -70,6 +91,23 @@ export default function SwitchCard({ crm }: { crm: CrmData }) {
         </div>
         <button type="button" disabled={busy || source === null} onClick={() => void flip()} className={source === "erp" ? "btn-secondary" : "btn-primary"}>
           {source === "erp" ? "amoCRM'ga qaytarish" : "ERP'ni asosiy qilish"}
+        </button>
+      </div>
+
+      {/* Step 6: the amoCRM sync off — only once the ERP is main. */}
+      <div className={`flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2.5 ${amoSync ? "border-ink-100" : "border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-900/20"}`}>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-ink-900">amoCRM bilan bog'lanish: {amoSync ? "ishlayapti" : "o'chirilgan"}</div>
+          <div className="text-xs text-ink-500">
+            {amoSync
+              ? source === "erp"
+                ? "O'chirsangiz, ERP amoCRM'dan endi hech narsa o'qimaydi. Javobsiz qo'ng'iroq, 09:30 va 19:00 xabarlari ERP ma'lumotidan boradi. Eski amoCRM hisobotlari arxiv bo'lib qoladi."
+                : "Avval ERP'ni asosiy qiling — keyin amoCRM'ni o'chirish mumkin bo'ladi."
+              : "amoCRM'dan hech narsa o'qilmayapti; eski hisobotlar — arxiv. Javobsiz qo'ng'iroq, 09:30 va 19:00 xabarlari ERP'dan."}
+          </div>
+        </div>
+        <button type="button" disabled={busy || (amoSync && source !== "erp")} onClick={() => void toggleSync()} className="btn-secondary py-1.5">
+          {amoSync ? "amoCRM'ni o'chirish" : "Qayta yoqish"}
         </button>
       </div>
 

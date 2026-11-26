@@ -9,7 +9,7 @@ import CrmAnalysis from "./crm/CrmAnalysis";
 import AmoImportCard from "./crm/AmoImportCard";
 import SwitchCard from "./crm/SwitchCard";
 import { useAuth } from "../../lib/AuthContext";
-import { setCrmOpen, useCrmOpen } from "./crm/crmOpen";
+import { setCrmOpen, useAmoSync, useCrmOpen } from "./crm/crmOpen";
 import LeadDrawer from "./crm/LeadDrawer";
 import SalesControl from "./SalesControl";
 import SalesFunnel from "./SalesFunnel";
@@ -60,6 +60,7 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
   // The owner (an admin who is not a manager's account) moves amoCRM's deals.
   const isOwner = auth.isAdmin && !auth.staff?.report_manager_id;
   const openToManagers = useCrmOpen();
+  const amoSync = useAmoSync();
   // Managers see the ERP analysis and their own amoCRM numbers (the other
   // amoCRM reports are admin-only data).
   // «amoCRM → ERP» (the switch) is the owner's only.
@@ -129,7 +130,7 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
               </button>
             ))}
           </div>
-          {tab !== "erp" && tab !== "otish" && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">amoCRM ma'lumoti · o'tish oyida</span>}
+          {tab !== "erp" && tab !== "otish" && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{amoSync ? "amoCRM ma'lumoti · o'tish oyida" : "amoCRM arxivi · endi yangilanmaydi"}</span>}
         </div>
         {tab === "erp" ? <CrmAnalysis crm={crm} /> : tab === "otish" ? <SwitchCard crm={crm} /> : tab === "voronka" ? <SalesFunnel /> : tab === "yutqazilgan" ? <LostDeals /> : tab === "nazorat" ? <SalesControl /> : amo}
       </div>

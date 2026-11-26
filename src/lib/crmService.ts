@@ -148,7 +148,7 @@ export async function addLeadNote(leadId: string, text: string, actor: Actor): P
 
 export async function markCrmLost(lead: Lead, reason: string, comment: string, openTasks: LeadTask[], actor: Actor): Promise<void> {
   const t = now();
-  await updateOne("leads", lead.id, { status: "lost", lost_reason: reason, lost_comment: comment, updated_at: t });
+  await updateOne("leads", lead.id, { status: "lost", lost_reason: reason, lost_comment: comment, lost_at: t, updated_at: t });
   for (const task of openTasks) await updateOne("lead_tasks", task.id, { status: "done", completed_at: t, result: "Lid yo'qotildi" });
   await logLeadActivity(lead.id, `Yo'qotildi — sabab: ${reason}${comment ? ` (${comment})` : ""}`, actor.email, actor.name);
 }

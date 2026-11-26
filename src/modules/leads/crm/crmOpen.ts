@@ -11,3 +11,10 @@ export function useCrmOpen(): boolean | null {
 }
 
 export const setCrmOpen = (open: boolean, by: string) => upsertOne("crm_settings", "main", { open_to_managers: open, changed_by: by, changed_at: new Date().toISOString() });
+
+// Is the amoCRM sync still on? (step 6, crm_settings/main.amo_sync; on unless set false)
+export function useAmoSync(): boolean {
+  const [on, setOn] = useState(true);
+  useEffect(() => subscribeOne<{ amo_sync?: boolean }>("crm_settings", "main", (d) => setOn(!(d && d.amo_sync === false))), []);
+  return on;
+}
