@@ -32,5 +32,5 @@ export const BOT_TASK_ROWS: { key: "recall" | "debts" | "leads" | "amo" | "tasks
   { key: "debts", label: "Qarzdor mijozlar", hint: "O'z buyurtmalari bo'yicha qarzi bor mijozlar ro'yxati, har kuni.", chip: "Qarzdorlar", cls: "bg-rose-50 text-rose-700" },
   { key: "leads", label: "Yangi lidlar", hint: "Guruhdagi yangi lidni «✅ Qabul qildim» bilan o'ziga ola oladi. Belgisi yo'q xodim bossa — «belgilanmagan» deydi.", chip: "Lidlar", cls: "bg-emerald-50 text-emerald-700" },
   { key: "tasks", label: "Zadacha eslatmalari (ERP)", hint: "Lid zadachasi vaqti kelganda Telegram'ga xabar: 📞 Gaplashdim · 📵 Javob bermadi · ⏰ +1 soat · 📅 Ertaga. 30 daqiqa o'tsa — yana bir marta.", chip: "Zadachalar", cls: "bg-amber-50 text-amber-800" },
-  { key: "amo", label: "amoCRM eslatmalari", hint: "Telegram'ga: 09:00 vazifalar, 10:00 va 15:00 bitimlar, o'tkazib yuborilgan qo'ng'iroqlar.", chip: "amoCRM", cls: "bg-violet-50 text-violet-700" },
+  { key: "amo", label: "Kunlik eslatmalar (amoCRM / ERP)", hint: "Telegram'ga: 09:00 zadachalar, 10:00 va 15:00 zadachasiz lidlar, 18:00 qolganlari. Asosiy tizim qaysi bo'lsa (Tahlil → «amoCRM → ERP»), o'shandan.", chip: "Kunlik", cls: "bg-violet-50 text-violet-700" },
 ];

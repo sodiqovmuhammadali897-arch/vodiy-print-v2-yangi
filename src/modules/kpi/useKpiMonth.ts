@@ -52,6 +52,7 @@ type Base = {
   general: WorkSchedule;
   personal: Map<string, PersonalSchedule>;
   amo: AmoTaskDoc[];
+  taskSource: "amo" | "erp";
 };
 
 export function useKpiMonth(month: string, only: { managerId: string; email: string } | null) {
@@ -68,6 +69,10 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
       try {
         const from = `${month}-01`;
         const to = monthEnd(month);
+        // Which system's tasks count (Sotuv bo'limi step 5, crm_settings/main.task_source).
+        const crmSettings = await getOne<{ id: string; task_source?: string }>("crm_settings", "main").catch(() => null);
+        const taskSource: "amo" | "erp" = crmSettings?.task_source === "erp" ? "erp" : "amo";
+        const taskCol = taskSource === "erp" ? "erp_tasks" : "amo_tasks";
         const [managers, staff, months, settings, attendance, leaves, holidays, general, personal, amo] = await Promise.all([
           only ? getOne<Manager>("managers", only.managerId).then((m) => (m ? [m] : [])) : listAll<Manager>("managers"),
           only ? Promise.resolve([] as Staff[]) : listAll<Staff>("staff"),
@@ -80,7 +85,7 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
           listAll<Holiday>("holidays").catch(() => [] as Holiday[]),
           getWorkSchedule(),
           listPersonalSchedules().catch(() => new Map<string, PersonalSchedule>()),
-          (only ? listWhere<AmoTaskDoc>("amo_tasks", "staff_email", only.email) : listWhere<AmoTaskDoc>("amo_tasks", "month", month)).catch(() => [] as AmoTaskDoc[]),
+          (only ? listWhere<AmoTaskDoc>(taskCol, "staff_email", only.email) : listWhere<AmoTaskDoc>(taskCol, "month", month)).catch(() => [] as AmoTaskDoc[]),
         ]);
         if (cancelled) return;
         setBase({
@@ -94,6 +99,7 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
           general,
           personal,
           amo: amo.filter((a) => a.month === month),
+          taskSource,
         });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Ma'lumotlarni yuklab bo'lmadi");
@@ -143,7 +149,7 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
         const attendance = st ? byEmail.get(st.email.toLowerCase()) || null : null;
         const attendancePct = month > today.slice(0, 7) ? null : attendance?.presencePct ?? null;
         const email = st?.email.toLowerCase() || "";
-        const amo = st ? base.amo.find((a) => (st.amo_user_id && a.amo_user_id === Number(st.amo_user_id)) || (a.staff_email || "").toLowerCase() === email) || null : null;
+        const amo = st ? base.amo.find((a) => (base.taskSource === "amo" && st.amo_user_id && a.amo_user_id === Number(st.amo_user_id)) || (a.staff_email || "").toLowerCase() === email) || null : null;
         const amoPct = amo?.pct ?? null;
         const snap = kpiMonth?.status !== "open" ? kpiMonth?.snapshot : null;
         const live = computeKpi({
@@ -191,5 +197,5 @@ export function useKpiMonth(month: string, only: { managerId: string; email: str
       .sort((a, b) => b.result.payout - a.result.payout || a.manager.name.localeCompare(b.manager.name));
   }, [base, sales, month, only?.email]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { rows, settings: base?.settings || DEFAULT_SALES_KPI, error, reload };
+  return { rows, settings: base?.settings || DEFAULT_SALES_KPI, error, reload, taskSource: base?.taskSource || "amo" };
 }

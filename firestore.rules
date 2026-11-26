@@ -266,6 +266,11 @@ service cloud.firestore {
     }
     // amoCRM tasks per manager and month (meta-webhook/amocrm.js), for the
     // KPI; the missed-task memory is server-only.
+    // The same numbers from the ERP's own lead tasks (erpTasks.js, step 5).
+    match /erp_tasks/{id} {
+      allow read: if isAdmin() || (isStaff() && resource.data.staff_email == email());
+      allow write: if false;
+    }
     match /amo_tasks/{id} {
       allow read: if isAdmin() || (isStaff() && resource.data.staff_email == email());
       allow write: if false;

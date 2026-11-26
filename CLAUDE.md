@@ -649,8 +649,28 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     yopiq/ochiq» under «Fon». On → managers get SalesShell with their own
     leads/tasks/calls; Tahlil shows them only «ERP tahlili» and «amoCRM
     hisobotlari»; `/leads/:id` lets them in. Default OFF.
-  - Not yet (step 5): KPI's task condition and the 09:00/10:00/15:00
-    messages from ERP tasks; a week in parallel, then stop the amoCRM sync.
+- **Step 5 — built 2026-11-26** (owner: «5-qadamni boshla»): the main
+  system switch, `crm_settings/main.task_source` ("amo" default | "erp"),
+  set on Tahlil → «amoCRM → ERP» (owner only, `crm/SwitchCard.tsx`: the
+  switch + this month's tasks side by side — amoCRM vs ERP on time / late /
+  no-task, ERP open leads — for the parallel week).
+  - `meta-webhook/erpTasks.js`: every 30 min `erp_tasks/{YYYY-MM}_{email}`
+    (same shape as amo_tasks; rules like amo_tasks). A task counts in its
+    deadline's month: done by it = on time; done later or open past it =
+    late; `missed` (set when a task whose day has come is moved to a later
+    day — `missedOnMove`, in the app's `moveLeadTask` and the Telegram
+    +1 soat/Ertaga) keeps it late in that month. No-task = open lead (not
+    lost, no order, manual stage) without an open task.
+  - When "erp": KPI's task condition reads erp_tasks (`useKpiMonth`
+    `taskSource`; labels «ERP zadachalar»); erpTasks.js sends 09:00 tasks
+    (+ overdue + no-task leads with ERP links), 10:00 no-task + 3-day stale
+    leads (admins a line each), 15:00 still no task, 18:00 left today (18:05
+    admins) — to staff with `bot_tasks.amo` (Xodimlar label now «Kunlik
+    eslatmalar (amoCRM / ERP)»); sent days in `crm_meta/erp_messages`;
+    10:00/15:00 skip Sundays and holidays. amocrm.js then sends none of its
+    own (remind, dealAlerts, postpone notices — `erpIsMain`). amoCRM sync
+    and its data keep running; switching back is one click.
+  - Not yet: stop the amoCRM sync after the parallel week (owner decides).
 - **Managers' group + lead message format — 2026-11-26** (owner: «alohida
   managerlar bor guruh ochaman, lidni o'sha yerga ham umumiy guruhga ham
   yuborsin»; «formada qanday to'ldirilsa shunday jo'natsin», with an

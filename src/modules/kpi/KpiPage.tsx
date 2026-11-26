@@ -32,7 +32,7 @@ export default function KpiRoute() {
 function KpiPage() {
   const { user } = useAuth();
   const [month, setMonth] = useState(currentMonth());
-  const { rows, settings, error, reload } = useKpiMonth(month, null);
+  const { rows, settings, error, reload, taskSource } = useKpiMonth(month, null);
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -120,7 +120,7 @@ function KpiPage() {
     if (!rows) return;
     exportCsv(
       `kpi-${month}`,
-      ["Menejer", "Reja", "Sotuv", "Sotuv %", "Sotuv bonusi", "Kirim", "Kirim %", "Davomat %", "amoCRM %", "Kirim bonusi", "Jami", "Avval to'langan", "Qo'shimcha", "Holat"],
+      ["Menejer", "Reja", "Sotuv", "Sotuv %", "Sotuv bonusi", "Kirim", "Kirim %", "Davomat %", taskSource === "erp" ? "ERP zadachalar %" : "amoCRM %", "Kirim bonusi", "Jami", "Avval to'langan", "Qo'shimcha", "Holat"],
       rows.map((r) => [
         r.manager.name,
         Math.round(r.rates.plan),

@@ -51,7 +51,7 @@ export default function MyKpi() {
   const [all, setAll] = useState(false);
   const managerId = staff?.report_manager_id || "";
   const email = (user?.email || "").toLowerCase();
-  const { rows, settings, error } = useKpiMonth(month, managerId ? { managerId, email } : null);
+  const { rows, settings, error, taskSource } = useKpiMonth(month, managerId ? { managerId, email } : null);
   if (!managerId) return null;
   const r = rows?.[0];
 
@@ -69,13 +69,13 @@ export default function MyKpi() {
           </div>
         )
       ) : (
-        <Body row={r} month={month} threshold={settings.threshold} all={all} setAll={setAll} />
+        <Body row={r} month={month} threshold={settings.threshold} all={all} setAll={setAll} taskLabel={taskSource === "erp" ? "ERP zadachalar" : "amoCRM vazifalar"} />
       )}
     </section>
   );
 }
 
-function Body({ row: r, month, threshold, all, setAll }: { row: KpiRow; month: string; threshold: number; all: boolean; setAll: (v: boolean) => void }) {
+function Body({ row: r, month, threshold, all, setAll, taskLabel }: { row: KpiRow; month: string; threshold: number; all: boolean; setAll: (v: boolean) => void; taskLabel: string }) {
   const today = dateCodeOf(new Date());
   const live = month === today.slice(0, 7);
   const progress = monthProgress(month, today);
@@ -196,7 +196,7 @@ function Body({ row: r, month, threshold, all, setAll }: { row: KpiRow; month: s
         </Formula>
         <div className="mt-3 grid grid-cols-2 gap-2.5">
           <Condition ok={res.attendanceOk} value={r.staff ? pct(r.attendancePct) : "—"} label="Davomat" threshold={threshold} />
-          <Condition ok={res.amoOk} value={pct(r.amoPct)} label="amoCRM vazifalar" threshold={threshold} muted={r.amoPct === null} />
+          <Condition ok={res.amoOk} value={pct(r.amoPct)} label={taskLabel} threshold={threshold} muted={r.amoPct === null} />
         </div>
         {(r.attendance || (r.amo && r.amo.due > 0)) && (
           <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px] font-semibold">
@@ -319,7 +319,7 @@ function LockNote({ row, threshold, live }: { row: KpiRow; threshold: number; li
             </>
           ) : (
             <>
-              {!res.amoOk ? "amoCRM vazifalar" : "Davomat"} {threshold}% dan past bo'lgani uchun <b>{short(res.collectPotential)}</b> berilmadi.
+              {!res.amoOk ? "Zadachalar" : "Davomat"} {threshold}% dan past bo'lgani uchun <b>{short(res.collectPotential)}</b> berilmadi.
             </>
           )}
         </span>

@@ -85,6 +85,9 @@ const salesKpi = require("./salesKpi").create(db, { notify: Boolean(process.env.
 const guideFacts = require("./guideFacts").create(db);
 // amoCRM, read only — see amocrm.js; feeds the "amoCRM tahlil" tab.
 const amocrm = require("./amocrm").create(db, { notify: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null });
+// ERP lead tasks → KPI numbers (erp_tasks) and, once the ERP is main, the
+// daily task / lead messages (erpTasks.js).
+const erpTasks = require("./erpTasks").create(db, { telegram: process.env.TELEGRAM_BOT_TOKEN ? require("./telegram").telegram : null });
 // amoCRM's open deals → ERP leads, started by the owner from the app (amoImport.js).
 require("./amoImport").create(db, { amo: amocrm }).register(app);
 // Targetolog — Meta ads with marketolog → admin approval; see targetolog.js.
@@ -530,6 +533,7 @@ app.listen(PORT, () => {
     .catch((e) => console.error("bot_tasks migrate failed:", e.message));
   if (debts) debts.start();
   if (leadTasks) leadTasks.start();
+  erpTasks.start();
   salesKpi.start();
   guideFacts.start();
   void amocrm.start().catch((err) => console.error("amoCRM start failed", err));

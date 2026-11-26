@@ -117,9 +117,17 @@ export async function addLeadTask(
   await logLeadActivity(lead.id, `Zadacha qo'yildi: ${taskTypeInfo(type).label} — ${date}${time ? " " + time : ""}${note ? ` (${note})` : ""}`, actor.email, actor.name);
 }
 
+// The same rule as meta-webhook/erpTasks.js missedOnMove.
+export function missedOnMove(task: Pick<LeadTask, "status" | "due_date" | "missed">, newDate: string, now = Date.now()): { missed?: string; missed_at?: string } {
+  const today = new Date(now + 5 * 3600e3).toISOString().slice(0, 10);
+  if (task.status !== "open" || task.missed || !task.due_date || task.due_date > today || !(newDate > task.due_date)) return {};
+  return { missed: task.due_date.slice(0, 7), missed_at: new Date(now).toISOString() };
+}
+
 // A new time for an open task; its Telegram reminder comes again then.
 export async function moveLeadTask(task: LeadTask, date: string, time: string, actor: Actor): Promise<void> {
-  await updateOne("lead_tasks", task.id, { due_date: date, due_time: time, reminded: {} });
+  // Put off to a later day once its day had come: late in KPI (step 5).
+  await updateOne("lead_tasks", task.id, { due_date: date, due_time: time, reminded: {}, ...missedOnMove(task, date) });
   await logLeadActivity(task.lead_id, `Zadacha ko'chirildi: ${taskTypeInfo(task.type).label} → ${date}${time ? " " + time : ""}`, actor.email, actor.name);
 }
 

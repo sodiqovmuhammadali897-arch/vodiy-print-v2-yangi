@@ -828,6 +828,9 @@ export type LeadTask = {
   result?: string;
   // Telegram reminders already sent (server, leadTaskBot.js); cleared on a move.
   reminded?: { due?: string; late?: string } | null;
+  // Put off to a later day once its day had come (step 5): late in KPI in this month.
+  missed?: string;
+  missed_at?: string;
 };
 
 // Auto-written, never edited by hand — the lead's "Faoliyat" timeline.

@@ -182,7 +182,8 @@ const create = (db, { telegram = require("./telegram").telegram, on = process.en
         await log(`Zadacha qo'yildi: ${typeInfo(p.follow.type)[1]} — ${p.follow.due_date} ${p.follow.due_time}`);
       }
     } else {
-      await ref.update({ ...p.move, reminded: {} });
+      // Put off to a later day once its day had come: late in KPI (erpTasks.js).
+      await ref.update({ ...p.move, reminded: {}, ...require("./erpTasks").missedOnMove(t, p.move.due_date, now) });
       await log(`Zadacha ko'chirildi: ${typeInfo(t.type)[1]} → ${p.move.due_date} ${p.move.due_time}`);
     }
     await answer();

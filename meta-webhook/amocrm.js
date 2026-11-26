@@ -484,7 +484,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
       byMonth.get(entry.month)[task.id] = { user: entry.user, due: entry.due, postponed: true, at: now, to: task.due, excused: false };
     }
     for (const [month, ids] of byMonth) await db.collection("amo_task_misses").doc(month).set({ month, ids }, { merge: true });
-    if (!postpones) return;
+    if (!postpones || (await erpIsMain())) return;
     await loadContacts(moved.map((m) => m.task), now);
     for (const { task, prevDue } of moved) {
       const email = staffByUser.get(task.user);
@@ -567,8 +567,21 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
     { key: "morning", from: "09:00", to: "11:00" },
     { key: "evening", from: "18:00", to: "20:00" },
   ];
+  // Step 5 (2026-11-26): once the owner makes the ERP the main system
+  // (crm_settings/main.task_source = "erp"), the daily task and deal
+  // messages come from erpTasks.js instead of here.
+  let erpMainAt = 0;
+  let erpMain = false;
+  const erpIsMain = async () => {
+    if (Date.now() - erpMainAt < 60e3) return erpMain;
+    erpMainAt = Date.now();
+    erpMain = ((await db.collection("crm_settings").doc("main").get().catch(() => null))?.data?.() || {}).task_source === "erp";
+    return erpMain;
+  };
+
   const remind = async (now) => {
     if (!notify) return;
+    if (await erpIsMain()) return;
     if (!reminders) {
       const snap = await db.collection("amo_meta").doc("reminders").get();
       reminders = snap.exists ? snap.data() : {};
@@ -910,6 +923,7 @@ const create = (db, { subdomain = process.env.AMO_SUBDOMAIN, token = process.env
   const DEALS_START = process.env.DEAL_ALERTS_START || "2026-11-02";
   const dealAlerts = async (now) => {
     if (!notify) return;
+    if (await erpIsMain()) return;
     const today = dayOf(now);
     if (today < DEALS_START) return;
     const hm = hmOf(now);

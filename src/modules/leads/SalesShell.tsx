@@ -7,6 +7,7 @@ import LeadsBoard from "./crm/LeadsBoard";
 import CallsLog from "./CallsLog";
 import CrmAnalysis from "./crm/CrmAnalysis";
 import AmoImportCard from "./crm/AmoImportCard";
+import SwitchCard from "./crm/SwitchCard";
 import { useAuth } from "../../lib/AuthContext";
 import { setCrmOpen, useCrmOpen } from "./crm/crmOpen";
 import LeadDrawer from "./crm/LeadDrawer";
@@ -21,7 +22,7 @@ import { boardStats, isOldLead } from "../../lib/crm";
 // tasks and calls are read once here for every section. «Tahlil» keeps
 // the amoCRM reports for the month of the move.
 export type SalesSection = "home" | "lidlar" | "zadachalar" | "qongiroqlar" | "tahlil";
-type TahlilTab = "erp" | "voronka" | "yutqazilgan" | "nazorat" | "amo";
+type TahlilTab = "erp" | "otish" | "voronka" | "yutqazilgan" | "nazorat" | "amo";
 
 const SECTIONS: { key: SalesSection; label: string; icon: ReactNode }[] = [
   { key: "home", label: "Bosh sahifa", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -32,6 +33,7 @@ const SECTIONS: { key: SalesSection; label: string; icon: ReactNode }[] = [
 ];
 const TAHLIL: { key: TahlilTab; label: string }[] = [
   { key: "erp", label: "ERP tahlili" },
+  { key: "otish", label: "amoCRM → ERP" },
   { key: "voronka", label: "Voronka (amo)" },
   { key: "yutqazilgan", label: "Yo'qotilganlar (amo)" },
   { key: "nazorat", label: "Menejerlar kuni" },
@@ -41,7 +43,7 @@ const TAHLIL: { key: TahlilTab; label: string }[] = [
 // Old links (?v=voronka …) land in the new place.
 export function sectionOf(v: string | null): { section: SalesSection; tab: TahlilTab } {
   if (v === "lidlar" || v === "zadachalar" || v === "qongiroqlar" || v === "home") return { section: v, tab: "erp" };
-  if (v === "voronka" || v === "yutqazilgan" || v === "nazorat" || v === "amo") return { section: "tahlil", tab: v };
+  if (v === "voronka" || v === "yutqazilgan" || v === "nazorat" || v === "amo" || v === "otish") return { section: "tahlil", tab: v };
   if (v === "control") return { section: "tahlil", tab: "nazorat" };
   if (v === "tahlil") return { section: "tahlil", tab: "erp" };
   return { section: "home", tab: "erp" };
@@ -60,7 +62,8 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
   const openToManagers = useCrmOpen();
   // Managers see the ERP analysis and their own amoCRM numbers (the other
   // amoCRM reports are admin-only data).
-  const tabs = crm.isAdmin ? TAHLIL : TAHLIL.filter((x) => x.key === "erp" || x.key === "amo");
+  // «amoCRM → ERP» (the switch) is the owner's only.
+  const tabs = crm.isAdmin ? TAHLIL.filter((x) => x.key !== "otish" || isOwner) : TAHLIL.filter((x) => x.key === "erp" || x.key === "amo");
   const tab: TahlilTab = tabs.some((x) => x.key === wanted) ? wanted : "erp";
   const toggleManagers = async () => {
     const next = !openToManagers;
@@ -126,9 +129,9 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
               </button>
             ))}
           </div>
-          {tab !== "erp" && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">amoCRM ma'lumoti · o'tish oyida</span>}
+          {tab !== "erp" && tab !== "otish" && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">amoCRM ma'lumoti · o'tish oyida</span>}
         </div>
-        {tab === "erp" ? <CrmAnalysis crm={crm} /> : tab === "voronka" ? <SalesFunnel /> : tab === "yutqazilgan" ? <LostDeals /> : tab === "nazorat" ? <SalesControl /> : amo}
+        {tab === "erp" ? <CrmAnalysis crm={crm} /> : tab === "otish" ? <SwitchCard crm={crm} /> : tab === "voronka" ? <SalesFunnel /> : tab === "yutqazilgan" ? <LostDeals /> : tab === "nazorat" ? <SalesControl /> : amo}
       </div>
     );
 
