@@ -774,6 +774,15 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   filled (labels and choice texts from the form's questions, cached) /
   ℹ️ Manba: Instagram|Facebook / 📆 Sana / 📣 Reklama / 🆔 LID» —
   `meta-webhook/leadText.js metaLeadText`.
+- **Lead portrait from the Meta form — 2026-11-26** (owner: «amoCRM'da mijoz
+  portretida ismi, soni, qayerdanligi turibdi, sandagida faqat nomeri»):
+  `leadText.js leadFields` keeps every answer as filled in
+  `leads.form_answers [{label, value}]` (card block «Formada to'ldirgani»)
+  and fills the card's fields by the question's key/label (Latin or
+  Cyrillic): name (custom «Ismi» too), phone, brand, address (+ region from
+  the town, `regionOf`), industry, product (`interested_product_name` +
+  matching `product_types`), `quantity` («Nechta», new card field, shown on
+  board cards). Only new leads; older ones were not backfilled.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

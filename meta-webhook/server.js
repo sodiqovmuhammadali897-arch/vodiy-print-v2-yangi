@@ -138,7 +138,16 @@ const fieldValue = (fieldData, ...names) => {
 // A form's questions (key → label, choice key → text), cached per form —
 // so the lead message shows the answers as the customer filled them.
 const formQuestions = new Map();
-const { metaLeadText } = require("./leadText");
+const { metaLeadText, leadFields } = require("./leadText");
+// The lead card's «Mahsulot turi» choices (src/lib/crm.ts PRODUCT_TYPES).
+const PRODUCT_TYPES = [
+  "Futbolka", "Kepka", "Kombo yozuv", "Flayer", "Buklet", "Liflet", "Ruchka", "Soft tach ruchka", "Sensor ruchka", "Kubarik",
+  "Bloknot", "Koja bloknot", "Paket A4", "Paket A5", "Paket A2", "Bokal", "Soft tach bokal", "Soat", "Fartuk",
+  "Ish stoli bayrog'i", "Sayohat bayrog'i", "Parus", "Roll-ap", "Pauchok", "Beydjik", "Finka standart", "Finka Lux",
+  "Futbolka Amina", "Futbolka Status", "Futbolka Basico", "Rangli futbolka", "Gift Box", "Sayohat yostiqchasi",
+  "Vizitka oddiy", "Vizitka Lux", "Sviter", "Xudi", "Kamzul", "Shopper", "Stiker pak", "Papka", "Doorhanger",
+  "Kombo bloknot ruchka", "Standart set", "Ideal set", "Premium set",
+];
 const graphQuestions = async (formId) => {
   if (!formId) return [];
   if (formQuestions.has(formId)) return formQuestions.get(formId);
@@ -189,12 +198,18 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId, prefetch
   }
 
   const fieldData = lead.field_data || [];
+  formId = formId || lead.form_id;
+  const questions = await graphQuestions(formId);
+  // The customer's portrait as the form was filled (name, brand, place,
+  // quantity, product … — leadText.js leadFields).
+  const portrait = leadFields(fieldData, questions, PRODUCT_TYPES);
   const fullName =
     fieldValue(fieldData, "full_name") ||
     [fieldValue(fieldData, "first_name"), fieldValue(fieldData, "last_name")].filter(Boolean).join(" ") ||
+    portrait.full_name ||
     "Noma'lum";
-  const phone = fieldValue(fieldData, "phone_number", "phone");
-  const telegram = (fieldData.find((f) => (f.name || "").toLowerCase().includes("telegram"))?.values || [])[0] || "";
+  const phone = fieldValue(fieldData, "phone_number", "phone") || portrait.phone || "";
+  const telegram = (fieldData.find((f) => (f.name || "").toLowerCase().includes("telegram"))?.values || [])[0] || portrait.telegram || "";
 
   const [campaignName, adSetName, adName, formName] = await Promise.all([
     lead.campaign_name || graphName(campaignId || lead.campaign_id),
@@ -205,10 +220,11 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId, prefetch
   campaignId = campaignId || lead.campaign_id;
   adSetId = adSetId || lead.adset_id;
   adId = adId || lead.ad_id;
-  formId = formId || lead.form_id;
 
   const source = lead.platform === "ig" ? "Instagram Target" : "Facebook Lead Ads";
+  const { full_name: _n, phone: _p, telegram: _t, ...portraitFields } = portrait;
   const created = await createLead(db, {
+    ...portraitFields,
     full_name: fullName,
     phone,
     telegram,
@@ -233,7 +249,7 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId, prefetch
       metaLeadText({
         formName,
         fieldData,
-        questions: await graphQuestions(formId),
+        questions,
         platform: lead.platform,
         createdTime: lead.created_time,
         leadNumber: created.lead_number,

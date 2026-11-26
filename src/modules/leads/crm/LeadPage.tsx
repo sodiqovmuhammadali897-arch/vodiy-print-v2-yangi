@@ -60,6 +60,7 @@ const FIELDS: (keyof Lead)[] = [
   "industry",
   "product_types",
   "order_volume",
+  "quantity",
   "estimated_amount",
   "payment_type",
   "ready_date",
@@ -354,6 +355,23 @@ export function LeadCard({ id, crm, panel = false, onClose }: { id: string; crm?
               </button>
             )}
           </div>
+          {(lead.form_answers || []).length > 0 && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50/70 px-3 py-2 dark:border-sky-800 dark:bg-sky-900/20">
+              <div className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-200">
+                🧾 Formada to'ldirgani{lead.form_name ? ` · ${lead.form_name}` : ""}
+              </div>
+              <dl className="space-y-0.5 text-sm">
+                {(lead.form_answers || []).map((a, i) => (
+                  <div key={i} className="grid grid-cols-[110px_1fr] gap-2">
+                    <dt className="truncate text-ink-500" title={a.label}>
+                      {a.label}
+                    </dt>
+                    <dd className="min-w-0 break-words font-semibold text-ink-900">{a.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
           <Txt
             label="Ism"
             v={form.full_name}
@@ -417,6 +435,11 @@ export function LeadCard({ id, crm, panel = false, onClose }: { id: string; crm?
             v={form.order_volume}
             on={(v) => set({ order_volume: v })}
             options={ORDER_VOLUMES}
+          />
+          <Txt
+            label="Nechta"
+            v={form.quantity}
+            on={(v) => set({ quantity: v })}
           />
           <Txt
             label="Taxminiy summa"

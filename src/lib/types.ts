@@ -794,6 +794,10 @@ export type Lead = {
   amo_id?: number | null;
   amo_ids?: number[]; // every amoCRM deal joined to this lead (same phone)
   lost_at?: string; // when it was marked lost (step 6; older ones: updated_at)
+  // A Meta form lead: every answer as the customer filled it, and the
+  // quantity they chose (meta-webhook/leadText.js leadFields, 2026-11-26).
+  form_answers?: { label: string; value: string }[];
+  quantity?: string;
 };
 
 export type LeadTaskType =

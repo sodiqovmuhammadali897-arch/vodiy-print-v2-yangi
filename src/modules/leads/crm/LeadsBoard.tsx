@@ -364,6 +364,8 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
                                       l.full_name && l.brand ? l.full_name : "",
                                       (l.product_types || []).join(", ") ||
                                         l.interested_product_name,
+                                      l.quantity || "",
+                                      l.region || "",
                                     ]
                                       .filter(Boolean)
                                       .join(" · ") ||
