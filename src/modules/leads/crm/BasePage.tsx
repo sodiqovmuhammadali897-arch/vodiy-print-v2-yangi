@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, Download, Loader2, RotateCcw } from "lucide-react";
+import { Download, Loader2, RotateCcw } from "lucide-react";
 import { formatMoneyShort } from "../../../lib/format";
 import { exportCsv } from "../../../lib/exportCsv";
 import { listAll } from "../../../lib/firestoreDb";
@@ -12,6 +12,7 @@ import type { CrmData } from "./useCrm";
 import { useBase } from "./useBase";
 import { useLeadHref } from "./leadLink";
 import AmoBaseCard from "./AmoBaseCard";
+import CustomerPanel from "./CustomerPanel";
 
 // Sotuv bo'limi → «Mijozlar bazasi» (2026-11-26; owner: «yopilgan, qimmat
 // degan hamma lidlar to'planadigan baza»; «managerlar ham umumiyni ko'ra
@@ -72,6 +73,7 @@ export default function BasePage({ crm, isOwner }: { crm: CrmData; isOwner: bool
       }
       setPicked(new Set());
       if (ids.length === 1 && lastId) {
+        setOpen(null);
         if (had) setMsg("Bu raqamda ochiq lid bor — o'sha ochildi.");
         navigate(leadHref(lastId));
       } else setMsg(`${made} ta mijoz ${t.name}ga lid bo'lib berildi («Qayta aloqa» zadachasi bilan)${had ? `; ${had} tasida ochiq lid bor edi` : ""}.`);
@@ -191,7 +193,7 @@ export default function BasePage({ crm, isOwner }: { crm: CrmData; isOwner: bool
                   <th className="px-2 py-1.5 font-semibold">Kim</th>
                   <th className="px-2 py-1.5 font-semibold">Mahsulot</th>
                   <th className="px-2 py-1.5 text-right font-semibold">Summa</th>
-                  <th className="px-2 py-1.5 font-semibold">Bitimlar</th>
+                  <th className="px-2 py-1.5 font-semibold">Tarix</th>
                   <th className="px-2 py-1.5" />
                 </tr>
               </thead>
@@ -225,7 +227,7 @@ export default function BasePage({ crm, isOwner }: { crm: CrmData; isOwner: bool
                         <td className="max-w-[180px] truncate px-2 py-2 text-xs text-ink-600">{products || "—"}</td>
                         <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-ink-700">{c.sum ? formatMoneyShort(c.sum) : "—"}</td>
                         <td className="whitespace-nowrap px-2 py-2 text-xs text-ink-500">
-                          {c.deals.length} <ChevronDown className={`inline h-3.5 w-3.5 transition ${isOpen ? "rotate-180" : ""}`} />
+                          {c.deals.length} bitim{c.calls_count ? ` · 📞 ${c.calls_count}` : ""}
                         </td>
                         <td className="whitespace-nowrap px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                           {c.reopened?.count ? (
@@ -239,13 +241,6 @@ export default function BasePage({ crm, isOwner }: { crm: CrmData; isOwner: bool
                           </button>
                         </td>
                       </tr>
-                      {isOpen && (
-                        <tr>
-                          <td colSpan={crm.isAdmin ? 10 : 9} className="bg-ink-50/40 px-4 py-3">
-                            <History deals={c.deals} />
-                          </td>
-                        </tr>
-                      )}
                     </Fragment>
                   );
                 })}
@@ -262,6 +257,15 @@ export default function BasePage({ crm, isOwner }: { crm: CrmData; isOwner: bool
         )}
         <p className="mt-2 text-[11px] text-ink-400">«Qayta ishlash» — mijoz yangi lid bo'lib «Qabul qilindi»ga tushadi, «Qayta aloqa» zadachasi qo'yiladi, eski tarixi lid kartasida ko'rinadi. Shu raqamda ochiq lid bo'lsa, ikkinchisi ochilmaydi.</p>
       </div>
+      {open && all.find((x) => x.id === open) && (
+        <CustomerPanel
+          c={all.find((x) => x.id === open)!}
+          names={Object.fromEntries(crm.sellers.map((x) => [x.email, x.name]))}
+          busy={busy === open}
+          onClose={() => setOpen(null)}
+          onReopen={() => void reopen([open])}
+        />
+      )}
     </div>
   );
 }

@@ -805,7 +805,19 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   source «Mijozlar bazasi», «Qayta aloqa» task in 30 min, or the open lead
   of that phone); admins pick «Kimga beriladi» and give many at once. Lead
   card: «📚 Oldin N marta murojaat qilgan» (`useBaseOf`, own deal hidden).
-  The import is NOT run yet — the owner presses it.
+  First import run by the owner 2026-11-26.
+  - **Full customer card (2026-11-26, «polni ma'lumotlari bilan, audio
+    qo'ng'iroqlari bilan»):** the import also reads every amoCRM call note
+    (leads + contacts, call_in/call_out, matched by `params.phone`, else the
+    deal's/contact's phone; deduped by `params.uniq`) → `crm_base.calls`
+    (≤150: at, dir, sec, who, link = Mois Zvonki recording, src), the deals'
+    «common» notes → `notes` (≤60), every filled field → `deals[].fields`,
+    tags → `deals[].tags`; `calls_count`, `talk_sec`. Preview runs in the
+    background too (`previewing`). `crm/CustomerPanel.tsx` (right panel over
+    the base and from the lead card's «To'liq tarix»): tabs Qo'ng'iroqlar
+    (amoCRM's + the ERP's own `calls` of that phone, `mergeCalls`,
+    `phoneForms`; ▶ audio) · Bitimlar (all fields, tags) · Izohlar. Old
+    recordings may be gone from Mois Zvonki.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

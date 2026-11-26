@@ -1,7 +1,7 @@
 // Mijozlar bazasi (Sotuv bo'limi, 2026-11-26): the rules of the page —
 // groups, filters, counts and what «Qayta ishlash» writes. Data comes from
 // crm_base (meta-webhook/crmBase.js).
-import type { BaseDeal, CrmBaseDoc } from "./types";
+import type { BaseCall, BaseDeal, CrmBaseDoc } from "./types";
 
 export const digitsOf = (p: string | null | undefined) => String(p || "").replace(/\D/g, "").slice(-9);
 
@@ -80,3 +80,29 @@ export function reopenFields(c: CrmBaseDoc) {
 export const csvRows = (list: CrmBaseDoc[]) =>
   list.map((c) => [c.name || "", c.brand || "", c.phone, c.region || "", dealLabel({ status: c.last?.status as "won" | "lost", reason: c.last?.reason || "", group: c.last?.group || "" }), String(c.last?.closed_at || "").slice(0, 10), c.last?.manager_name || "", [...new Set(c.deals.map((d) => d.product).filter(Boolean))].join("; "), c.sum || 0, c.deals.length, c.reopened?.count || 0]);
 export const CSV_HEADERS = ["Ism", "Brend", "Telefon", "Viloyat", "Oxirgi natija", "Yopilgan", "Manager", "Mahsulot", "Summa", "Bitimlar", "Qayta ishlangan"];
+
+// The customer's calls: amoCRM's (in the base) + the ERP's own `calls` of
+// that phone, newest first, one per call (the same Mois Zvonki call may be
+// in both — same minute, same direction → kept once, the one with audio).
+export type ErpCallRow = { id: string; direction?: string; answered?: boolean; duration_seconds?: number; recording_url?: string; start_time?: string | null; created_at?: string; staff_name?: string; staff_email?: string; contact?: unknown };
+export function mergeCalls(amo: BaseCall[] = [], erp: ErpCallRow[] = []): BaseCall[] {
+  const out: BaseCall[] = [...amo];
+  const key = (c: { at: string; dir: string }) => `${c.dir}:${String(c.at).slice(0, 16)}`;
+  const have = new Map(out.map((c) => [key(c), c]));
+  for (const r of erp) {
+    const c = { id: `erp:${r.id}`, at: r.start_time || r.created_at || "", dir: (r.direction === "in" ? "in" : "out") as "in" | "out", sec: Number(r.duration_seconds) || 0, who: r.staff_name || r.staff_email || "", link: r.recording_url || "", src: "erp" as const, answered: r.answered };
+    const same = have.get(key(c));
+    if (same) {
+      if (!same.link && c.link) same.link = c.link;
+      continue;
+    }
+    have.set(key(c), c);
+    out.push(c);
+  }
+  return out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+// The forms a phone is kept in `calls.phone` (Mois Zvonki sends it as typed).
+export const phoneForms = (digits: string, raw = "") => [...new Set([digits, `998${digits}`, `+998${digits}`, raw].filter((x) => x && x.length >= 9))];
+
+export const secLabel = (s: number) => (s >= 60 ? `${Math.floor(s / 60)} daq ${s % 60} s` : `${s} s`);

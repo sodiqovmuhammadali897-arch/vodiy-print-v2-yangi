@@ -40,6 +40,46 @@ function amoEntry(deal, { user = "", staffEmail = "" } = {}) {
     price: Number(deal.price) || 0,
     title: latin(deal.name || "").slice(0, 120),
     amo_id: Number(deal.id),
+    fields: allFields(deal),
+    tags: ((deal._embedded && deal._embedded.tags) || []).map((t) => latin(t.name)).filter(Boolean),
+  };
+}
+
+// Every filled amoCRM field of a deal as «label: value» (Latin). Pure.
+function allFields(deal) {
+  const out = [];
+  for (const f of deal.custom_fields_values || []) {
+    const vals = (f.values || []).map((v) => v.value).filter((v) => v !== null && v !== undefined && v !== "");
+    if (!vals.length) continue;
+    const label = latin(f.field_name || "").trim();
+    const date = /^\d{9,10}$/.test(String(vals[0])) && /san|date|vaqt|muddat/i.test(label);
+    const value = date ? new Date(Number(vals[0]) * 1000 + 5 * 3600e3).toISOString().slice(0, 10) : vals.map((v) => latin(String(v))).join(", ");
+    out.push({ label, value: value.slice(0, 300) });
+  }
+  return out;
+}
+
+// An amoCRM call note → a call of the customer. Pure.
+function amoCall(n, users = new Map()) {
+  const p = n.params || {};
+  return {
+    id: String(p.uniq || `${n.entity_type || ""}${n.id}`),
+    at: Number(n.created_at) > 0 ? new Date(Number(n.created_at) * 1000).toISOString() : "",
+    dir: n.note_type === "call_in" ? "in" : "out",
+    sec: Math.max(0, Number(p.duration) || 0),
+    who: latin((users.get(Number(n.created_by || n.responsible_user_id)) || {}).name || ""),
+    link: String(p.link || ""),
+    src: "amo",
+  };
+}
+
+// A manager's text note on a deal. Pure.
+function amoNote(n, users = new Map()) {
+  return {
+    id: `amo:${n.id}`,
+    at: Number(n.created_at) > 0 ? new Date(Number(n.created_at) * 1000).toISOString() : "",
+    who: latin((users.get(Number(n.created_by || n.responsible_user_id)) || {}).name || ""),
+    text: latin(String((n.params && n.params.text) || "")).trim().slice(0, 800),
   };
 }
 
@@ -66,7 +106,15 @@ function erpEntry(l) {
 
 // The customer's doc: the existing one + new person fields (blanks only) +
 // the entries (one per key, newest first). Pure.
-function mergeDoc(existing, person, entries, now = new Date().toISOString()) {
+const MAX_CALLS = 150;
+const MAX_NOTES = 60;
+const mergeById = (old, add, max) => {
+  const m = new Map((old || []).map((x) => [x.id, x]));
+  for (const x of add || []) m.set(x.id, { ...(m.get(x.id) || {}), ...x });
+  return [...m.values()].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, max);
+};
+
+function mergeDoc(existing, person, entries, now = new Date().toISOString(), extra = {}) {
   const doc = existing ? { ...existing } : { digits: person.digits, reopened: null, created_at: now };
   for (const k of ["phone", "name", "brand", "region", "industry", "address"]) if (!doc[k] && person[k]) doc[k] = person[k];
   const byKey = new Map((doc.deals || []).map((d) => [d.key, d]));
@@ -77,13 +125,19 @@ function mergeDoc(existing, person, entries, now = new Date().toISOString()) {
   doc.lost = doc.deals.filter((d) => d.status === "lost").length;
   doc.won = doc.deals.filter((d) => d.status === "won").length;
   doc.sum = Math.max(0, ...doc.deals.map((d) => d.price || 0));
+  if (extra.calls && extra.calls.length) doc.calls = mergeById(doc.calls, extra.calls, MAX_CALLS);
+  if (extra.notes && extra.notes.length) doc.notes = mergeById(doc.notes, extra.notes.filter((n) => n.text), MAX_NOTES);
+  if (doc.calls) {
+    doc.calls_count = doc.calls.length;
+    doc.talk_sec = doc.calls.reduce((t, c) => t + (c.sec || 0), 0);
+  }
   doc.updated_at = now;
   return doc;
 }
 
 // Closed amoCRM rows ({deal, contact, user, staffEmail}) grouped by phone.
 // Pure: what the import will write, and the counts for the preview.
-function planAmo(rows) {
+function planAmo(rows, { callsByPhone = new Map(), notesByDeal = new Map() } = {}) {
   const byPhone = new Map();
   let noPhone = 0;
   for (const r of rows) {
@@ -97,11 +151,17 @@ function planAmo(rows) {
     const g = byPhone.get(d);
     for (const k of ["name", "brand", "region", "industry"]) if (!g.person[k]) g.person[k] = k === "name" ? latin(r.contact.name || "").trim() : f[k] || "";
     g.entries.push(amoEntry(r.deal, r));
+    g.notes = [...(g.notes || []), ...(notesByDeal.get(Number(r.deal.id)) || [])];
+  }
+  let calls = 0;
+  for (const [d, g] of byPhone) {
+    g.calls = callsByPhone.get(d) || [];
+    calls += g.calls.length;
   }
   const all = rows.length - noPhone;
   const groups = {};
   for (const g of byPhone.values()) for (const e of g.entries) groups[e.group] = (groups[e.group] || 0) + 1;
-  return { byPhone, counts: { deals: rows.length, withPhone: all, noPhone, customers: byPhone.size, won: rows.filter((r) => Number(r.deal.status_id) === WON).length, lost: rows.filter((r) => Number(r.deal.status_id) === LOST).length, groups } };
+  return { byPhone, counts: { calls, recorded: [...byPhone.values()].reduce((t, g) => t + g.calls.filter((c) => c.link).length, 0), notes: [...byPhone.values()].reduce((t, g) => t + (g.notes || []).length, 0), deals: rows.length, withPhone: all, noPhone, customers: byPhone.size, won: rows.filter((r) => Number(r.deal.status_id) === WON).length, lost: rows.filter((r) => Number(r.deal.status_id) === LOST).length, groups } };
 }
 
 const create = (db, { amo, log = console } = {}) => {
@@ -132,16 +192,50 @@ const create = (db, { amo, log = console } = {}) => {
     }
     const staff = (await db.collection("staff").get()).docs.map((d) => ({ email: d.id.toLowerCase(), ...d.data() }));
     const staffByAmo = new Map(staff.filter((s) => s.amo_user_id).map((s) => [Number(s.amo_user_id), s]));
-    return deals.map((deal) => {
+    // Who is who in notes: the staff name when linked, else amoCRM's user.
+    const people = new Map([...io.users.entries()].map(([id, u]) => [id, { name: (staffByAmo.get(id) || {}).full_name || u.name }]));
+    // Managers' text notes on these deals.
+    const dealIds = new Set(deals.map((d) => Number(d.id)));
+    const notesByDeal = new Map();
+    for (const n of await io.pageAll("leads/notes", { "filter[note_type][]": ["common"] }, "notes").catch(() => [])) {
+      const id = Number(n.entity_id);
+      if (!dealIds.has(id)) continue;
+      if (!notesByDeal.has(id)) notesByDeal.set(id, []);
+      notesByDeal.get(id).push(amoNote(n, people));
+    }
+    // Every call (Mois Zvonki notes on deals and contacts), by the phone.
+    const dealPhone = new Map();
+    const contactPhone = new Map([...contacts.entries()].map(([id, c]) => [id, digitsOf(c.phone)]));
+    for (const d of deals) {
+      const cs = (d._embedded || {}).contacts || [];
+      const main = cs.find((c) => c.is_main) || cs[0];
+      if (main) dealPhone.set(Number(d.id), contactPhone.get(Number(main.id)) || "");
+    }
+    const callsByPhone = new Map();
+    const seen = new Set();
+    for (const entity of ["leads", "contacts"]) {
+      for (const n of await io.pageAll(`${entity}/notes`, { "filter[note_type][]": ["call_in", "call_out"] }, "notes").catch(() => [])) {
+        const c = amoCall({ ...n, entity_type: entity[0] }, people);
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        const ph = digitsOf(n.params && n.params.phone) || (entity === "leads" ? dealPhone.get(Number(n.entity_id)) : contactPhone.get(Number(n.entity_id))) || "";
+        if (ph.length < 9) continue;
+        if (!callsByPhone.has(ph)) callsByPhone.set(ph, []);
+        callsByPhone.get(ph).push(c);
+      }
+    }
+    const rows = deals.map((deal) => {
       const cs = (deal._embedded || {}).contacts || [];
       const main = cs.find((c) => c.is_main) || cs[0];
       const s = staffByAmo.get(Number(deal.responsible_user_id));
       return { deal, contact: main ? contacts.get(Number(main.id)) || null : null, user: s ? s.full_name || s.email : (io.users.get(Number(deal.responsible_user_id)) || {}).name || "", staffEmail: s ? s.email : "" };
     });
+    return { rows, callsByPhone, notesByDeal };
   };
 
   const preview = async () => {
-    const { counts } = planAmo(await fetchClosed());
+    const f = await fetchClosed();
+    const { counts } = planAmo(f.rows, f);
     const have = (await COL.count().get()).data().count;
     const out = { ...counts, inBase: have, at: new Date().toISOString() };
     await META.set({ preview: out }, { merge: true });
@@ -153,15 +247,16 @@ const create = (db, { amo, log = console } = {}) => {
     running = true;
     try {
       await META.set({ state: "running", started_at: new Date().toISOString(), by: who.name, progress: { done: 0, total: 0 }, error: null }, { merge: true });
-      const { byPhone, counts } = planAmo(await fetchClosed());
+      const f = await fetchClosed();
+      const { byPhone, counts } = planAmo(f.rows, f);
       const existing = new Map((await COL.get()).docs.map((d) => [d.id, d.data()]));
       const total = byPhone.size;
       let done = 0;
       let batch = db.batch();
       let inBatch = 0;
       for (const [d, g] of byPhone) {
-        batch.set(COL.doc(d), mergeDoc(existing.get(d), g.person, g.entries));
-        if (++inBatch === 400) {
+        batch.set(COL.doc(d), mergeDoc(existing.get(d), g.person, g.entries, undefined, { calls: g.calls, notes: g.notes }));
+        if (++inBatch === 100) {
           await batch.commit();
           batch = db.batch();
           inBatch = 0;
@@ -170,7 +265,7 @@ const create = (db, { amo, log = console } = {}) => {
         done++;
       }
       if (inBatch) await batch.commit();
-      const result = { customers: total, deals: counts.withPhone, noPhone: counts.noPhone, won: counts.won, lost: counts.lost };
+      const result = { customers: total, deals: counts.withPhone, noPhone: counts.noPhone, won: counts.won, lost: counts.lost, calls: counts.calls, recorded: counts.recorded, notes: counts.notes };
       await META.set({ state: "done", finished_at: new Date().toISOString(), progress: { done, total }, result, preview: null }, { merge: true });
       log.log(`crm_base amo import: ${JSON.stringify(result)}`);
       return result;
@@ -221,14 +316,17 @@ const create = (db, { amo, log = console } = {}) => {
       }
       return who;
     };
+    // Reading every call note takes minutes: the preview runs in the
+    // background too, the app watches crm_meta/amo_base.
     app.post("/webhooks/crm/amo-base/preview", async (req, res) => {
       const who = await owner(req, res);
       if (!who) return;
-      try {
-        res.json(await preview());
-      } catch (err) {
-        res.status(500).json({ error: String(err.message || err) });
-      }
+      if (running) return res.status(409).json({ error: "Ko'chirish ketyapti" });
+      res.json({ ok: true });
+      await META.set({ previewing: true, error: null }, { merge: true }).catch(() => undefined);
+      preview()
+        .catch((err) => META.set({ error: String(err.message || err) }, { merge: true }).catch(() => undefined))
+        .finally(() => META.set({ previewing: false }, { merge: true }).catch(() => undefined));
     });
     app.post("/webhooks/crm/amo-base/run", async (req, res) => {
       const who = await owner(req, res);
@@ -242,4 +340,4 @@ const create = (db, { amo, log = console } = {}) => {
   return { preview, run, syncErp, start, register };
 };
 
-module.exports = { create, amoEntry, erpEntry, mergeDoc, planAmo, digitsOf };
+module.exports = { create, amoEntry, erpEntry, mergeDoc, planAmo, digitsOf, amoCall, amoNote, allFields };

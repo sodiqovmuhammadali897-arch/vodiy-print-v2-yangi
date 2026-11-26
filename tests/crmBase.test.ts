@@ -76,3 +76,47 @@ describe("crm_base in the app", () => {
     expect(historyFor(doc, "L9").length).toBe(1);
   });
 });
+
+describe("full customer: calls, notes, fields", () => {
+  const { amoCall, amoNote, allFields, mergeDoc: merge, planAmo: plan } = require("../meta-webhook/crmBase.js");
+  const users = new Map([[7, { name: "Нуриддин" }]]);
+  it("reads a Mois Zvonki call note and a text note", () => {
+    const c = amoCall({ id: 1, entity_type: "l", note_type: "call_in", created_by: 7, created_at: 1762000000, params: { uniq: "u1", duration: 95, link: "https://rec/1.mp3", phone: "+998901234567" } }, users);
+    expect(c).toMatchObject({ id: "u1", dir: "in", sec: 95, who: "Nuriddin", link: "https://rec/1.mp3", src: "amo" });
+    expect(amoNote({ id: 9, created_by: 7, created_at: 1762000000, params: { text: "Нархни сўради" } }, users)).toMatchObject({ id: "amo:9", who: "Nuriddin", text: "Narxni so'radi" });
+  });
+  it("keeps every filled field, dates as days", () => {
+    expect(allFields({ custom_fields_values: [{ field_name: "Буюртма хажми", values: [{ value: "Катта буюртма" }] }, { field_name: "Тайёр бўлиш санаси", values: [{ value: 1762000000 }] }, { field_name: "Бўш", values: [] }] })).toEqual([
+      { label: "Buyurtma xajmi", value: "Katta buyurtma" },
+      { label: "Tayyor bo'lish sanasi", value: "2025-11-01" },
+    ]);
+  });
+  it("calls and notes go to the customer by phone, merged without duplicates", () => {
+    const callsByPhone = new Map([["901234567", [{ id: "u1", at: "2026-10-01T05:00:00Z", dir: "in", sec: 95, who: "N", link: "x", src: "amo" }]]]);
+    const notesByDeal = new Map([[1, [{ id: "amo:9", at: "2026-10-01T06:00:00Z", who: "N", text: "Salom" }]]]);
+    const { byPhone, counts } = plan([{ deal: { id: 1, status_id: 143, created_at: 1, closed_at: 2 }, contact: { name: "A", phone: "901234567" } }], { callsByPhone, notesByDeal });
+    expect(counts).toMatchObject({ calls: 1, recorded: 1, notes: 1 });
+    const g = byPhone.get("901234567");
+    const doc = merge(null, g.person, g.entries, "t", { calls: g.calls, notes: g.notes });
+    const again = merge(doc, g.person, g.entries, "t2", { calls: [...g.calls, { id: "u2", at: "2026-11-01T05:00:00Z", dir: "out", sec: 0, who: "N", link: "", src: "amo" }], notes: g.notes });
+    expect(again.calls.map((c: any) => c.id)).toEqual(["u2", "u1"]);
+    expect(again.notes.length).toBe(1);
+    expect([again.calls_count, again.talk_sec]).toEqual([2, 95]);
+  });
+});
+
+describe("the ERP's own calls next to amoCRM's", () => {
+  it("same call in both is kept once, with the recording", async () => {
+    const { mergeCalls, phoneForms } = await import("../src/lib/crmBase");
+    const out = mergeCalls(
+      [{ id: "u1", at: "2026-11-20T05:00:10.000Z", dir: "in", sec: 60, who: "N", link: "", src: "amo" }],
+      [
+        { id: "e1", direction: "in", duration_seconds: 60, recording_url: "https://r/1.aac", start_time: "2026-11-20T05:00:40.000Z" },
+        { id: "e2", direction: "out", duration_seconds: 0, start_time: "2026-11-21T05:00:00.000Z", staff_name: "M" },
+      ],
+    );
+    expect(out.map((c) => c.id)).toEqual(["erp:e2", "u1"]);
+    expect(out[1].link).toBe("https://r/1.aac");
+    expect(phoneForms("901234567", "+998 90 123 45 67")).toEqual(["901234567", "998901234567", "+998901234567", "+998 90 123 45 67"]);
+  });
+});

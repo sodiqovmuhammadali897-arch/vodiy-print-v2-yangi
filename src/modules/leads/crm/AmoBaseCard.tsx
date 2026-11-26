@@ -7,12 +7,13 @@ import { subscribeOne } from "../../../lib/firestoreDb";
 // closed deals (won and lost) into the base, one customer per phone
 // (meta-webhook/crmBase.js). «Oldin ko'rish» counts, «Ko'chirish» writes;
 // pressing again later adds the deals closed since. amoCRM is only read.
-type Preview = { deals: number; withPhone: number; noPhone: number; customers: number; won: number; lost: number; inBase: number; groups: Record<string, number>; at: string };
+type Preview = { calls?: number; recorded?: number; notes?: number; deals: number; withPhone: number; noPhone: number; customers: number; won: number; lost: number; inBase: number; groups: Record<string, number>; at: string };
 type BaseImportDoc = {
   state?: "running" | "done" | "error";
   preview?: Preview | null;
   progress?: { done: number; total: number };
-  result?: { customers: number; deals: number; noPhone: number; won: number; lost: number };
+  result?: { customers: number; deals: number; noPhone: number; won: number; lost: number; calls?: number; recorded?: number; notes?: number };
+  previewing?: boolean;
   finished_at?: string;
   by?: string;
   error?: string | null;
@@ -47,7 +48,7 @@ export default function AmoBaseCard({ empty, onDone }: { empty: boolean; onDone:
     }
   };
   const p = doc.preview;
-  const running = doc.state === "running";
+  const running = doc.state === "running" || !!doc.previewing;
   const pr = doc.progress;
   const run = () => {
     if (!window.confirm(`amoCRM'dagi ${p ? p.withPhone : "yopilgan"} ta bitim Mijozlar bazasiga ko'chirilsinmi? amoCRM'ning o'zi o'zgarmaydi.`)) return;
@@ -63,8 +64,10 @@ export default function AmoBaseCard({ empty, onDone }: { empty: boolean; onDone:
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold text-ink-900">amoCRM arxivini ko'chirish</span>
           <span className="block truncate text-xs text-ink-600">
-            {running
-              ? `Ko'chirilmoqda… ${pr ? `${pr.done} / ${pr.total}` : ""}`
+            {doc.previewing
+              ? "Sanalmoqda… qo'ng'iroqlar ko'p, bir necha daqiqa"
+              : running
+              ? `Ko'chirilmoqda… ${pr && pr.total ? `${pr.done} / ${pr.total}` : "amoCRM o'qilmoqda"}`
               : doc.state === "done" && doc.result
                 ? `Oxirgisi ${when(doc.finished_at)}: ${doc.result.customers} mijoz, ${doc.result.deals} bitim`
                 : "amoCRM'dagi yopilgan hamma bitimlar (yo'qotilgan va yutilgan) bazaga o'tadi"}
@@ -77,7 +80,7 @@ export default function AmoBaseCard({ empty, onDone }: { empty: boolean; onDone:
         <div className="space-y-3 border-t border-emerald-200 px-4 py-3 text-sm dark:border-emerald-800">
           <ol className="list-decimal space-y-0.5 pl-5 text-xs text-ink-600">
             <li>«Oldin ko'rish» — nechta bitim va mijoz o'tishini sanaydi, hech narsa yozilmaydi.</li>
-            <li>«Ko'chirish» — bir telefondagi hamma bitimlar bitta mijozga yig'iladi: sabab, kim yopgan, qachon, mahsulot, summa.</li>
+            <li>«Ko'chirish» — bir telefondagi hamma bitimlar bitta mijozga yig'iladi: sabab, kim yopgan, qachon, hamma maydonlar, teglar, izohlar va qo'ng'iroqlar (yozuvi bilan).</li>
             <li>Keyin yana bossangiz, yangi yopilganlar qo'shiladi, takrorlanmaydi. amoCRM'ning o'zi o'zgarmaydi.</li>
           </ol>
           <div className="flex flex-wrap gap-2">
@@ -97,7 +100,7 @@ export default function AmoBaseCard({ empty, onDone }: { empty: boolean; onDone:
           )}
           {doc.state === "done" && doc.result && !p && (
             <p className="rounded-xl bg-emerald-100/70 px-3 py-2 text-xs text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200">
-              ✅ {when(doc.finished_at)} · {doc.by}: {doc.result.customers} mijoz, {doc.result.deals} bitim (yo'qotilgan {doc.result.lost}, yutilgan {doc.result.won}); {doc.result.noPhone} tasida telefon yo'q edi.
+              ✅ {when(doc.finished_at)} · {doc.by}: {doc.result.customers} mijoz, {doc.result.deals} bitim (yo'qotilgan {doc.result.lost}, yutilgan {doc.result.won}){doc.result.calls !== undefined ? `, ${doc.result.calls} qo'ng'iroq (${doc.result.recorded} tasida yozuv), ${doc.result.notes} izoh` : ""}; {doc.result.noPhone} tasida telefon yo'q edi.
             </p>
           )}
           {p && (
@@ -107,7 +110,7 @@ export default function AmoBaseCard({ empty, onDone }: { empty: boolean; onDone:
                   ["Yopilgan bitim", p.deals],
                   ["Mijoz bo'ladi", p.customers],
                   ["Yo'qotilgan / yutilgan", `${p.lost} / ${p.won}`],
-                  ["Telefonsiz", p.noPhone],
+                  ["Qo'ng'iroq (yozuvli)", p.calls !== undefined ? `${p.calls} (${p.recorded})` : "—"],
                 ].map(([label, n]) => (
                   <div key={String(label)} className="rounded-xl border border-ink-100 bg-surface px-3 py-2">
                     <div className="text-[10.5px] font-bold uppercase tracking-wide text-ink-500">{label}</div>
@@ -120,7 +123,7 @@ export default function AmoBaseCard({ empty, onDone }: { empty: boolean; onDone:
                   .sort((a, b) => b[1] - a[1])
                   .map(([k, n]) => `${GROUP_LABEL[k] || k} ${n}`)
                   .join(" · ")}{" "}
-                · bazada hozir {p.inBase} mijoz · {when(p.at)} holati
+                · {p.notes ?? 0} izoh · {p.noPhone} bitimda telefon yo'q · bazada hozir {p.inBase} mijoz · {when(p.at)} holati
               </p>
             </div>
           )}

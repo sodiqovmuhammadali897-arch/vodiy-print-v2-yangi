@@ -818,7 +818,13 @@ export type BaseDeal = {
   comment?: string;
   amo_id?: number;
   lead_id?: string;
+  fields?: { label: string; value: string }[]; // every filled amoCRM field
+  tags?: string[];
 };
+// A call of the customer: amoCRM's (Mois Zvonki notes, «link» = recording)
+// or the ERP's own `calls` (shown next to them, read in the app).
+export type BaseCall = { id: string; at: string; dir: "in" | "out"; sec: number; who: string; link: string; src: "amo" | "erp"; answered?: boolean };
+export type BaseNote = { id: string; at: string; who: string; text: string };
 export type CrmBaseDoc = {
   id: string;
   digits: string;
@@ -834,6 +840,10 @@ export type CrmBaseDoc = {
   won: number;
   sum: number;
   reopened?: { count: number; last_at: string; lead_id: string; by_name: string; to_name: string } | null;
+  calls?: BaseCall[];
+  notes?: BaseNote[];
+  calls_count?: number;
+  talk_sec?: number;
   updated_at?: string;
 };
 

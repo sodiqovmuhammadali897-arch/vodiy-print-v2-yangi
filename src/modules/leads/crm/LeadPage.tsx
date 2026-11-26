@@ -46,6 +46,7 @@ import { useCrmOpen } from "./crmOpen";
 import { useSalesFon } from "../SalesFon";
 import { useBaseOf } from "./useBase";
 import { History } from "./BasePage";
+import CustomerPanel from "./CustomerPanel";
 import { historyFor } from "../../../lib/crmBase";
 
 // One lead: its stage, fields (amoCRM's), timeline and tasks.
@@ -358,7 +359,7 @@ export function LeadCard({ id, crm, panel = false, onClose }: { id: string; crm?
               </button>
             )}
           </div>
-          <BaseHistory phone={lead.phone} leadId={lead.id} />
+          <BaseHistory phone={lead.phone} leadId={lead.id} names={Object.fromEntries(sellers.map((x) => [x.email, x.name]))} />
           {(lead.form_answers || []).length > 0 && (
             <div className="rounded-xl border border-sky-200 bg-sky-50/70 px-3 py-2 dark:border-sky-800 dark:bg-sky-900/20">
               <div className="mb-1 text-[10.5px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-200">
@@ -797,11 +798,12 @@ function Multi({
 
 // The same phone's earlier closed deals (Mijozlar bazasi): who talked, why
 // it was lost, what they asked — so another manager sees it (2026-11-26).
-function BaseHistory({ phone, leadId }: { phone: string; leadId: string }) {
+function BaseHistory({ phone, leadId, names }: { phone: string; leadId: string; names: Record<string, string> }) {
   const doc = useBaseOf(phone);
   const deals = historyFor(doc, leadId);
   const [open, setOpen] = useState(true);
-  if (!deals.length) return null;
+  const [full, setFull] = useState(false);
+  if (!doc || (!deals.length && !doc.calls_count)) return null;
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
       <button type="button" className="flex w-full items-center justify-between text-left text-[10.5px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200" onClick={() => setOpen((o) => !o)}>
@@ -809,10 +811,14 @@ function BaseHistory({ phone, leadId }: { phone: string; leadId: string }) {
         <span>{open ? "−" : "+"}</span>
       </button>
       {open && (
-        <div className="mt-1.5">
+        <div className="mt-1.5 space-y-2">
           <History deals={deals} />
+          <button type="button" className="w-full rounded-lg border border-amber-300 bg-surface px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100" onClick={() => setFull(true)}>
+            To'liq tarix{doc.calls_count ? ` · 📞 ${doc.calls_count} qo'ng'iroq` : ""}{doc.notes?.length ? ` · ${doc.notes.length} izoh` : ""}
+          </button>
         </div>
       )}
+      {full && <CustomerPanel c={doc} names={names} onClose={() => setFull(false)} />}
     </div>
   );
 }
