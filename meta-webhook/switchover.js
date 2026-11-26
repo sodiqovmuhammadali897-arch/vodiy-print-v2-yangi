@@ -255,6 +255,17 @@ const create = (db, { amo, log = console } = {}) => {
     }
   };
 
+  // A server restart (deploy) stops a run midway: the app would show it
+  // «running» forever. Mark it so it can be pressed again (re-runs add only
+  // what is missing).
+  META.get()
+    .then((d) => {
+      const x = d.exists ? d.data() : {};
+      if (x.state === "running" || x.previewing) return META.set({ state: x.state === "running" ? "error" : x.state || null, previewing: false, error: x.state === "running" ? "Server qayta ishga tushdi — yana bosing, qolgani qo'shiladi" : null }, { merge: true });
+      return null;
+    })
+    .catch(() => undefined);
+
   const register = (app) => {
     const { staffFromRequest } = require("./auth");
     const owner = async (req, res) => {

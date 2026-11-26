@@ -1,0 +1,76 @@
+name: Sotuv bo'limi check (read only)
+
+# Run by hand after the owner's imports / switchover. Prints counts only —
+# no names, phones or notes: the import and switchover results, ERP leads by
+# status and age, open ERP tasks per seller, the customer base's size, calls
+# and recordings, and the server log lines of those jobs.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            SUDO="${{ secrets.SERVER_SUDO_PASSWORD }}"
+            echo "== server log, last 6h (job lines)"
+            echo "$SUDO" | sudo -S journalctl -u meta-webhook --since "6 hours ago" --no-pager 2>/dev/null \
+              | grep -E "switchover|crm_base|amoCRM import|portrait backfill" | cut -c1-260 | tail -20
+            cat > /tmp/vp-crm.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const strip = (o) => JSON.stringify(o, (k, v) => (["by", "error"].includes(k) && typeof v === "string" ? (k === "error" ? v.replace(/\d{7,}/g, "#").slice(0, 200) : "…") : v));
+            const count = (list, key) => { const m = {}; for (const x of list) { const k = key(x); m[k] = (m[k] || 0) + 1; } return m; };
+            (async () => {
+              for (const id of ["switchover", "amo_base", "amo_import"]) {
+                const d = (await db.collection("crm_meta").doc(id).get()).data();
+                if (!d) { console.log(`== ${id}: not run`); continue; }
+                console.log(`== ${id}: state=${d.state || "—"} finished=${d.finished_at || "—"} progress=${strip(d.progress || {})}`);
+                console.log(`   result=${strip(d.result || {})}`);
+                if (d.preview) console.log(`   preview=${strip({ ...d.preview, byUser: undefined, byStage: undefined })}`);
+                if (d.error) console.log(`   error=${strip({ error: d.error })}`);
+              }
+              const staff = (await db.collection("staff").get()).docs.map((d) => ({ email: d.id.toLowerCase(), name: d.data().full_name || "?" }));
+              const nameOf = (e) => (staff.find((s) => s.email === String(e || "").toLowerCase()) || {}).name || (e ? "boshqa" : "mas'ulsiz");
+              const leads = (await db.collection("leads").get()).docs.map((d) => d.data());
+              const cut = "2026-11-24T19:00:00.000Z";
+              const open = leads.filter((l) => l.status !== "lost" && !l.converted_order_id);
+              console.log(`== leads: ${leads.length}; open (no order) ${open.length}: before 25.11 ${open.filter((l) => String(l.created_at) < cut).length}, from 25.11 ${open.filter((l) => String(l.created_at) >= cut).length}`);
+              console.log(`   open by status ${JSON.stringify(count(open, (l) => l.status))}`);
+              console.log(`   open by seller ${JSON.stringify(count(open, (l) => nameOf(l.assigned_to_email)))}`);
+              console.log(`   lost by reason (top) ${JSON.stringify(Object.entries(count(leads.filter((l) => l.status === "lost"), (l) => l.lost_reason || "—")).sort((a, b) => b[1] - a[1]).slice(0, 8))}`);
+              console.log(`   with an order ${leads.filter((l) => l.converted_order_id).length}; from amoCRM ${leads.filter((l) => l.amo_id).length}`);
+              const tasks = (await db.collection("lead_tasks").where("status", "==", "open").get()).docs.map((d) => d.data());
+              const today = new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
+              console.log(`== open tasks: ${tasks.length}; from amoCRM ${tasks.filter((t) => t.amo_task_id).length}; overdue ${tasks.filter((t) => t.due_date < today).length}, today ${tasks.filter((t) => t.due_date === today).length}, later ${tasks.filter((t) => t.due_date > today).length}`);
+              console.log(`   by seller ${JSON.stringify(count(tasks, (t) => nameOf(t.assigned_to_email)))}`);
+              const cancelled = (await db.collection("lead_tasks").where("cancelled", "==", true).get()).size;
+              console.log(`   cancelled by switchover ${cancelled}`);
+              const base = (await db.collection("crm_base").get()).docs.map((d) => d.data());
+              const calls = base.reduce((t, b) => t + (b.calls || []).length, 0);
+              const rec = base.reduce((t, b) => t + (b.calls || []).filter((c) => c.link).length, 0);
+              console.log(`== crm_base: ${base.length} customers; deals ${base.reduce((t, b) => t + (b.deals || []).length, 0)}; with calls ${base.filter((b) => (b.calls || []).length).length}; calls ${calls} (recorded ${rec}); notes ${base.reduce((t, b) => t + (b.notes || []).length, 0)}; with fields ${base.filter((b) => (b.deals || []).some((d) => d.fields)).length}`);
+              console.log(`   last result ${JSON.stringify(count(base, (b) => (b.last || {}).group || "—"))}`);
+              console.log(`   sources ${JSON.stringify(count(base.flatMap((b) => b.deals || []), (d) => d.source))}`);
+              const sample = base.flatMap((b) => (b.calls || []).filter((c) => c.link)).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+              for (const [label, c] of [["newest", sample[0]], ["oldest", sample[sample.length - 1]]]) {
+                if (!c) continue;
+                try {
+                  const r = await fetch(c.link, { method: "GET", headers: { Range: "bytes=0-1023" }, signal: AbortSignal.timeout(15000) });
+                  console.log(`   recording ${label} (${String(c.at).slice(0, 10)}): HTTP ${r.status} ${r.headers.get("content-type") || ""}`);
+                } catch (e) {
+                  console.log(`   recording ${label}: ${e.message}`);
+                }
+              }
+            })().catch((e) => console.log("check failed:", e.message));
+            JS
+            cd /opt/meta-webhook && node /tmp/vp-crm.js; rm -f /tmp/vp-crm.js
