@@ -42,7 +42,7 @@ function weekRank({ sellers, calls, tasks, orders, week }) {
   }
   for (const t of tasks) {
     const r = byEmail.get(key(t.assigned_to_email));
-    if (r && t.status === "done" && t.completed_at && dayOf(t.completed_at) >= week) r.done++;
+    if (r && t.status === "done" && !t.cancelled && t.completed_at && dayOf(t.completed_at) >= week) r.done++;
   }
   for (const o of orders) {
     if (o.status === "cancelled" || o.is_draft) continue;

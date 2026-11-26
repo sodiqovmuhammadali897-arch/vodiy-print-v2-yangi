@@ -8,6 +8,7 @@ import CrmAnalysis from "./crm/CrmAnalysis";
 import AmoImportCard from "./crm/AmoImportCard";
 import ContactsPage from "./crm/ContactsPage";
 import BasePage from "./crm/BasePage";
+import SwitchoverCard from "./crm/SwitchoverCard";
 import CrmSettings from "./crm/CrmSettings";
 import { sectionLabel } from "../../lib/crmSettings";
 import SwitchCard from "./crm/SwitchCard";
@@ -108,6 +109,7 @@ export default function SalesShell({ amo, fonButton }: { amo: ReactNode; fonButt
   const body =
     section === "lidlar" ? (
       <div className="space-y-4">
+        {isOwner && <SwitchoverCard />}
         {isOwner && <AmoImportCard />}
         <LeadsBoard mode="board" crm={crm} />
       </div>

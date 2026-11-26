@@ -161,7 +161,7 @@ export function crmDash({
   const lateTasks = open.filter((t) => taskState(t, now) === "late");
   const todayTasks = open.filter((t) => taskState(t, now) === "today");
   const doneIn = (s: Span) =>
-    myTasks.filter((t) => t.status === "done" && inSpan(t.completed_at, s));
+    myTasks.filter((t) => t.status === "done" && !t.cancelled && inSpan(t.completed_at, s));
   const withTask = new Set(open.map((t) => t.lead_id));
   const col = (l: Lead) => columnOf(l, orders);
   const noTaskLeads = myLeads.filter(

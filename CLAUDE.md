@@ -818,6 +818,21 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     (amoCRM's + the ERP's own `calls` of that phone, `mergeCalls`,
     `phoneForms`; ▶ audio) · Bitimlar (all fields, tags) · Izohlar. Old
     recordings may be gone from Mois Zvonki.
+- **ERP'ga o'tish (switchover) — built 2026-11-26** (owner: «25 kundagi
+  yangi lidlardan boshqa eski lidlarni yop; ertadan managerlar ERP bo'yicha
+  ishlaydi; amodan hamma zadachalarni ko'chir — Muhammadiyor, Nuriddin»).
+  `meta-webhook/switchover.js`, owner-only `/webhooks/crm/switchover/
+  preview|run` (body `{day}`, default 2026-11-25 = cut-off at 00:00
+  Tashkent), card on Lidlar (`crm/SwitchoverCard.tsx`), state in
+  `crm_meta/switchover`. Every open amoCRM task on an OPEN deal → an ERP
+  lead_task (`amo_task_id`; the task's amoCRM user → staff by amo_user_id)
+  on the deal's ERP lead (amo_id/amo_ids, else the phone's open lead, else a
+  new lead from the deal; a lost one is reopened); tasks the first import
+  copied (same lead + due day + time) are not doubled. Then every other
+  open ERP lead created before the cut-off with no order is closed: lost
+  «Eski lid (ERP'ga o'tish)», `lost_at`; its open tasks → done +
+  `cancelled: true` (erpTasks, salesRank and crmDash skip them). Closed
+  leads flow into Mijozlar bazasi. Not run yet — the owner presses it.
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

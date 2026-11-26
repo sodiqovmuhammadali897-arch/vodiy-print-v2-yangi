@@ -70,7 +70,8 @@ function computeErpTasks(month, { tasks, leads, now }) {
   for (const t of tasks) {
     const who = key(t.assigned_to_email);
     const lead = leadById.get(t.lead_id);
-    if (!who || !t.due_date || (lead && isOld(lead))) continue;
+    // A task cancelled because its lead was closed (switchover.js) counts nowhere.
+    if (!who || !t.due_date || t.cancelled || (lead && isOld(lead))) continue;
     const due = dueAt(t);
     const done = t.status === "done";
     const home = t.missed || t.due_date.slice(0, 7);

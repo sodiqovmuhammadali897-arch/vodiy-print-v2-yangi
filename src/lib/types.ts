@@ -858,6 +858,7 @@ export type LeadTaskType =
   | "other";
 
 export type LeadTaskStatus = "open" | "done";
+// done + cancelled: the lead was closed (switchover), the task counts nowhere.
 
 // A lead's own follow-up/reminder queue — distinct from the general
 // `tasks` collection (Vazifalar module), since these are always tied to
@@ -882,6 +883,8 @@ export type LeadTask = {
   reminded?: { due?: string; late?: string } | null;
   // Put off to a later day once its day had come (step 5): late in KPI in this month.
   missed?: string;
+  cancelled?: boolean;
+  amo_task_id?: number;
   missed_at?: string;
 };
 

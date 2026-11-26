@@ -100,6 +100,9 @@ require("./amoImport").create(db, { amo: amocrm }).register(app);
 // ERP's lost leads, one doc per phone (crmBase.js).
 const crmBase = require("./crmBase").create(db, { amo: amocrm });
 crmBase.register(app);
+// «Ertadan ERP bo'yicha»: amoCRM's open tasks into the ERP, old leads closed
+// (switchover.js; the owner starts it from the app).
+require("./switchover").create(db, { amo: amocrm }).register(app);
 // Targetolog — Meta ads with marketolog → admin approval; see targetolog.js.
 const targetolog = groups ? require("./targetolog").create(db, { route: groups.route }) : null;
 // Marketolog video tahlili — see content.js (bot + site upload).
