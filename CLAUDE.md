@@ -782,7 +782,11 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   Cyrillic): name (custom «Ismi» too), phone, brand, address (+ region from
   the town, `regionOf`), industry, product (`interested_product_name` +
   matching `product_types`), `quantity` («Nechta», new card field, shown on
-  board cards). Only new leads; older ones were not backfilled.
+  board cards). Older form leads: `meta-webhook/leadPortrait.js` runs once
+  90 s after the server starts (owner approved): reads each `meta_leads` doc
+  back from Meta, matches the ERP lead (`meta_leads.lead_id`, now written on
+  ingest, else phone among form leads), fills blanks only; counts in
+  `crm_meta/portrait_backfill` (delete `done_at` to run it again).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

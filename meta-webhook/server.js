@@ -239,6 +239,7 @@ const ingestLead = async (leadgenId, formId, adId, campaignId, adSetId, prefetch
     form_id: formId || "",
   });
   const { lead_number } = created;
+  await db.collection("meta_leads").doc(String(leadgenId)).set({ lead_id: created.id }, { merge: true }).catch(() => {});
   const owner = await startLead(db, { id: created.id, full_name: fullName }, { text: `Lid ochildi — ${source}${formName ? ` («${formName}»)` : ""}`, actor: "Meta forma", assign: true });
   // Unassigned: the managers see it with «✅ Qabul qildim» (leadClaim.js).
   // The owner's format (2026-11-26): form name, every answer as filled,
@@ -574,4 +575,16 @@ app.listen(PORT, () => {
   if (targetolog && ai.on("targetolog")) void targetolog.start().catch((err) => console.error("Targetolog start failed", err));
   // Facebook/Instagram form leads read from the forms every 3 min (leadPoll.js).
   require("./leadPoll").create(db, { token: PAGE_ACCESS_TOKEN, graphVersion: GRAPH_VERSION, ingest: ingestLead }).start();
+  // Once: the form answers onto the form leads that came before the portrait
+  // (leadPortrait.js; the owner approved, 2026-11-26).
+  if (PAGE_ACCESS_TOKEN)
+    setTimeout(() => {
+      require("./leadPortrait")
+        .backfill(db, {
+          fetchLead: async (id) => (await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${id}?fields=field_data,form_id&access_token=${PAGE_ACCESS_TOKEN}`)).json(),
+          questionsOf: graphQuestions,
+          productTypes: PRODUCT_TYPES,
+        })
+        .catch((e) => console.error("Lead portrait backfill failed:", e.message));
+    }, 90 * 1000);
 });
