@@ -49,3 +49,23 @@ describe("who took the call", () => {
     expect(C.matchStaff({ user_name: "Boshqa" }, staff)).toBeNull();
   });
 });
+
+describe("acceptByCall — a talk takes a «Yangi» lead to «Qabul qilindi»", () => {
+  const now = "2026-11-27T10:00:00.000Z";
+  const who = { email: "m@x.uz", name: "Muhammadiyor" };
+  it("answered call on a new unassigned lead: accepted and given to the caller", () => {
+    expect(C.acceptByCall({ status: "new" }, { answered: 1, direction: 1 }, who, now)).toEqual({ status: "accepted", first_contact_at: now, assigned_to_email: "m@x.uz", assigned_to_name: "Muhammadiyor" });
+  });
+  it("incoming too; keeps the lead's own manager", () => {
+    const p = C.acceptByCall({ status: "new", assigned_to_email: "n@x.uz", first_contact_at: "2026-11-26T09:00:00Z" }, { answered: true, direction: 0 }, who, now);
+    expect(p).toEqual({ status: "accepted", first_contact_at: "2026-11-26T09:00:00Z" });
+  });
+  it("nothing for a missed call or a lead already past «Yangi»", () => {
+    expect(C.acceptByCall({ status: "new" }, { answered: 0 }, who, now)).toBeNull();
+    expect(C.acceptByCall({ status: "offer" }, { answered: 1 }, who, now)).toBeNull();
+    expect(C.acceptByCall(null, { answered: 1 }, who, now)).toBeNull();
+  });
+  it("unknown caller: accepted, nobody assigned", () => {
+    expect(C.acceptByCall({ status: "new" }, { answered: 1 }, null, now)).toEqual({ status: "accepted", first_contact_at: now });
+  });
+});

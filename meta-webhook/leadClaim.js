@@ -83,6 +83,19 @@ const create = (db, { route = null, salesTargets = null, managersTarget = null }
     return { ok: true, at: now };
   };
 
+  // Every copy of a lead's message (+ the pressed one) gets `line` under it
+  // and loses the button.
+  const editPosts = async (leadId, line, msg = null) => {
+    const posts = ((await db.collection("lead_posts").doc(String(leadId)).get().catch(() => null))?.data?.() || {}).posts || [];
+    const all = [...posts];
+    if (msg && !all.some((p) => String(p.chat_id) === String(msg.chat.id) && p.message_id === msg.message_id)) all.push({ chat_id: msg.chat.id, message_id: msg.message_id, text: msg.text || msg.caption || "", caption: !msg.text && Boolean(msg.caption) });
+    for (const p of all)
+      if (p.caption) await telegram("editMessageCaption", { chat_id: p.chat_id, message_id: p.message_id, caption: `${p.text || ""}\n\n${line}`.slice(0, 1024) }).catch(() => {});
+      else await telegram("editMessageText", { chat_id: p.chat_id, message_id: p.message_id, text: `${p.text || ""}\n\n${line}`, link_preview_options: { is_disabled: true } }).catch(() => {});
+  };
+  // A lead taken by a call (server.js handleCallFinish): «Qabul qildi: …».
+  const markTaken = (leadId, name, at) => editPosts(leadId, `${takenLine(name, at)} (qo'ng'iroq)`);
+
   // Telegram button: the presser is found by their linked Telegram chat.
   const handleCallback = async (cq) => {
     const answer = (text) => telegram("answerCallbackQuery", { callback_query_id: cq.id, ...(text ? { text, show_alert: true } : {}) });
@@ -97,14 +110,7 @@ const create = (db, { route = null, salesTargets = null, managersTarget = null }
     const r = await claim(m[1], who);
     const msg = cq.message;
     // The pressed message and every other copy of this lead (other group).
-    const edit = async (line) => {
-      const posts = ((await db.collection("lead_posts").doc(m[1]).get().catch(() => null))?.data?.() || {}).posts || [];
-      const all = [...posts];
-      if (msg && !all.some((p) => String(p.chat_id) === String(msg.chat.id) && p.message_id === msg.message_id)) all.push({ chat_id: msg.chat.id, message_id: msg.message_id, text: msg.text || msg.caption || "", caption: !msg.text && Boolean(msg.caption) });
-      for (const p of all)
-        if (p.caption) await telegram("editMessageCaption", { chat_id: p.chat_id, message_id: p.message_id, caption: `${p.text || ""}\n\n${line}`.slice(0, 1024) }).catch(() => {});
-        else await telegram("editMessageText", { chat_id: p.chat_id, message_id: p.message_id, text: `${p.text || ""}\n\n${line}`, link_preview_options: { is_disabled: true } }).catch(() => {});
-    };
+    const edit = (line) => editPosts(m[1], line, msg);
     if (r.ok) {
       await answer();
       await edit(takenLine(who.name, r.at));
@@ -118,7 +124,7 @@ const create = (db, { route = null, salesTargets = null, managersTarget = null }
     await answer(r.error || "Bo'lmadi");
   };
 
-  return { announce, toManagers, record, claim, handleCallback, button };
+  return { announce, toManagers, record, claim, handleCallback, button, markTaken };
 };
 
 module.exports = { create, claimPatch, button, takenLine };

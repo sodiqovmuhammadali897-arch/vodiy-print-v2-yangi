@@ -91,4 +91,15 @@ function tasksDoneByTalk(tasks, seconds, now = Date.now()) {
 
 const talkLabel = (sec) => (sec >= 60 ? `${Math.floor(sec / 60)} daq ${sec % 60} s` : `${sec} s`);
 
-module.exports = { CRM_START, pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone, talkedSeconds, tasksDoneByTalk, talkLabel, TALK_MIN_S };
+// 2026-11-27 (owner: «muhammadiyor gaplashsa birorta kiruv yoki chiquv bo'sa
+// qabul qildiga tushsin»): an answered call, in or out, on a lead still in
+// «Yangi» takes it to «Qabul qilindi» — like pressing «✅ Qabul qildim».
+// Nobody's lead goes to whoever talked. Returns the lead patch, or null.
+function acceptByCall(lead, event, who, now) {
+  if (!lead || lead.status !== "new" || !event || !event.answered) return null;
+  const patch = { status: "accepted", first_contact_at: lead.first_contact_at || now };
+  if (!lead.assigned_to_email && who && who.email) Object.assign(patch, { assigned_to_email: who.email, assigned_to_name: who.name || who.email });
+  return patch;
+}
+
+module.exports = { CRM_START, pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone, talkedSeconds, tasksDoneByTalk, talkLabel, TALK_MIN_S, acceptByCall };

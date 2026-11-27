@@ -116,7 +116,7 @@ const debts = recall ? require("./debts").create(db, { team: () => recall.manage
 const leadTasks = process.env.TELEGRAM_BOT_TOKEN ? require("./leadTaskBot").create(db) : null;
 const assistant = require("./assistant").register(app, db, hr, groups, marketing, chief, tasks, targetolog, content, recall, debts, amocrm, claims, leadTasks);
 const { ERP_LEADS_ON, slugify, findByPhone: findByPhoneIn, createLead, startLead } = require("./leads");
-const { pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone: normalizeCallPhone, talkedSeconds, tasksDoneByTalk, talkLabel } = require("./callLeads");
+const { pickOpenLead, callStaffEmail, matchStaff, dueIn, needsCallback, normalizePhone: normalizeCallPhone, talkedSeconds, tasksDoneByTalk, talkLabel, acceptByCall } = require("./callLeads");
 // Calls open ERP leads (the ERP's CRM, phase 2) on their own switch, so the
 // Meta form and Instagram leads keep going to the managers as before.
 // ERP_CALL_LEADS=off turns it off.
@@ -462,7 +462,25 @@ const handleCallFinish = async (event) => {
     const patch = { last_contact_at: now, updated_at: now };
     // Nobody's lead yet: it goes to whoever took the call.
     if (!lead.assigned_to_email && staffLogin) Object.assign(patch, { assigned_to_email: staffLogin, assigned_to_name: staffName });
+    // An answered call (in or out) on a «Yangi» lead → «Qabul qilindi».
+    const accept = CALL_LEADS_ON ? acceptByCall(lead, event, staffLogin ? { email: staffLogin, name: staffName } : null, now) : null;
+    if (accept) Object.assign(patch, accept);
     await db.collection("leads").doc(lead.id).update(patch);
+    if (accept) {
+      const by = patch.assigned_to_name || lead.assigned_to_name || staffName || "";
+      await db.collection("lead_activities").add({ lead_id: lead.id, text: `✅ Qabul qilindi — ${isIncoming ? "kiruvchi" : "chiquvchi"} qo'ng'iroqda gaplashildi${by ? ` (${by})` : ""}`, actor_email: actor.email, actor_name: actor.name, created_at: now });
+      const owner = patch.assigned_to_email || lead.assigned_to_email;
+      if (owner) {
+        const ownerName = patch.assigned_to_name || lead.assigned_to_name || owner;
+        const open = await db.collection("lead_tasks").where("lead_id", "==", lead.id).get();
+        for (const d of open.docs) {
+          const t = d.data();
+          if (t.status === "open" && !t.assigned_to_email) await d.ref.update({ assigned_to_email: owner, assigned_to_name: ownerName });
+        }
+      }
+      // The lead's Telegram messages with «✅ Qabul qildim» say who took it.
+      if (by) await claims.markTaken(lead.id, by, now).catch(() => undefined);
+    }
 
     // A real talk (30 s+, in or out) does the lead's call tasks due by
     // today; if nothing stays open, «Qayta aloqa» tomorrow 10:00 (step 3).

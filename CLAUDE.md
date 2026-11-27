@@ -623,6 +623,13 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   (`tasksDoneByTalk`) with «📞 Gaplashildi (N daq) — … qo'ng'iroq», and adds
   Qayta aloqa tomorrow 10:00 if nothing stays open. Outgoing calls were
   already put on the lead's timeline.
+  **2026-11-27** (owner: «gaplashsa birorta kiruv yoki chiquv bo'lsa qabul
+  qildiga tushsin»): any ANSWERED call, in or out, on a lead in «Yangi» moves
+  it to «Qabul qilindi» (`callLeads.acceptByCall`; first_contact_at), gives a
+  nobody's lead to whoever talked (its open unassigned tasks follow), adds
+  «✅ Qabul qilindi — … qo'ng'iroqda gaplashildi» to the timeline and edits
+  the lead's Telegram «Qabul qildim» messages (`leadClaim.markTaken`).
+  Outgoing calls to a number with no open lead still open no lead.
 - **Step 4 — built 2026-11-26** (owner: «4-qadamni boshla»):
   - **Tahlil → «ERP tahlili»** (first tab; amoCRM tabs renamed «(amo)»):
     `src/lib/crmAnalysis.ts` + `crm/CrmAnalysis.tsx` — the period's lead
