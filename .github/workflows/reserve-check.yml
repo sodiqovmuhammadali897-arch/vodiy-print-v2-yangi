@@ -1,0 +1,60 @@
+name: Reserve check (read only)
+
+# Moliyaviy yostiqcha (2026-11-27): how much a month the business spends on
+# fixed costs, from the ERP's own expenses and «Doimiy xarajatlar»
+# templates, next to the money that came in. Prints sums by month and
+# category only — no names, notes or payees. Reads only.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reserve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Expenses by month and category, income by month
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            cat > /tmp/vp-reserve.js <<'JS'
+            const admin = require("/opt/meta-webhook/node_modules/firebase-admin");
+            admin.initializeApp({ credential: admin.credential.cert(require("/opt/meta-webhook/service-account.json")) });
+            const db = admin.firestore();
+            const all = async (c) => { try { return (await db.collection(c).get()).docs.map((d) => ({ id: d.id, ...d.data() })); } catch { return []; } };
+            const month = (s) => String(s || "").slice(0, 7);
+            const FROM = "2026-07";
+            const r = (x) => Math.round(x).toLocaleString("ru-RU").replace(/ /g, " ");
+            (async () => {
+              const [expenses, templates, payments, orders] = await Promise.all(["expenses", "expense_templates", "order_payments", "orders"].map(all));
+              const cats = [...new Set(expenses.map((e) => String(e.category || "—")))].sort();
+              const months = [...new Set(expenses.map((e) => month(e.date)).filter((m) => m >= FROM))].sort();
+              console.log(`expenses=${expenses.length} templates=${templates.length} payments=${payments.length}`);
+              console.log("== expenses by month × category (sum · count), from " + FROM);
+              for (const m of months) {
+                const es = expenses.filter((e) => month(e.date) === m);
+                const parts = cats.map((c) => { const xs = es.filter((e) => String(e.category || "—") === c); return xs.length ? `${c}=${r(xs.reduce((s, e) => s + Number(e.amount || 0), 0))}·${xs.length}` : null; }).filter(Boolean);
+                console.log(`${m}\ttotal=${r(es.reduce((s, e) => s + Number(e.amount || 0), 0))}\t${parts.join("  ")}`);
+              }
+              console.log("== expense_templates (category · amount · due_day · active) — no names");
+              for (const t of templates) console.log(`${t.category || "—"}\t${r(Number(t.amount || 0))}\tday=${t.due_day || "-"}\tactive=${t.active !== false}`);
+              const byCat = new Map();
+              for (const t of templates.filter((t) => t.active !== false)) byCat.set(t.category || "—", (byCat.get(t.category || "—") || 0) + Number(t.amount || 0));
+              console.log(`templates active total=${r([...byCat.values()].reduce((s, x) => s + x, 0))} ` + [...byCat].map(([c, v]) => `${c}=${r(v)}`).join(" "));
+              console.log("== money in by month (order_payments by payment_date) and sales (orders by order date, live)");
+              const live = orders.filter((o) => o.status !== "cancelled" && !o.is_draft);
+              const ms = [...new Set([...payments.map((p) => month(p.payment_date || p.created_at)), ...live.map((o) => month(o.order_date || o.created_at))].filter((m) => m >= FROM))].sort();
+              for (const m of ms) {
+                const inn = payments.filter((p) => month(p.payment_date || p.created_at) === m).reduce((s, p) => s + Number(p.amount || 0), 0);
+                const sales = live.filter((o) => month(o.order_date || o.created_at) === m).reduce((s, o) => s + Number(o.total_amount || 0), 0);
+                console.log(`${m}\tin=${r(inn)}\tsales=${r(sales)}`);
+              }
+              const debt = live.reduce((s, o) => s + Math.max(0, Number(o.remaining_amount || 0)), 0);
+              console.log(`receivable now (live orders remaining)=${r(debt)}`);
+              process.exit(0);
+            })().catch((e) => { console.error("ERR", e.message); process.exit(1); });
+            JS
+            cd /opt/meta-webhook && node /tmp/vp-reserve.js; rm -f /tmp/vp-reserve.js
