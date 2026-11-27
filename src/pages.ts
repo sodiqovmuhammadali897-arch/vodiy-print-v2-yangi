@@ -34,6 +34,7 @@ const loaders = {
   DarslikPage: () => import("./modules/darslik/DarslikPage"),
   LessonPage: () => import("./modules/darslik/LessonPage"),
   GuidePage: () => import("./modules/darslik/GuidePage"),
+  VideoPage: () => import("./modules/darslik/VideoPage"),
   GuideCard: () => import("./modules/darslik/GuideCard"),
   CallMode: () => import("./modules/darslik/CallMode"),
   Settings: () => import("./modules/settings/Settings"),

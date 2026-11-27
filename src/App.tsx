@@ -8,7 +8,7 @@ import Login from "./modules/auth/Login";
 import Dashboard from "./modules/dashboard/Dashboard";
 import { pages } from "./pages";
 
-const { SalesPipeline, LeadPage, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, GiftboxOfferEditor, SouvenirOfferEditor, Textile, Warehouse, Finance, Reports, MarginPage, GiftboxPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, DarslikPage, LessonPage, GuidePage, GuideCard, CallMode, Settings } = pages;
+const { SalesPipeline, LeadPage, AdsPage, ContentPage, Orders, OrderDetail, OrderWizard, Customers, CustomerDetail, Products, Proposals, ProposalEditor, GiftboxOfferEditor, SouvenirOfferEditor, Textile, Warehouse, Finance, Reports, MarginPage, GiftboxPage, KpiPage, AiOffice, Production, Pechatnik, AttendancePage, Tasks, DarslikPage, LessonPage, GuidePage, VideoPage, GuideCard, CallMode, Settings } = pages;
 
 export default function App() {
   return (
@@ -27,6 +27,7 @@ export default function App() {
             <Route path="/leads/:id" element={<LeadPage />} />
             {/* Darslik: sales scripts and lessons per product. */}
             <Route path="/darslik" element={<DarslikPage />} />
+            <Route path="/darslik/video" element={<VideoPage />} />
             <Route path="/darslik/qollanma" element={<GuidePage />} />
             <Route path="/darslik/qollanma/:key" element={<GuideCard />} />
             <Route path="/darslik/:key" element={<LessonPage />} />

@@ -872,6 +872,16 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   themselves) → `src/components/Celebration.tsx` (in Layout) shows others a
   6 s toast. Sound `public/yangi-buyurtma.mp3` (made by us: arpeggio +
   applause, 3.8 s); confetti `.vp-confetti` (off with «no-motion»).
+- **Darslik → «🎬 Video darslar» — built 2026-11-27** (owner: «darsliklar
+  bo'limiga video dars joylamoqchiman»; chose YouTube over uploading):
+  `/darslik/video` (`darslik/VideoPage.tsx`, logic `src/lib/videoLessons.ts`,
+  link card on the Darslik page). `lesson_videos/{id}` {title, description,
+  section (`VIDEO_SECTIONS`), url, youtube_id (`youtubeId` reads watch /
+  youtu.be / shorts / embed / live links), order}; rules: staff read, admin
+  write. Played inside the ERP via youtube-nocookie embed; the owner uploads
+  them to YouTube as «Ro'yxatsiz» (Unlisted). «Ko'rdim» →
+  `lesson_progress/{email}.videos.{id}`; admins see «Kim ko'rdi» (sellers =
+  staff with report_manager_id).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

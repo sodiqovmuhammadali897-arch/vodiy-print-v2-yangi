@@ -311,6 +311,11 @@ service cloud.firestore {
     }
     // Darslik: lesson texts edited by admins (the starting text is in the
     // app), and each person's reading/test progress.
+    // Darslik → «Video darslar» (YouTube links): staff watch, admins add.
+    match /lesson_videos/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
     match /lessons/{key} {
       allow read: if isStaff();
       allow write: if isAdmin();

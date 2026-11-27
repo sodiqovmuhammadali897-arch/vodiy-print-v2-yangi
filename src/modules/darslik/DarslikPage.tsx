@@ -65,6 +65,16 @@ export default function DarslikPage() {
         </div>
         <span className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-brand-700">Ochish →</span>
       </Link>
+      <Link
+        to="/darslik/video"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink-100 bg-surface px-5 py-4 shadow-sm transition hover:border-brand-300"
+      >
+        <div>
+          <div className="font-display text-lg font-extrabold text-ink-900">🎬 Video darslar</div>
+          <div className="text-sm text-ink-500">Qo'ng'iroq, e'tirozlar, mahsulot va ERP bo'yicha videolar — ko'rib, «Ko'rdim» bosiladi</div>
+        </div>
+        <span className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-bold text-white">Ko'rish →</span>
+      </Link>
 
       {view === "team" && isAdmin ? (
         <TeamResults />
