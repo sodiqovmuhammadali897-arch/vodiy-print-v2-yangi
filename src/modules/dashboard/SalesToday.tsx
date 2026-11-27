@@ -1,36 +1,24 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
-import { PhoneIncoming, PhoneMissed, PhoneOutgoing, Trophy } from "lucide-react";
+import { PhoneIncoming, PhoneOutgoing } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
-import { getOne, listRange, listWhere, subscribeOne } from "../../lib/firestoreDb";
-import { formatMoneyShort } from "../../lib/format";
+import { listRange, subscribeOne } from "../../lib/firestoreDb";
 import { crmDash, periodSpans, talkLabel, type CallRow, type PeriodKind } from "../../lib/crmDash";
-import { taskDueAt } from "../../lib/crm";
 import { DEFAULT_TALK_TARGET_MIN, talkProgress } from "../../lib/managerHome";
-import { callStats, minutes, myUnreturned } from "../../lib/salesToday";
+import { callStats, minutes } from "../../lib/salesToday";
 import { useCrm } from "../leads/crm/useCrm";
-import { TaskRow } from "../leads/crm/TaskList";
 import { useContacts } from "../leads/crm/useContacts";
 import { salesCalls } from "../../lib/contacts";
 
-// The main Bosh sahifa's «Bugungi sotuv» (2026-11-26; the owner: «bosh
-// sahifada bugungi gaplashgan vaqti, zadachalari, kirish nechta, chiqish
-// nechta … hammasi qo'shilsin»): talk time against the daily target,
-// incoming and outgoing calls with minutes, the reminders (tasks), missed
-// calls not returned, leads without a next step and the week's places in
-// the team. A seller sees their own; the owner the team, with a table.
+// The main Bosh sahifa's «Bugungi sotuv» (2026-11-26): talk time against the
+// daily target, incoming and outgoing calls with minutes; the owner also gets
+// the team table. The task list, missed calls, no-task leads and the weekly
+// ranking were taken off on 2026-11-27 (owner: «bularni olib tashla») — tasks
+// live in Sotuv bo'limi → Zadachalar, the rest in the Telegram messages.
 const PERIODS: [PeriodKind, string][] = [
   ["today", "Bugun"],
   ["yesterday", "Kecha"],
   ["week", "Hafta"],
 ];
-type Rank = { staff_email: string; name: string; talk_sec: number; done: number; sales: number; rank: { talk: number; done: number; sales: number }; of: number };
-const leadLink = (id: string) => `/leads?v=lidlar&lead=${id}`;
-const weekStart = () => {
-  const d = new Date(Date.now() + 5 * 3600e3);
-  const dow = (d.getUTCDay() + 6) % 7;
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow)).toISOString().slice(0, 10);
-};
 
 export default function SalesToday() {
   const auth = useAuth();
@@ -45,7 +33,6 @@ export default function SalesToday() {
   const { index: contactsIndex } = useContacts();
   const calls = useMemo(() => salesCalls(allCalls, contactsIndex), [allCalls, contactsIndex]);
   const [target, setTarget] = useState(DEFAULT_TALK_TARGET_MIN);
-  const [ranks, setRanks] = useState<Rank[]>([]);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const t = window.setInterval(() => setTick((x) => x + 1), 120_000);
@@ -62,13 +49,6 @@ export default function SalesToday() {
     };
   }, [spans.cur.from, spans.cur.to]);
   useEffect(() => subscribeOne<{ talk_target_min?: number }>("crm_settings", "main", (d) => setTarget(Number(d?.talk_target_min) > 0 ? Number(d!.talk_target_min) : DEFAULT_TALK_TARGET_MIN)), []);
-  // The week's places (meta-webhook/salesRank.js): the owner reads all, a seller their own.
-  useEffect(() => {
-    const week = weekStart();
-    const done = (rows: (Rank | null)[]) => setRanks(rows.filter((r): r is Rank => !!r));
-    if (owner) void listWhere<Rank>("sales_rank", "week", week).then(done).catch(() => setRanks([]));
-    else if (me) void getOne<Rank>("sales_rank", `${week}_${me}`).then((r) => done([r])).catch(() => setRanks([]));
-  }, [owner, me, tick]);
 
   const leads = crm.leads || [];
   const ownerOf = useMemo(() => new Map(leads.map((l) => [l.id, l.assigned_to_email || ""])), [leads]);
@@ -78,12 +58,7 @@ export default function SalesToday() {
     [calls, email, ownerOf],
   );
   const st = callStats(mine);
-  const d = useMemo(() => crmDash({ leads, tasks: crm.tasks, calls: mine, orders: crm.orders, owner: email, cur: spans.cur, prev: spans.prev }), [leads, crm.tasks, mine, crm.orders, email, spans]);
-  const todo = useMemo(() => [...d.lateTasks, ...d.todayTasks].sort((a, b) => taskDueAt(a) - taskDueAt(b)), [d.lateTasks, d.todayTasks]);
-  const missedLeft = useMemo(() => myUnreturned(calls, leads, email), [calls, leads, email]);
-  const leadById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
   const talkP = talkProgress(st.talk, target);
-  const myRank = email ? ranks.find((r) => r.staff_email === email) || null : null;
 
   // The owner's table: one row per seller.
   const rows = useMemo(() => {
@@ -105,7 +80,7 @@ export default function SalesToday() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-bold text-ink-900">{owner && !who ? "Bugungi sotuv — jamoa" : "Bugungi sotuv"}</h2>
-          <p className="text-xs text-ink-500">Qo'ng'iroqlar (Mois Zvonki) va eslatmalar (zadachalar) — har 2 daqiqada yangilanadi.</p>
+          <p className="text-xs text-ink-500">Qo'ng'iroqlar (Mois Zvonki) — har 2 daqiqada yangilanadi. Zadachalar: Sotuv bo'limi → Zadachalar.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {owner && (
@@ -146,111 +121,6 @@ export default function SalesToday() {
         </Card>
         <CallCard icon={<PhoneIncoming className="h-4 w-4 text-emerald-600" />} label="Kiruvchi qo'ng'iroq" n={st.in} talkMin={minutes(st.inTalk)} note={<>{st.inAnswered} javob berildi{st.inMissed ? <> · <b className="text-rose-600">{st.inMissed} javobsiz</b></> : null}</>} />
         <CallCard icon={<PhoneOutgoing className="h-4 w-4 text-brand-600" />} label="Chiquvchi qo'ng'iroq" n={st.out} talkMin={minutes(st.outTalk)} note={<>{st.outAnswered} ko'tarildi · {st.out - st.outAnswered} ko'tarmadi</>} />
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Card>
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <h3 className="font-display text-sm font-extrabold text-ink-900">Eslatmalar</h3>
-            <span className="text-xs text-ink-500">
-              <b className="text-rose-600">{d.lateTasks.length}</b> bajarilmagan (muddati o'tgan) · <b className="text-brand-600">{d.todayTasks.length}</b> bugungi · <b className="text-emerald-600">{d.doneTasks.length}</b> bajarildi
-            </span>
-          </div>
-          {todo.length ? (
-            <div className="mt-2 space-y-2">
-              {todo.slice(0, 10).map((t) => (
-                <TaskRow key={t.id} task={t} lead={leadById.get(t.lead_id)} actor={crm.actor} late={taskDueAt(t) < Date.now()} />
-              ))}
-              {todo.length > 10 && (
-                <Link to="/leads?v=zadachalar" className="block text-xs text-brand-700 hover:underline">
-                  … yana {todo.length - 10} ta — Sotuv bo'limi → Zadachalar
-                </Link>
-              )}
-            </div>
-          ) : (
-            <p className="py-6 text-center text-sm text-ink-500">Bugunga eslatma qolmadi 👍</p>
-          )}
-        </Card>
-
-        <div className="space-y-3">
-          <Card>
-            <h3 className="flex items-center gap-2 font-display text-sm font-extrabold text-ink-900">
-              <PhoneMissed className="h-4 w-4 text-rose-600" /> Qaytarilmagan qo'ng'iroqlar · {missedLeft.length}
-            </h3>
-            {missedLeft.length ? (
-              <div className="mt-2 divide-y divide-ink-100">
-                {missedLeft.slice(0, 5).map((c) => (
-                  <div key={c.id} className="flex items-center gap-2 py-1.5 text-sm">
-                    <span className="min-w-0 flex-1 truncate">
-                      <b className="text-ink-900">{c.client_name || c.phone || "Noma'lum"}</b> <span className="text-xs text-ink-500">· {new Date(Date.parse(c.start_time || c.created_at) + 5 * 3600e3).toISOString().slice(11, 16)} da qilgan</span>
-                    </span>
-                    {c.phone && (
-                      <a href={`tel:${c.phone}`} className="rounded-lg border border-rose-200 px-2 py-0.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">
-                        📞 Qayta qilish
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-1 text-xs text-ink-500">Hammasiga javob qaytarilgan ✅</p>
-            )}
-            <p className="mt-1 text-[11px] text-ink-400">Mijoz qo'ng'iroq qilgan, javob bermadik — eng tez yo'qotiladigan pul.</p>
-          </Card>
-
-          <Card>
-            <h3 className="font-display text-sm font-extrabold text-ink-900">📌 Zadachasiz lidlar · {d.noTaskLeads.length}</h3>
-            {d.noTaskLeads.length ? (
-              <div className="mt-2 divide-y divide-ink-100">
-                {[...d.noTaskLeads]
-                  .sort((a, b) => (Number(b.estimated_amount) || 0) - (Number(a.estimated_amount) || 0))
-                  .slice(0, 5)
-                  .map((l) => (
-                    <div key={l.id} className="flex items-center gap-2 py-1.5 text-sm">
-                      <span className="min-w-0 flex-1 truncate text-ink-800">
-                        {l.brand || l.full_name || l.phone}
-                        {l.estimated_amount ? <span className="text-xs text-ink-500"> · {formatMoneyShort(Number(l.estimated_amount))}</span> : null}
-                        {!email && l.assigned_to_name ? <span className="text-xs text-ink-400"> · {l.assigned_to_name}</span> : null}
-                      </span>
-                      <Link to={leadLink(l.id)} className="rounded-lg border border-ink-200 px-2 py-0.5 text-xs font-semibold text-ink-700 hover:bg-ink-50">
-                        Zadacha qo'yish
-                      </Link>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <p className="mt-1 text-xs text-ink-500">Har bir lidda keyingi qadam bor ✅</p>
-            )}
-          </Card>
-
-          <Card>
-            <h3 className="flex items-center gap-2 font-display text-sm font-extrabold text-ink-900">
-              <Trophy className="h-4 w-4 text-amber-500" /> {email ? "Jamoada o'rningiz — bu hafta" : "Bu hafta — reyting"}
-            </h3>
-            {email ? (
-              myRank ? (
-                <div className="mt-2 space-y-1 text-sm text-ink-800">
-                  <RankLine place={myRank.rank.talk} of={myRank.of} label="Gaplashgan vaqt" value={talkLabel(myRank.talk_sec)} />
-                  <RankLine place={myRank.rank.done} of={myRank.of} label="Bajarilgan zadacha" value={`${myRank.done} ta`} />
-                  <RankLine place={myRank.rank.sales} of={myRank.of} label="Savdo" value={formatMoneyShort(myRank.sales)} />
-                </div>
-              ) : (
-                <p className="mt-1 text-xs text-ink-500">Hisoblanmoqda — har 30 daqiqada yangilanadi.</p>
-              )
-            ) : ranks.length ? (
-              <div className="mt-2 space-y-1 text-sm text-ink-800">
-                {(["talk", "done", "sales"] as const).map((k) => {
-                  const top = [...ranks].sort((a, b) => a.rank[k] - b.rank[k])[0];
-                  const label = k === "talk" ? "Gaplashgan vaqt" : k === "done" ? "Bajarilgan zadacha" : "Savdo";
-                  const value = k === "talk" ? talkLabel(top.talk_sec) : k === "done" ? `${top.done} ta` : formatMoneyShort(top.sales);
-                  return <RankLine key={k} place={1} of={top.of} label={`${label}: ${top.name}`} value={value} />;
-                })}
-              </div>
-            ) : (
-              <p className="mt-1 text-xs text-ink-500">Hisoblanmoqda — har 30 daqiqada yangilanadi.</p>
-            )}
-          </Card>
-        </div>
       </div>
 
       {owner && !who && rows.length > 0 && (
@@ -335,14 +205,6 @@ function CallCard({ icon, label, n, talkMin, note }: { icon: ReactNode; label: s
       </div>
       <Sub>{note}</Sub>
     </Card>
-  );
-}
-function RankLine({ place, of, label, value }: { place: number; of: number; label: string; value: string }) {
-  const medal = place === 1 ? "🥇" : place === 2 ? "🥈" : place === 3 ? "🥉" : "▫️";
-  return (
-    <div>
-      {medal} {label}: <b>{place}-o'rin</b> <span className="text-ink-500">/ {of} · {value}</span>
-    </div>
   );
 }
 const Card = ({ children }: { children: ReactNode }) => <div className="min-w-0 rounded-2xl border border-ink-100 bg-surface p-4 shadow-sm">{children}</div>;

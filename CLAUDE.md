@@ -712,6 +712,11 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   with minutes, missed, done/left/overdue tasks, no-task leads, first call;
   a name opens that seller) and can pick one seller. ManagerHome.tsx was
   removed. `talkLabel` now says «2 soat 14 daq».
+  - **2026-11-27** (owner: «bularni olib tashla», then chose «faqat olib
+    tashla» over a new-blocks mockup he disliked): the Eslatmalar list,
+    «Qaytarilmagan qo'ng'iroqlar», «Zadachasiz lidlar» and «Jamoada
+    o'rningiz» are off the Bosh sahifa; it keeps talk time + in/out calls
+    and the owner's team table.
 - **Sotuv bo'limi: a manager sees only their own — 2026-11-26** (owner:
   «sotuv bo'limida faqat bitta manager o'zini ma'lumotlari o'ziga
   ko'rinsin»): `useCrm` gives non-admins only their leads + untaken new ones
