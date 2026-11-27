@@ -1,3 +1,4 @@
+import Celebration from "../Celebration";
 import { Outlet, useLocation, useNavigationType } from "react-router-dom";
 import { Suspense, useLayoutEffect, useRef } from "react";
 import { Loader } from "lucide-react";
@@ -64,6 +65,7 @@ export default function Layout() {
         <Topbar />
         <OfflineBanner />
         <UpdateBar />
+        <Celebration />
         <main ref={main} onScroll={remember} className="vt-page flex-1 overflow-y-auto bg-ink-50 pb-[var(--tabbar)]">
           {/* Keyed by the page, so each opened page slides in where the
               browser has no View Transitions. */}

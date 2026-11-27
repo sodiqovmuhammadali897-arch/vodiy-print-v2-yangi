@@ -278,6 +278,12 @@ service cloud.firestore {
       allow update: if (isAdmin() || can('leads', 'edit'))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reopened', 'updated_at']);
     }
+    // «Yangi buyurtma» toasts (src/lib/celebrateService.ts): staff read, a
+    // staff member adds one as themselves; nobody edits.
+    match /celebrations/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff() && request.resource.data.created_by_email == email();
+    }
     match /crm_contacts/{id} {
       allow read: if isAdmin() || can('leads', 'view');
       allow create: if (isAdmin() || can('leads', 'edit')) && request.resource.data.added_by_email == email();

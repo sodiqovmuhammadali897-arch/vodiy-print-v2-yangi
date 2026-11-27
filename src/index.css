@@ -323,3 +323,21 @@ main.fon-glass .fon-col,
 .fon-glass h2 {
   text-shadow: 0 1px 12px rgb(0 0 0 / 0.35);
 }
+
+/* «Yangi buyurtma» confetti (components/Celebration.tsx). */
+.vp-confetti {
+  position: absolute;
+  top: -20px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0.95;
+  animation-name: vp-confetti-fall;
+  animation-timing-function: cubic-bezier(0.3, 0.6, 0.6, 1);
+  animation-fill-mode: forwards;
+}
+@keyframes vp-confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(720deg); opacity: 0.2; }
+}
+html.no-motion .vp-confetti { display: none; }

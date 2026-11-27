@@ -860,6 +860,18 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     «Yangi» with nobody on them (managers take them with «Qabul qildim»)
     and moved their 182 open tasks to 2026-11-27 10:00, unassigned (they
     follow whoever claims the lead).
+- **«Yangi buyurtma» tabrigi — built 2026-11-27** (owner: lid → buyurtma
+  bo'lganda 3–4 s ovoz, «Tabriklayman, Muhammadiyor! … KPI», boshqalarga
+  «Muhammadiyor buyurtma oldi»; chose sound 3 and «KPI bo'yicha ol»).
+  `src/lib/celebrate.ts` (`shouldCelebrate`: a new order saved for real,
+  or a draft — e.g. from a lead — made real, total > 0; `kpiBonus`),
+  `src/lib/celebrateService.ts announceOrder` (called by OrderWizard after
+  save): a seller (staff with report_manager_id) gets the dialog with the
+  KPI part (rate as the KPI page: month → manager → kpi_settings, 7.5 now);
+  every save writes `celebrations/{id}` (rules: staff read, create as
+  themselves) → `src/components/Celebration.tsx` (in Layout) shows others a
+  6 s toast. Sound `public/yangi-buyurtma.mp3` (made by us: arpeggio +
+  applause, 3.8 s); confetti `.vp-confetti` (off with «no-motion»).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».

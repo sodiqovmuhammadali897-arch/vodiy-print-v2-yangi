@@ -1,3 +1,5 @@
+import { shouldCelebrate } from "../../../lib/celebrate";
+import { announceOrder } from "../../../lib/celebrateService";
 import { regionProblem } from "../../../lib/orderRegion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -343,6 +345,21 @@ export default function OrderWizard() {
     [brands, payload.brand_id],
   );
 
+  // A new real order (or a draft made real — e.g. from a lead): the seller's
+  // «Tabriklayman» dialog and everyone else's toast (lib/celebrate.ts).
+  const celebrate = (asDraft: boolean, total: number, numbers: string[], orderId: string) => {
+    if (!shouldCelebrate({ asDraft, isNew, wasDraft, total })) return;
+    const c = linkedCustomer;
+    void announceOrder({
+      total,
+      orderNumbers: numbers.filter(Boolean),
+      orderId,
+      customer: c ? c.company || [c.first_name, c.last_name].filter(Boolean).join(" ") : payload.title,
+      managerName: payload.manager_name || "",
+      actor: { email: (user?.email || "").toLowerCase(), name: staff?.full_name || user?.email || "", managerId: staff?.report_manager_id },
+    });
+  };
+
   const doSave = async (asDraft: boolean) => {
     // A second click before the first save finishes would save twice.
     if (savingRef.current) return;
@@ -374,6 +391,7 @@ export default function OrderWizard() {
     if (isNew && filteredProducts.length > 1) {
       const parts = splitOrder({ ...payload, is_draft: asDraft }, filteredProducts, payments);
       const saved: string[] = [];
+      const savedIds: string[] = [];
       for (const part of parts) {
         const r = await saveOrder(part.payload, part.products, part.payments);
         if ("error" in r) {
@@ -387,7 +405,9 @@ export default function OrderWizard() {
           return;
         }
         saved.push(r.order_number);
+        savedIds.push(r.id);
       }
+      celebrate(asDraft, totals.total, saved, savedIds[0] || "");
       ready.current = false;
       clearDraft(email, draftId);
       setSaving(false);
@@ -417,6 +437,7 @@ export default function OrderWizard() {
       setError(res.error);
       return;
     }
+    celebrate(asDraft, totals.total, [res.order_number], res.id);
     ready.current = false;
     clearDraft(email, draftId);
     navigate(`/orders/${res.id}`, { replace: true });
