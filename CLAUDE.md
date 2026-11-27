@@ -879,6 +879,12 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   themselves) → `src/components/Celebration.tsx` (in Layout) shows others a
   6 s toast. Sound `public/yangi-buyurtma.mp3` (made by us: arpeggio +
   applause, 3.8 s); confetti `.vp-confetti` (off with «no-motion»).
+  **2026-11-27** (owner: «man kirgizsam ham ko'rinsin, admin bo'lsam ham»):
+  whoever saves gets the dialog — an admin sees «Tabriklaymiz! X yangi
+  buyurtma oldi» + X's KPI part; the order's manager is found by
+  manager_name (`orderManagerOf`); `celebrations` rows now carry
+  `manager_id`, `kpi`, `rate_pct`, and that manager gets the full
+  «Tabriklayman» dialog with the sound even when someone else typed it.
 - **Darslik → «🎬 Video darslar» — built 2026-11-27** (owner: «darsliklar
   bo'limiga video dars joylamoqchiman»; chose YouTube over uploading):
   `/darslik/video` (`darslik/VideoPage.tsx`, logic `src/lib/videoLessons.ts`,

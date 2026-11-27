@@ -2,8 +2,9 @@
 // buyurtmaga aylantirganda 3-4 soniyalik ovoz … Tabriklayman Muhammadiyor,
 // yangi buyurtmangiz bilan, summaning KPI foizi … boshqalarga Muhammadiyor
 // shunchalik buyurtma oldi deb chiqsin»; the KPI rate is the KPI page's).
-// The seller who saves a new real order sees a dialog with the sound and
-// confetti; everyone else gets a short toast from `celebrations/{id}`.
+// Whoever saves a new real order — a seller or the owner/an admin — sees a
+// dialog with the sound and confetti; the order's manager gets it too when
+// someone else typed it; everyone else gets a short toast (`celebrations`).
 
 export type Celebration = {
   manager_name: string; // whose order (order.manager_name, else who saved it)
@@ -14,10 +15,25 @@ export type Celebration = {
   order_numbers: string[];
   order_id: string;
   created_at: string;
+  // The order's manager (Managerlar id) and their KPI part — so that manager
+  // gets the full dialog even when an admin typed the order (2026-11-27).
+  manager_id?: string;
+  kpi?: number;
+  rate_pct?: number;
 };
 
 export const CELEBRATE_EVENT = "vp:celebrate";
-export type CelebrateDetail = Celebration & { kpi: number; ratePct: number };
+// `mine`: the one who saved it is the order's seller («Tabriklayman, X!»);
+// otherwise (the owner/an admin typed it) «X yangi buyurtma oldi».
+export type CelebrateDetail = Celebration & { kpi: number; ratePct: number; mine: boolean; hasManager: boolean };
+
+// The order's manager: by manager_name (as KPI counts orders), else the
+// saver's own Managerlar record when the order names nobody.
+export function orderManagerOf<M extends { id: string; name: string }>(managers: M[], managerName: string, actorManagerId: string | null | undefined): M | null {
+  const n = String(managerName || "").trim().toLowerCase();
+  if (n) return managers.find((m) => String(m.name || "").trim().toLowerCase() === n) || null;
+  return actorManagerId ? managers.find((m) => m.id === actorManagerId) || null : null;
+}
 
 // The first word of a name: «Muhammaddiyor Abdullayev» → «Muhammaddiyor».
 export const firstName = (name: string) => String(name || "").trim().split(/\s+/)[0] || "";

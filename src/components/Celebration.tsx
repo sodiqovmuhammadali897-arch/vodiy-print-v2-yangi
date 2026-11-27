@@ -5,31 +5,36 @@ import { subscribeSince } from "../lib/firestoreDb";
 import { formatMoney } from "../lib/format";
 import { CELEBRATE_EVENT, firstName, isFresh, type CelebrateDetail, type Celebration as Row } from "../lib/celebrate";
 
-// Mounted once in the Layout. Own new order → the dialog with the sound and
-// confetti (window event from the order wizard); someone else's → a toast
+// Mounted once in the Layout. A new order I saved → the dialog with the sound
+// and confetti (window event from the order wizard); one typed by someone
+// else for MY Managerlar record → the same dialog; anyone else's → a toast
 // for 6 s (live from `celebrations`). See src/lib/celebrate.ts.
 const COLORS = ["#f43f5e", "#facc15", "#22c55e", "#3b82f6", "#a855f7", "#fb923c"];
 
 export default function Celebration() {
-  const { user } = useAuth();
+  const { user, staff } = useAuth();
   const me = (user?.email || "").toLowerCase();
+  const myManagerId = staff?.report_manager_id || "";
   const [mine, setMine] = useState<CelebrateDetail | null>(null);
   const [toasts, setToasts] = useState<(Row & { id: string })[]>([]);
   const since = useRef(new Date().toISOString());
   const seen = useRef(new Set<string>());
 
+  const show = (d: CelebrateDetail) => {
+    setMine(d);
+    try {
+      const a = new Audio("/yangi-buyurtma.mp3");
+      a.volume = 0.8;
+      void a.play().catch(() => undefined);
+    } catch {
+      // no sound on this device
+    }
+  };
+
   useEffect(() => {
     const on = (e: Event) => {
       const d = (e as CustomEvent<CelebrateDetail>).detail;
-      if (!d) return;
-      setMine(d);
-      try {
-        const a = new Audio("/yangi-buyurtma.mp3");
-        a.volume = 0.8;
-        void a.play().catch(() => undefined);
-      } catch {
-        // no sound on this device
-      }
+      if (d) show(d);
     };
     window.addEventListener(CELEBRATE_EVENT, on);
     return () => window.removeEventListener(CELEBRATE_EVENT, on);
@@ -41,10 +46,16 @@ export default function Celebration() {
       const fresh = rows.filter((r) => isFresh(r, since.current) && !seen.current.has(r.id) && String(r.created_by_email).toLowerCase() !== me);
       if (!fresh.length) return;
       for (const r of fresh) seen.current.add(r.id);
-      setToasts((cur) => [...cur, ...fresh].slice(-3));
-      for (const r of fresh) window.setTimeout(() => setToasts((cur) => cur.filter((x) => x.id !== r.id)), 6500);
+      // An order typed for me by someone else (the owner): my full dialog.
+      const forMe = myManagerId ? fresh.filter((r) => r.manager_id === myManagerId) : [];
+      const last = forMe[forMe.length - 1];
+      if (last) show({ ...last, kpi: Number(last.kpi) || 0, ratePct: Number(last.rate_pct) || 0, mine: true, hasManager: true });
+      const others = fresh.filter((r) => !forMe.includes(r));
+      if (!others.length) return;
+      setToasts((cur) => [...cur, ...others].slice(-3));
+      for (const r of others) window.setTimeout(() => setToasts((cur) => cur.filter((x) => x.id !== r.id)), 6500);
     });
-  }, [me]);
+  }, [me, myManagerId]);
 
   const confetti = useMemo(
     () =>
@@ -70,20 +81,31 @@ export default function Celebration() {
           </div>
           <div className="modal-pop relative w-full max-w-[440px] rounded-3xl bg-surface p-7 text-center shadow-2xl">
             <div className="text-6xl leading-none">🎉</div>
-            <h2 className="mt-3 font-display text-2xl font-extrabold text-ink-900">Tabriklayman, {firstName(mine.created_by_name)}!</h2>
-            <p className="mt-1 text-sm text-ink-600">Yangi buyurtmangiz bilan!</p>
+            {mine.mine ? (
+              <>
+                <h2 className="mt-3 font-display text-2xl font-extrabold text-ink-900">Tabriklayman, {firstName(mine.manager_name || mine.created_by_name)}!</h2>
+                <p className="mt-1 text-sm text-ink-600">Yangi buyurtmangiz bilan!</p>
+              </>
+            ) : (
+              <>
+                <h2 className="mt-3 font-display text-2xl font-extrabold text-ink-900">Tabriklaymiz!</h2>
+                <p className="mt-1 text-sm text-ink-600">{mine.hasManager ? `${firstName(mine.manager_name)} yangi buyurtma oldi` : "Yangi buyurtma kiritildi"}</p>
+              </>
+            )}
             <div className="my-4 rounded-2xl bg-ink-50 px-4 py-3 text-sm text-ink-700 dark:bg-ink-800/40">
               {[mine.customer, mine.order_numbers.join(", ")].filter(Boolean).join(" · ")}
               <br />
               Buyurtma summasi: <b className="text-ink-900">{formatMoney(mine.total)}</b>
             </div>
+            {(mine.mine || mine.hasManager) && (
             <div className="rounded-2xl bg-gradient-to-br from-emerald-600 to-lime-600 px-4 py-3 text-white">
-              <div className="text-[11px] font-bold uppercase tracking-wider opacity-90">Sizning KPI'ingizga qo'shildi</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-90">{mine.mine ? "Sizning KPI'ingizga qo'shildi" : `${firstName(mine.manager_name)}ning KPI'siga qo'shildi`}</div>
               <div className="mt-0.5 font-display text-4xl font-extrabold" data-no-count>
                 +{formatMoney(mine.kpi)}
               </div>
               <div className="text-xs opacity-90">summaning {String(mine.ratePct).replace(".", ",")} %i</div>
             </div>
+            )}
             <button type="button" className="btn-primary mt-5 px-6" onClick={() => setMine(null)} autoFocus>
               Rahmat! 💪
             </button>

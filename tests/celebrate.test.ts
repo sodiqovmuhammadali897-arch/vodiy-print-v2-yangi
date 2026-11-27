@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstName, isFresh, kpiBonus, shouldCelebrate } from "../src/lib/celebrate";
+import { firstName, isFresh, kpiBonus, shouldCelebrate, orderManagerOf } from "../src/lib/celebrate";
 
 describe("«Yangi buyurtma» celebration", () => {
   it("the KPI part is total × rate %, whole so'm", () => {
@@ -19,5 +19,18 @@ describe("«Yangi buyurtma» celebration", () => {
     expect(firstName("  Muhammaddiyor Abdullayev ")).toBe("Muhammaddiyor");
     expect(isFresh({ created_at: "2026-11-27T05:00:01Z" }, "2026-11-27T05:00:00Z")).toBe(true);
     expect(isFresh({ created_at: "2026-11-27T04:59:59Z" }, "2026-11-27T05:00:00Z")).toBe(false);
+  });
+});
+
+describe("orderManagerOf — whose order it is", () => {
+  const ms = [{ id: "m1", name: "Muhammadiyor" }, { id: "m2", name: "Nuriddin " }];
+  it("by the order's manager_name (trimmed, any case), even when an admin saves it", () => {
+    expect(orderManagerOf(ms, " nuriddin", null)?.id).toBe("m2");
+    expect(orderManagerOf(ms, "Muhammadiyor", "m2")?.id).toBe("m1");
+  });
+  it("no name on the order: the saver's own record; else nobody", () => {
+    expect(orderManagerOf(ms, "", "m1")?.id).toBe("m1");
+    expect(orderManagerOf(ms, "", null)).toBeNull();
+    expect(orderManagerOf(ms, "Maryam", "m1")).toBeNull();
   });
 });
