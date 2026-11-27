@@ -849,6 +849,12 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     double + 1 orphan task cancelled. Before the fix: 513 open leads (460
     from amoCRM with tasks, 53 from 25.11), 647 open tasks (214 overdue),
     753 old leads closed. `crm-check.yml` (read only) prints these counts.
+  - **Then (owner, 26.11 evening: «jamiladagi hamma zadachalarni yangi
+    lidga o'tkaz, ertaga obrabotka» → chose «Yangi + mas'ulsiz»):**
+    `crm-jamila-new.yml` (writer) put those 160 still-open leads back to
+    «Yangi» with nobody on them (managers take them with «Qabul qildim»)
+    and moved their 182 open tasks to 2026-11-27 10:00, unassigned (they
+    follow whoever claims the lead).
 - **Still to build for sales control:** weekly ranking.
   Proposal tracking was dropped by the owner on 2026-11-04: «tijorat
   taklifi shart emas».
