@@ -15,7 +15,7 @@ import LostModal from "./LostModal";
 // Sotuv bo'limi → Jarayon in a calm amoCRM-like look (2026-11-28, the owner:
 // «bizda ranglar juda ko'p, ko'zga noqulay; amoda minimalizm; tepada bugungi
 // zadacha, o'tib ketganlar — bosganda chiqadi; mijoz kartasi kattaroq»).
-// Admins first («avval manga adminga ko'rinsin»); managers keep LeadsBoard.
+// Admins first («avval manga adminga ko'rinsin»), managers from 28.11 19:00.
 // One plain dark ground (the «Fon» picture is not used here), wide columns,
 // colour only on the stage line and the task dot. The numbers on top are
 // filters (lib/boardFilters.ts).

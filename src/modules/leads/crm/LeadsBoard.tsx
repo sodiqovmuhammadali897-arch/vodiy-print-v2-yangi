@@ -153,9 +153,9 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
     }
   };
 
-  // The calm amoCRM-like board — admins first (2026-11-28, «avval manga
-  // adminga ko'rinsin»); managers keep this one until the owner opens it.
-  if (view === "board" && isAdmin) return <MinimalBoard crm={crm || own} />;
+  // The calm amoCRM-like board (2026-11-28) — admins first, then everyone
+  // (the owner: «managerlarga 19:00dan keyin och»).
+  if (view === "board") return <MinimalBoard crm={crm || own} />;
 
   if (!leads)
     return (
@@ -195,7 +195,7 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
             <button
               type="button"
               onClick={() => setView("board")}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${view === "board" ? "bg-brand-600 text-white" : "text-ink-500"}`}
+              className="rounded-lg px-3 py-1.5 text-sm font-semibold text-ink-500"
             >
               Voronka
             </button>

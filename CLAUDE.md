@@ -728,8 +728,9 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   ERP screenshots: «bizda ranglar juda ko'p, ko'zga noqulay; amoda
   minimalizm; tepada bugungi zadacha, o'tib ketganlar — belgisa chiqadi;
   mijoz kartasi kattaroq»; mockup approved, «avval manga adminga
-  ko'rinsin»). `crm/MinimalBoard.tsx` — ADMINS ONLY for now (LeadsBoard
-  hands `view === "board" && isAdmin` to it; managers keep LeadsBoard):
+  ko'rinsin»). `crm/MinimalBoard.tsx` — admins first, everyone from 28.11
+  19:00 (owner: «managerlarga 19:00dan keyin och»; LeadsBoard hands
+  `view === "board"` to it — the old board code is only the tasks view now):
   one plain dark ground (`main.vt-page.mb-solid`, the «Fon» picture is not
   used while it is open), a top bar (search, manager, N lid: sum, Yangi
   lid), the amoCRM-like strip — Bugungi zadachalar / Zadachasiz / Muddati
@@ -739,7 +740,6 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
   cards (name, date `cardDate`, blue brand · LID, tags, task dot + label,
   initials or «✓ Qabul qildim»; «Yangi» cards show Ism / Nechta / Mahsulot /
   Telefon / Manba). Drag, «Yo'qotildi» drop and the modals as before.
-  To open it to managers: drop the `isAdmin` condition in LeadsBoard.
 - **Sotuv bo'limi: a manager sees only their own — 2026-11-26** (owner:
   «sotuv bo'limida faqat bitta manager o'zini ma'lumotlari o'ziga
   ko'rinsin»): `useCrm` gives non-admins only their leads + untaken new ones
