@@ -30,6 +30,7 @@ import LostModal from "./LostModal";
 import TaskList from "./TaskList";
 import { sectionLabel } from "../../../lib/crmSettings";
 import CrmHome from "./CrmHome";
+import MinimalBoard from "./MinimalBoard";
 
 // Sotuv bo'limi → «Lidlar»: the ERP's own amoCRM-like board — a column per
 // stage, cards with the next task, drag a card to move it.
@@ -151,6 +152,10 @@ export default function LeadsBoard({ mode, crm }: { mode?: "board" | "tasks"; cr
       setBusy(null);
     }
   };
+
+  // The calm amoCRM-like board — admins first (2026-11-28, «avval manga
+  // adminga ko'rinsin»); managers keep this one until the owner opens it.
+  if (view === "board" && isAdmin) return <MinimalBoard crm={crm || own} />;
 
   if (!leads)
     return (

@@ -724,6 +724,22 @@ The user is the owner. They write in Uzbek (often in capitals, voice-typed).
     «Qaytarilmagan qo'ng'iroqlar», «Zadachasiz lidlar» and «Jamoada
     o'rningiz» are off the Bosh sahifa; it keeps talk time + in/out calls
     and the owner's team table.
+- **Jarayon, calm amoCRM-like board — 2026-11-28** (owner, with amoCRM and
+  ERP screenshots: «bizda ranglar juda ko'p, ko'zga noqulay; amoda
+  minimalizm; tepada bugungi zadacha, o'tib ketganlar — belgisa chiqadi;
+  mijoz kartasi kattaroq»; mockup approved, «avval manga adminga
+  ko'rinsin»). `crm/MinimalBoard.tsx` — ADMINS ONLY for now (LeadsBoard
+  hands `view === "board" && isAdmin` to it; managers keep LeadsBoard):
+  one plain dark ground (`main.vt-page.mb-solid`, the «Fon» picture is not
+  used while it is open), a top bar (search, manager, N lid: sum, Yangi
+  lid), the amoCRM-like strip — Bugungi zadachalar / Zadachasiz / Muddati
+  o'tgan / Yangi bugun·kecha / Prognoz (Dizayn/avans) — whose numbers count
+  LEADS and are filters (`src/lib/boardFilters.ts` `boardCounts`/`passes`;
+  chip «Ko'rsatilmoqda … ✕»), 300 px columns with a thin stage line, bigger
+  cards (name, date `cardDate`, blue brand · LID, tags, task dot + label,
+  initials or «✓ Qabul qildim»; «Yangi» cards show Ism / Nechta / Mahsulot /
+  Telefon / Manba). Drag, «Yo'qotildi» drop and the modals as before.
+  To open it to managers: drop the `isAdmin` condition in LeadsBoard.
 - **Sotuv bo'limi: a manager sees only their own — 2026-11-26** (owner:
   «sotuv bo'limida faqat bitta manager o'zini ma'lumotlari o'ziga
   ko'rinsin»): `useCrm` gives non-admins only their leads + untaken new ones

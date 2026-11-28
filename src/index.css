@@ -280,6 +280,13 @@ img[src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAA
    these classes on <main> while the page is open): the dark palette, and
    cards as frosted glass over the picture. --glass-a is how solid they are
    (the picker's «Kartalar shaffofligi»). Modals render outside <main>. */
+/* Sotuv bo'limi → Jarayon, the calm board (crm/MinimalBoard.tsx): one plain
+   ground instead of the «Fon» picture while it is open. */
+main.vt-page.mb-solid {
+  background-image: none !important;
+  background-color: #141d26 !important;
+}
+
 .fon-glass {
   color-scheme: dark;
   --ink-50: 15 23 42;
